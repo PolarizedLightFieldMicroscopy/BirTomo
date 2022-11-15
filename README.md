@@ -1,2 +1,2 @@
-# ray-optics
-forward model using ray tracing
+# forward-model
+forward model using mainly ray tracing
