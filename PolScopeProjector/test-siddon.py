@@ -18,6 +18,7 @@ colition_indexes = vol_indexes(midpoints, dx, dy, dz)
 lengths = intersect_length(*(list(args[:6])+[a_list]))
 # print('Midpoints: ' + str([(round(x[0], 3), round(x[1], 3), round(x[2], 3)) for x in midpoints]))
 # print('Lengths: ' + str([round(x, 3) for x in lengths]))
+# print(len(midpoints))
 
 x_midpoint = [x for (x,y,z) in midpoints]
 y_midpoint = [y for (x,y,z) in midpoints]
@@ -32,6 +33,8 @@ ax = fig.add_subplot(projection='3d')
 ax.scatter(x_midpoint,y_midpoint,z_midpoint, )
 ax.scatter(x1,y1,z1, c='red')
 ax.scatter(x2,y2,z2, c='green')
+
+
 if False: #simple rendering
 
     # Create box around volume
@@ -77,3 +80,5 @@ else:
     ax.set_xlabel('Y')
     ax.set_xlabel('Z')
     fig.show()
+
+    plt.show()
