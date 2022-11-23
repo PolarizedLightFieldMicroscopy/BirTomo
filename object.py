@@ -5,7 +5,6 @@ rng = Random()
 
 def get_ellipsoid(vox):
     if True:
-        from random import Random
         Delta_n = rng.uniform(-1,1)
         a = (rng.uniform(-5,5), rng.uniform(-5,5), rng.uniform(-5,5))
         opticAxis = a / np.linalg.norm(a)
