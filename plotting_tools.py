@@ -1,0 +1,116 @@
+import matplotlib.pyplot as plt
+import matplotlib
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import numpy as np
+
+def explode(data):
+    size = np.array(data.shape)*2
+    data_e = np.zeros(size - 1, dtype=data.dtype)
+    data_e[::2, ::2, ::2] = data
+    return data_e
+
+def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
+
+    dxy = mla_info.vox_pitch
+
+    z1,y1,x1 = ray_entry
+    z2,y2,x2 = ray_exit
+    z_indices = [x for (x,y,z) in colition_indexes]
+    y_indices = [y for (x,y,z) in colition_indexes]
+    x_indices = [z for (x,y,z) in colition_indexes]
+
+    z_midpoint = [x for (x,y,z) in midpoints]
+    y_midpoint = [y for (x,y,z) in midpoints]
+    x_midpoint = [z for (x,y,z) in midpoints]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.scatter(z_midpoint,y_midpoint,x_midpoint)
+    ax.scatter(z1,y1,x1, c='red')
+    ax.scatter(z2,y2,x2, c='green')
+
+    # Create box around volume
+    voxels = np.zeros((mla_info.z_span,mla_info.xy_span,mla_info.xy_span))
+
+    # Fast rendering
+    if True:
+
+        facecolors = np.where(voxels==0, '#00000000', '#7A88CCC0')
+        edgecolors = np.where(voxels==0, '#0000000F', '#7A88CCC0')
+        filled = voxels + 1
+        x_coords,y_coords,z_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
+        x_coords *= dxy
+        y_coords *= dxy
+        z_coords *= dxy
+        ax.voxels(x_coords, y_coords, z_coords, filled, facecolors=facecolors, edgecolors=edgecolors)
+        # plt.savefig('output.png')
+        plt.show()
+    else:
+        # Fill visited voxels
+        voxels[z_indices, y_indices, x_indices] = 1
+        facecolors = explode(np.where(voxels==0, '#00000000', '#7A88CCC0'))
+        edgecolors = explode(np.where(voxels==0, '#00000002', '#7A88CCC0'))
+        filled = explode(voxels + 1)
+        x_coords,y_coords,z_coords = np.indices(np.array(facecolors.shape) + 1).astype(float)
+        x_coords[0::2, :, :] += 0.05
+        y_coords[:, 0::2, :] += 0.05
+        z_coords[:, :, 0::2] += 0.05
+        x_coords[1::2, :, :] += 0.95
+        y_coords[:, 1::2, :] += 0.95
+        z_coords[:, :, 1::2] += 0.95
+        x_coords *= 0.5*dxy
+        y_coords *= 0.5*dxy
+        z_coords *= 0.5*dxy
+        ax.voxels(x_coords, y_coords, z_coords, filled, facecolors=facecolors, edgecolors=edgecolors)
+        # plt.savefig('output.png')
+        ax.set_xlabel('Z')
+        ax.set_xlabel('X')
+        ax.set_xlabel('Z')
+    fig.show()
+
+    plt.show()
+
+def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', mla_info=None):
+
+    i_shape,j_shape = ray_entry.shape[1:]
+
+    # Grab all rays
+    all_entry = np.reshape(ray_entry,[ray_entry.shape[0],i_shape*j_shape])
+    all_exit = np.reshape(ray_exit,[ray_entry.shape[0],i_shape*j_shape])
+    x_entry,y_entry,z_entry = all_entry[1,:],all_entry[2,:],all_entry[0,:]
+    x_exit,y_exit,z_exit = all_exit[1,:],all_exit[2,:],all_exit[0,:]
+
+    # grab the ray index to color them
+    ray_index = list(range(len(x_exit)))
+    # And plot them
+    plt.clf()
+    ax = plt.subplot(1,3,1)
+    plt.scatter(x_entry, y_entry, c=ray_index, cmap=colormap)
+    ax.set_box_aspect(1)
+    plt.title('entry rays coords')
+    ax = plt.subplot(1,3,2)
+    plt.scatter(x_exit, y_exit, c=ray_index, cmap=colormap)
+    ax.set_box_aspect(1)
+    plt.title('exit rays coords')
+    ax = plt.subplot(1,3,3, projection='3d')
+    for ray_ix in range(len(x_entry)):
+        cmap = matplotlib.cm.get_cmap(colormap)
+        rgba = cmap(ray_ix/len(x_entry))
+        plt.plot([x_entry[ray_ix],x_exit[ray_ix]],[y_entry[ray_ix],y_exit[ray_ix]],[z_entry[ray_ix],z_exit[ray_ix]], color=rgba)
+
+    # Add area covered by MLAs
+    if mla_info is not None:
+        m = mla_info.xy_span/2
+        mz = mla_info.z_span/2
+        n_mlas = mla_info.n_mlas//2
+        mla_sample_pitch = mla_info.pitch / mla_info.obj_M
+        x = [m-n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch,m-n_mlas*mla_sample_pitch]
+        y = [m-n_mlas*mla_sample_pitch,m-n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch]
+        z = [mz,mz,mz,mz]
+        verts = [list(zip(x,y,z))]
+        ax.add_collection3d(Poly3DCollection(verts,alpha=.20))
+
+    # ax.set_box_aspect((1,1,5))
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.show()
