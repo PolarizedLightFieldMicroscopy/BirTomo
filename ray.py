@@ -17,8 +17,8 @@ Object space center:
     - volCtr:same center in micrometers'''
 
 # Volume span in um
-nVoxX = voxPitch*10
-nVoxYZ = voxPitch*10
+nVoxX = voxPitch * 10
+nVoxYZ = voxPitch * 10
 
 # Number of voxels
 voxNrX = round(nVoxX/voxPitch)

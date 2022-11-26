@@ -20,23 +20,29 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
     y_indices = np.array([y for (x,y,z) in colition_indexes])
     x_indices = np.array([z for (x,y,z) in colition_indexes])
 
-    z_midpoint = [x for (x,y,z) in midpoints]
-    y_midpoint = [y for (x,y,z) in midpoints]
-    x_midpoint = [z for (x,y,z) in midpoints]
-
-
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-    ax.scatter((z_indices+offset)*dxy,(y_indices+offset)*dxy,(x_indices+offset)*dxy, s=dxy)
-    ax.scatter(z1,y1,x1, c='red')
-    ax.scatter(z2,y2,x2, c='green')
-
     # Create box around volume
     voxels = np.zeros((mla_info.n_voxels_z,mla_info.n_voxels_xy,mla_info.n_voxels_xy))
 
+    # Define grid 
+    z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
+    
+    x_coords += 0.5
+    y_coords += 0.5
+    z_coords += 0.5
+    x_coords *= dxy
+    y_coords *= dxy
+    z_coords *= dxy
+
+    voxels[z_indices,y_indices,x_indices] = 1
     # Fast rendering
-    if True:
+    if False:
         
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        ax.scatter((z_indices+offset)*dxy,(y_indices+offset)*dxy,(x_indices+offset)*dxy, s=dxy)
+        ax.scatter(z1,y1,x1, c='red')
+        ax.scatter(z2,y2,x2, c='green')
+
         facecolor = '#FF00000F'
         edgecolor = '#FF0000FF'
         voxels[z_indices,y_indices,x_indices] = 1
@@ -44,12 +50,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
         facecolors = np.where(voxels==1, facecolor, '#0000000F')
         edgecolors = np.where(voxels==1, edgecolor, '#0000000F')
 
-
-        # Define grid 
-        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
-        x_coords *= dxy
-        y_coords *= dxy
-        z_coords *= dxy
         ax.voxels(z_coords, y_coords, x_coords, voxels, facecolors=facecolors, edgecolors=edgecolors)
         ax.plot([z1,z2],[y1,y2],[x1,x2])
         plt.xlabel('Axial')
@@ -59,29 +59,44 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
         # plt.savefig('output.png')
         plt.show()
     else:
+        import plotly.graph_objects as go
+        
+        fig = go.Figure(data=go.Volume(
+            x=z_coords[:-1,:-1,:-1].flatten(),
+            y=y_coords[:-1,:-1,:-1].flatten(),
+            z=x_coords[:-1,:-1,:-1].flatten(),
+            value=voxels.flatten(),
+            isomin=0,
+            isomax=0.1,
+            opacity=0.1, # needs to be small to see through all surfaces
+            surface_count=1, # needs to be a large number for good volume rendering
+            ))
+        fig.add_scatter3d(x=(z_indices+offset)*dxy,y=(y_indices+offset)*dxy,z=(x_indices+offset)*dxy)
+        
+        fig.add_scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2])
+        # fig.add_scatter3d(x=(z_indices+offset)*dxy,y=(y_indices+offset)*dxy,z=(x_indices+offset)*dxy)
         # Fill visited voxels
-        voxels[z_indices, y_indices, x_indices] = 1
-        facecolors = explode(np.where(voxels==0, '#00000000', '#7A88CCC0'))
-        edgecolors = explode(np.where(voxels==0, '#00000002', '#7A88CCC0'))
-        filled = explode(voxels + 1)
-        x_coords,y_coords,z_coords = np.indices(np.array(facecolors.shape) + 1).astype(float)
-        x_coords[0::2, :, :] += 0.05
-        y_coords[:, 0::2, :] += 0.05
-        z_coords[:, :, 0::2] += 0.05
-        x_coords[1::2, :, :] += 0.95
-        y_coords[:, 1::2, :] += 0.95
-        z_coords[:, :, 1::2] += 0.95
-        x_coords *= 0.5*dxy
-        y_coords *= 0.5*dxy
-        z_coords *= 0.5*dxy
-        ax.voxels(x_coords, y_coords, z_coords, filled, facecolors=facecolors, edgecolors=edgecolors)
-        # plt.savefig('output.png')
-        ax.set_xlabel('Z')
-        ax.set_xlabel('X')
-        ax.set_xlabel('Z')
+        # voxels[z_indices, y_indices, x_indices] = 1
+        # facecolors = explode(np.where(voxels==0, '#00000000', '#7A88CCC0'))
+        # edgecolors = explode(np.where(voxels==0, '#00000002', '#7A88CCC0'))
+        # filled = explode(voxels + 1)
+        # x_coords,y_coords,z_coords = np.indices(np.array(facecolors.shape) + 1).astype(float)
+        # x_coords[0::2, :, :] += 0.05
+        # y_coords[:, 0::2, :] += 0.05
+        # z_coords[:, :, 0::2] += 0.05
+        # x_coords[1::2, :, :] += 0.95
+        # y_coords[:, 1::2, :] += 0.95
+        # z_coords[:, :, 1::2] += 0.95
+        # x_coords *= 0.5*dxy
+        # y_coords *= 0.5*dxy
+        # z_coords *= 0.5*dxy
+        # ax.voxels(x_coords, y_coords, z_coords, filled, facecolors=facecolors, edgecolors=edgecolors)
+        # # plt.savefig('output.png')
+        # ax.set_xlabel('Z')
+        # ax.set_xlabel('X')
+        # ax.set_xlabel('Z')
     fig.show()
 
-    plt.show()
 
 def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', mla_info=None):
 
