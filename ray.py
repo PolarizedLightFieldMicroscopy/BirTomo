@@ -16,15 +16,17 @@ Object space center:
     - voxCtr:center voxel where all rays of the central microlens converge
     - volCtr:same center in micrometers'''
 
-nVoxX = 250
-nVoxYZ = 700
+# Volume span in um
+nVoxX = voxPitch*10
+nVoxYZ = voxPitch*10
 
+# Number of voxels
 voxNrX = round(nVoxX/voxPitch)
-if voxNrX % 2 == 1:
-    voxNrX += 1
+# if voxNrX % 2 == 1:
+#     voxNrX += 1
 voxNrYZ = round(nVoxYZ/voxPitch)
-if voxNrYZ % 2 == 1:
-    voxNrYZ += 1
+# if voxNrYZ % 2 == 1:
+#     voxNrYZ += 1
 voxCtr = np.array([voxNrX/2, voxNrYZ/2, voxNrYZ/2])
 volCtr = voxCtr * voxPitch
 
@@ -38,6 +40,8 @@ class MLAinfo:
 mla_info = MLAinfo()
 mla_info.xy_span = nVoxYZ
 mla_info.z_span = nVoxX
+mla_info.n_voxels_z = voxNrX
+mla_info.n_voxels_xy = voxNrYZ
 mla_info.n_mlas = 100
 mla_info.pitch = nrCamPix * camPixPitch
 mla_info.vox_pitch = voxPitch
@@ -79,20 +83,20 @@ def main():
     rayExit = rayEnter + 2 * (volCtrGridTemp - rayEnter)
 
     # Plot
-    plot_rays_at_sample(rayEnter, rayExit, colormap='cool', mla_info=mla_info)
+    # plot_rays_at_sample(rayEnter, rayExit, colormap='cool', mla_info=mla_info)
 
     '''Direction of the rays at the exit plane'''
     rayDiff = rayExit - rayEnter
     rayDiff = rayDiff / np.linalg.norm(rayDiff, axis=0)
 
     '''For the (i,j) pixel behind a single microlens'''
-    i = 3
-    j = 8
+    i = 8
+    j = 5
     start = rayEnter[:,i,j]
     stop = rayExit[:,i,j]
     siddon_list = siddon_params(start, stop, [voxPitch]*3, [voxNrX, voxNrYZ, voxNrYZ])
     seg_mids = siddon_midpoints(start, stop, siddon_list)
-    voxels_of_segs = vox_indices(seg_mids, [1]*3)
+    voxels_of_segs = vox_indices(seg_mids, [voxPitch]*3)
     ell_in_voxels = siddon_lengths(start, stop, siddon_list)
 
     # Plot

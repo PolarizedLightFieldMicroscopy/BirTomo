@@ -22,7 +22,7 @@ def siddon_params(start, stop, vox_pitch, vox_count):
         ay_N = 1
     if (z2 - z1) != 0:
         az_0 = -z1/(z2 - z1)
-        az_N = (pix_numz - z1)/(z2 - z1)
+        az_N = (pix_numz*dz - z1)/(z2 - z1) #todo: geneva, was this an error? not multiplying by dz
     else:
         az_0 = 0
         az_N = 1

@@ -15,34 +15,47 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
 
     z1,y1,x1 = ray_entry
     z2,y2,x2 = ray_exit
-    z_indices = [x for (x,y,z) in colition_indexes]
-    y_indices = [y for (x,y,z) in colition_indexes]
-    x_indices = [z for (x,y,z) in colition_indexes]
+    offset = 0.5
+    z_indices = np.array([x for (x,y,z) in colition_indexes])
+    y_indices = np.array([y for (x,y,z) in colition_indexes])
+    x_indices = np.array([z for (x,y,z) in colition_indexes])
 
     z_midpoint = [x for (x,y,z) in midpoints]
     y_midpoint = [y for (x,y,z) in midpoints]
     x_midpoint = [z for (x,y,z) in midpoints]
 
+
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
-    ax.scatter(z_midpoint,y_midpoint,x_midpoint)
+    ax.scatter((z_indices+offset)*dxy,(y_indices+offset)*dxy,(x_indices+offset)*dxy, s=dxy)
     ax.scatter(z1,y1,x1, c='red')
     ax.scatter(z2,y2,x2, c='green')
 
     # Create box around volume
-    voxels = np.zeros((mla_info.z_span,mla_info.xy_span,mla_info.xy_span))
+    voxels = np.zeros((mla_info.n_voxels_z,mla_info.n_voxels_xy,mla_info.n_voxels_xy))
 
     # Fast rendering
     if True:
+        
+        facecolor = '#FF00000F'
+        edgecolor = '#FF0000FF'
+        voxels[z_indices,y_indices,x_indices] = 1
 
-        facecolors = np.where(voxels==0, '#00000000', '#7A88CCC0')
-        edgecolors = np.where(voxels==0, '#0000000F', '#7A88CCC0')
-        filled = voxels + 1
-        x_coords,y_coords,z_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
+        facecolors = np.where(voxels==1, facecolor, '#0000000F')
+        edgecolors = np.where(voxels==1, edgecolor, '#0000000F')
+
+
+        # Define grid 
+        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
         x_coords *= dxy
         y_coords *= dxy
         z_coords *= dxy
-        ax.voxels(x_coords, y_coords, z_coords, filled, facecolors=facecolors, edgecolors=edgecolors)
+        ax.voxels(z_coords, y_coords, x_coords, voxels, facecolors=facecolors, edgecolors=edgecolors)
+        ax.plot([z1,z2],[y1,y2],[x1,x2])
+        plt.xlabel('Axial')
+        plt.ylabel('Y axis')
+        # show backward mesh?
+        # ax.voxels(z_coords, y_coords, x_coords, voxels+1, facecolors='#00FF000F', edgecolors='#0000000F')
         # plt.savefig('output.png')
         plt.show()
     else:
