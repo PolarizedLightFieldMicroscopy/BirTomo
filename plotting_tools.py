@@ -11,7 +11,7 @@ def explode(data):
 
 def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
 
-    dxy = mla_info.vox_pitch
+    [dz, dxy, dxy] = mla_info.vox_pitch
 
     z1,y1,x1 = ray_entry
     z2,y2,x2 = ray_exit
@@ -31,7 +31,7 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
     z_coords += 0.5
     x_coords *= dxy
     y_coords *= dxy
-    z_coords *= dxy
+    z_coords *= dz
 
     voxels[z_indices,y_indices,x_indices] = 1
     # Fast rendering
@@ -71,30 +71,21 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, mla_info):
             opacity=0.1, # needs to be small to see through all surfaces
             surface_count=1, # needs to be a large number for good volume rendering
             ))
-        fig.add_scatter3d(x=(z_indices+offset)*dxy,y=(y_indices+offset)*dxy,z=(x_indices+offset)*dxy)
+        fig.add_scatter3d(  x=(z_indices+offset)*dz,
+                            y=(y_indices+offset)*dxy,
+                            z=(x_indices+offset)*dxy)
         
         fig.add_scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2])
-        # fig.add_scatter3d(x=(z_indices+offset)*dxy,y=(y_indices+offset)*dxy,z=(x_indices+offset)*dxy)
-        # Fill visited voxels
-        # voxels[z_indices, y_indices, x_indices] = 1
-        # facecolors = explode(np.where(voxels==0, '#00000000', '#7A88CCC0'))
-        # edgecolors = explode(np.where(voxels==0, '#00000002', '#7A88CCC0'))
-        # filled = explode(voxels + 1)
-        # x_coords,y_coords,z_coords = np.indices(np.array(facecolors.shape) + 1).astype(float)
-        # x_coords[0::2, :, :] += 0.05
-        # y_coords[:, 0::2, :] += 0.05
-        # z_coords[:, :, 0::2] += 0.05
-        # x_coords[1::2, :, :] += 0.95
-        # y_coords[:, 1::2, :] += 0.95
-        # z_coords[:, :, 1::2] += 0.95
-        # x_coords *= 0.5*dxy
-        # y_coords *= 0.5*dxy
-        # z_coords *= 0.5*dxy
-        # ax.voxels(x_coords, y_coords, z_coords, filled, facecolors=facecolors, edgecolors=edgecolors)
-        # # plt.savefig('output.png')
-        # ax.set_xlabel('Z')
-        # ax.set_xlabel('X')
-        # ax.set_xlabel('Z')
+        
+        fig.update_layout(
+        scene = dict(
+                    xaxis = dict(nticks=mla_info.n_voxels_z, range=[0,mla_info.z_span],),
+                    yaxis = dict(nticks=mla_info.n_voxels_xy, range=[0,mla_info.xy_span]),
+                    zaxis = dict(nticks=mla_info.n_voxels_xy, range=[0,mla_info.xy_span]),
+                    xaxis_title='Axial dimension',),
+        # width=700,
+        # margin=dict(r=20, l=10, b=10, t=10)
+        )
     fig.show()
 
 

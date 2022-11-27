@@ -9,6 +9,7 @@ nrCamPix = 16 # num pixels behind lenslet
 camPixPitch = 6.5
 microLensPitch = nrCamPix * camPixPitch / magnObj
 voxPitch = microLensPitch / 1
+axialPitch = voxPitch
 
 '''The number of voxels along each side length of the cube is determined by the voxPitch. 
 An odd number of voxels will allow the center of a voxel in the center of object space.
@@ -17,18 +18,18 @@ Object space center:
     - volCtr:same center in micrometers'''
 
 # Volume span in um
-nVoxX = voxPitch * 10
+nVoxX = axialPitch * 10
 nVoxYZ = voxPitch * 10
 
 # Number of voxels
-voxNrX = round(nVoxX/voxPitch)
+voxNrX = round(nVoxX/axialPitch)
 # if voxNrX % 2 == 1:
 #     voxNrX += 1
 voxNrYZ = round(nVoxYZ/voxPitch)
 # if voxNrYZ % 2 == 1:
 #     voxNrYZ += 1
 voxCtr = np.array([voxNrX/2, voxNrYZ/2, voxNrYZ/2])
-volCtr = voxCtr * voxPitch
+volCtr = [voxCtr[0] * axialPitch, voxCtr[1] * voxPitch, voxCtr[2] * voxPitch]
 
 wavelength = 0.550
 naObj = 1.2
@@ -44,7 +45,7 @@ mla_info.n_voxels_z = voxNrX
 mla_info.n_voxels_xy = voxNrYZ
 mla_info.n_mlas = 100
 mla_info.pitch = nrCamPix * camPixPitch
-mla_info.vox_pitch = voxPitch
+mla_info.vox_pitch = [axialPitch, voxPitch, voxPitch]
 mla_info.obj_M = magnObj
 
 set_wavelength(wavelength)
@@ -94,9 +95,9 @@ def main():
     j = 5
     start = rayEnter[:,i,j]
     stop = rayExit[:,i,j]
-    siddon_list = siddon_params(start, stop, [voxPitch]*3, [voxNrX, voxNrYZ, voxNrYZ])
+    siddon_list = siddon_params(start, stop, mla_info.vox_pitch, [voxNrX, voxNrYZ, voxNrYZ])
     seg_mids = siddon_midpoints(start, stop, siddon_list)
-    voxels_of_segs = vox_indices(seg_mids, [voxPitch]*3)
+    voxels_of_segs = vox_indices(seg_mids, mla_info.vox_pitch)
     ell_in_voxels = siddon_lengths(start, stop, siddon_list)
 
     # Plot
