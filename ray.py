@@ -41,21 +41,6 @@ wavelength = 0.550
 naObj = 1.2
 nMedium = 1.52
 
-
-# Gather information in a class for plotting
-class MLAinfo:
-        pass
-mla_info = MLAinfo()
-mla_info.xy_span = nVoxYZ
-mla_info.z_span = nVoxX
-mla_info.n_voxels_z = voxNrX
-mla_info.n_voxels_xy = voxNrYZ
-mla_info.n_mlas = 100
-mla_info.pitch = nrCamPix * camPixPitch
-mla_info.vox_pitch = [axialPitch, voxPitch, voxPitch]
-mla_info.obj_M = magnObj
-
-
 # Populate OpticConfig from WaveBlocks with these values, to start migration
 optic_config = OpticConfig()
 use_default_values = False
@@ -71,15 +56,9 @@ if not use_default_values:
     optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
     optic_config.mla_config.n_mlas = 100
 
-    # Todo: should we keep axial dimension as x?
-    # Now is [axial, y, z]
-    optic_config.PSF_config.voxel_size = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
-    # Create a shortcut
-    voxel_size = optic_config.PSF_config.voxel_size
-    # todo: Add volume_config to optic_config
-    optic_config.volume_config.voxel_size = voxel_size
     optic_config.volume_config.volume_shape = [voxNrX,voxNrYZ,voxNrYZ]
-    optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(voxel_size)
+    optic_config.volume_config.voxel_size_um = [axialPitch, voxPitch, voxPitch]
+    optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 else:
     # Set objective info
     optic_config.PSF_config.M = 60      # Objective magnification
@@ -92,15 +71,9 @@ else:
     optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
     optic_config.mla_config.n_mlas = 100
 
-    # Todo: should we keep axial dimension as x?
-    # Now is [axial, y, z]
-    optic_config.PSF_config.voxel_size = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
-    # Create a shortcut
-    voxel_size = optic_config.PSF_config.voxel_size
-    # todo: Add volume_config to optic_config
-    optic_config.volume_config.voxel_size = voxel_size
     optic_config.volume_config.volume_shape = [10,10,10]
-    optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(voxel_size)
+    optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
+    optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
 
 
@@ -141,7 +114,7 @@ def main():
     rayExit = rayEnter + 2 * (volCtrGridTemp - rayEnter)
 
     # Plot
-    plot_rays_at_sample(rayEnter, rayExit, colormap='inferno', optical_config=optic_config)
+    # plot_rays_at_sample(rayEnter, rayExit, colormap='inferno', optical_config=optic_config)
 
     '''Direction of the rays at the exit plane'''
     rayDiff = rayExit - rayEnter
@@ -152,13 +125,16 @@ def main():
     j = 5
     start = rayEnter[:,i,j]
     stop = rayExit[:,i,j]
-    siddon_list = siddon_params(start, stop, optic_config.volume_config.voxel_size, optic_config.volume_config.volume_shape)
+    siddon_list = siddon_params(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
     seg_mids = siddon_midpoints(start, stop, siddon_list)
-    voxels_of_segs = vox_indices(seg_mids, optic_config.volume_config.voxel_size)
+    voxels_of_segs = vox_indices(seg_mids, optic_config.volume_config.voxel_size_um)
     ell_in_voxels = siddon_lengths(start, stop, siddon_list)
 
     # Plot
-    plot_ray_path(start, stop, voxels_of_segs, seg_mids, optic_config)
+    plot_ray_path(start, stop, voxels_of_segs, optic_config)
+    # {
+    #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
+    #     'volume_size_um' : }optic_config)
     ray = rayDiff[:,i,j]
     rayDir = calc_rayDir(ray)
     JM_list = []

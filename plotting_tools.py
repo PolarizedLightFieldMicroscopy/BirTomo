@@ -9,11 +9,26 @@ def explode(data):
     data_e[::2, ::2, ::2] = data
     return data_e
 
-def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, optical_config):
+def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, use_matplotlib=False):
 
-    volume_shape = optical_config.volume_config.volume_shape
-    volume_size_um = optical_config.volume_config.volume_size_um
-    [dz, dxy, dxy] = optical_config.volume_config.voxel_size
+    # is optical_config a Waveblocks object or a dictionary?
+    wave_blocks_found = True
+    try:
+        from waveblocks.blocks.optic_config import OpticConfig
+    except:
+        wave_blocks_found = False
+    if wave_blocks_found and isinstance(optical_config, OpticConfig):
+        volume_shape = optical_config.volume_config.volume_shape
+        volume_size_um = optical_config.volume_config.volume_size_um
+        [dz, dxy, dxy] = optical_config.volume_config.voxel_size_um
+    else:
+        try:
+            volume_shape = optical_config['volume_shape']
+            volume_size_um = optical_config['volume_size_um']
+            [dz, dxy, dxy] = optical_config['voxel_size']
+        except:
+            print('Error in plot_ray_path: optical_config should be either a waveblock.OpticConfig or a dictionary containing the required variables...')
+            return
 
     z1,y1,x1 = ray_entry
     z2,y2,x2 = ray_exit
@@ -23,7 +38,7 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, optical_conf
     x_indices = np.array([z for (x,y,z) in colition_indexes])
 
     # Create box around volume
-    voxels = np.zeros((optical_config.volume_config.volume_shape))
+    voxels = np.zeros(volume_shape)
 
     # Define grid 
     z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
@@ -36,8 +51,9 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, optical_conf
     z_coords *= dz
 
     voxels[z_indices,y_indices,x_indices] = 1
-    # Fast rendering
-    if False:
+
+    # Fast rendering with matplotlib
+    if use_matplotlib:
         
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
@@ -70,14 +86,24 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, midpoints, optical_conf
             value=voxels.flatten(),
             isomin=0,
             isomax=0.1,
-            opacity=0.1, # needs to be small to see through all surfaces
+            opacity=0.01, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
             ))
         fig.add_scatter3d(  x=(z_indices+offset)*dz,
                             y=(y_indices+offset)*dxy,
                             z=(x_indices+offset)*dxy)
         
-        fig.add_scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2])
+        fig.add_scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2],
+            marker=dict(
+            size=12,
+            color='blue',  # set color to an array/list of desired values
+            colorscale='Viridis',   # choose a colorscale
+            ),
+            line=dict(
+            width=3,
+            color='blue',  # set color to an array/list of desired values
+            colorscale='Viridis',   # choose a colorscale
+            ))
         
         fig.update_layout(
         scene = dict(
