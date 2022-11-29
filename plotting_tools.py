@@ -196,7 +196,6 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
                                 subplot_titles=("Rays through volume",),
                                 print_grid=True)
             # Gather all rays in single arrays, to plot them all at once, placing NAN in between them
-            ray_ix= 0
             # Prepare colormap
             all_x = np.empty((3*len(x_entry)))
             all_x[::3] = x_entry
@@ -206,19 +205,27 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
             all_y = np.empty((3*len(y_entry)))
             all_y[::3] = y_entry
             all_y[1::3] = y_exit
-            all_x[2::3] = np.NaN
+            all_y[2::3] = np.NaN
 
             all_z = np.empty((3*len(z_entry)))
             all_z[::3] = z_entry
             all_z[1::3] = z_exit
-            all_x[2::3] = np.NaN
+            all_z[2::3] = np.NaN
 
             # prepare colors for each line
             rgba = [ray_ix/len(all_x) for ray_ix in range(len(all_x))] 
             # Draw the lines and markers
-            fig.append_trace(go.Scatter3d(z=all_x, y=all_y,x=all_z,
+            fig.append_trace(go.Scatter3d(z=all_x, y=all_y, x=all_z,
                 marker=dict(color=rgba, colorscale=colormap, size=4), 
-                line=dict(color=rgba, colorscale=colormap, ), mode='lines+markers'),
+                line=dict(color=rgba, colorscale=colormap, ), 
+                connectgaps=False, mode='lines+markers'
+                ),
                 row=1, col=1)
+            fig.update_layout(
+            scene = dict(
+                        xaxis_title='Axial dimension',),
+            # width=700,
+            margin=dict(r=0, l=0, b=0, t=0)
+            )
 
         fig.show()
