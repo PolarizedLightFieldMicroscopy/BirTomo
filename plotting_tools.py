@@ -195,13 +195,30 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
                                 specs=[[{'is_3d': True}]],
                                 subplot_titles=("Rays through volume",),
                                 print_grid=True)
-            # Plot rays
-            for ray_ix in range(len(x_entry)):
-                cmap = matplotlib.cm.get_cmap(colormap)
-                rgba = cmap(ray_ix/len(x_entry))
-                if not np.isnan(x_entry[ray_ix]) and not np.isnan(x_exit[ray_ix]):
-                    fig.append_trace(go.Scatter3d(z=[x_entry[ray_ix],x_exit[ray_ix]], y=[y_entry[ray_ix],y_exit[ray_ix]],x=[z_entry[ray_ix],z_exit[ray_ix]], name=f'Ray {ray_ix}',
-                        marker=dict(color=rgba,size=4), 
-                        line=dict(color=rgba)),
-                        row=1, col=1)
+            # Gather all rays in single arrays, to plot them all at once, placing NAN in between them
+            ray_ix= 0
+            # Prepare colormap
+            all_x = np.empty((3*len(x_entry)))
+            all_x[::3] = x_entry
+            all_x[1::3] = x_exit
+            all_x[2::3] = np.NaN
+
+            all_y = np.empty((3*len(y_entry)))
+            all_y[::3] = y_entry
+            all_y[1::3] = y_exit
+            all_x[2::3] = np.NaN
+
+            all_z = np.empty((3*len(z_entry)))
+            all_z[::3] = z_entry
+            all_z[1::3] = z_exit
+            all_x[2::3] = np.NaN
+
+            # prepare colors for each line
+            rgba = [ray_ix/len(all_x) for ray_ix in range(len(all_x))] 
+            # Draw the lines and markers
+            fig.append_trace(go.Scatter3d(z=all_x, y=all_y,x=all_z,
+                marker=dict(color=rgba, colorscale=colormap, size=4), 
+                line=dict(color=rgba, colorscale=colormap, ), mode='lines+markers'),
+                row=1, col=1)
+
         fig.show()

@@ -114,7 +114,7 @@ def main():
     rayExit = rayEnter + 2 * (volCtrGridTemp - rayEnter)
 
     # Plot
-    # plot_rays_at_sample(rayEnter, rayExit, colormap='inferno', optical_config=optic_config)
+    plot_rays_at_sample(rayEnter, rayExit, colormap='inferno', optical_config=optic_config)
 
     '''Direction of the rays at the exit plane'''
     rayDiff = rayExit - rayEnter
