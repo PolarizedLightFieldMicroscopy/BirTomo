@@ -43,9 +43,9 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
     # Define grid 
     z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
     
-    x_coords -= 0.5
-    y_coords -= 0.5
-    z_coords -= 0.5
+    x_coords += 0.5
+    y_coords += 0.5
+    z_coords += 0.5
     x_coords *= dxy
     y_coords *= dxy
     z_coords *= dz

@@ -12,6 +12,7 @@ magnObj = 60
 nrCamPix = 16 # num pixels behind lenslet
 camPixPitch = 6.5
 microLensPitch = nrCamPix * camPixPitch / magnObj
+# voxPitch is the width of each voxel in um (dividing by 5 to supersample)
 voxPitch = microLensPitch / 1
 axialPitch = voxPitch
 
@@ -21,8 +22,6 @@ Object space center:
     - voxCtr:center voxel where all rays of the central microlens converge
     - volCtr:same center in micrometers'''
 
-# 250 and 700 is the dim in um of our volume
-# voxPitch is the width of each voxel in um (dividing by 5 to supersample)
 # Volume shape
 voxNrX = 5
 voxNrYZ = 5
@@ -30,15 +29,8 @@ voxNrYZ = 5
 nVoxX = axialPitch * voxNrX
 nVoxYZ = voxPitch * voxNrYZ
 
-# Number of voxels
-# voxNrX = round(nVoxX/axialPitch)
-# if voxNrX % 2 == 1:
-#     voxNrX += 1
-# voxNrYZ = round(nVoxYZ/voxPitch)
-# if voxNrYZ % 2 == 1:
-#     voxNrYZ += 1
-voxCtr = np.array([voxNrX/2, voxNrYZ/2, voxNrYZ/2])
-volCtr = [voxCtr[0] * axialPitch, voxCtr[1] * voxPitch, voxCtr[2] * voxPitch]
+voxCtr = np.array([(voxNrX - 1) / 2, (voxNrYZ - 1) / 2, (voxNrYZ - 1) / 2]) # in index units
+volCtr = [voxCtr[0] * axialPitch, voxCtr[1] * voxPitch, voxCtr[2] * voxPitch]   # in vol units (um)
 
 wavelength = 0.550
 naObj = 1.2
