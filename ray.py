@@ -122,7 +122,7 @@ def main():
 
     '''For the (i,j) pixel behind a single microlens'''
     i = 8
-    j = 5
+    j = 1
     start = rayEnter[:,i,j]
     stop = rayExit[:,i,j]
     siddon_list = siddon_params(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
@@ -131,7 +131,7 @@ def main():
     ell_in_voxels = siddon_lengths(start, stop, siddon_list)
 
     # Plot
-    plot_ray_path(start, stop, voxels_of_segs, optic_config)
+    plot_ray_path(start, stop, voxels_of_segs, optic_config, ell_in_voxels, colormap='hot')
     # {
     #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
     #     'volume_size_um' : }optic_config)

@@ -9,7 +9,7 @@ def explode(data):
     data_e[::2, ::2, ::2] = data
     return data_e
 
-def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, use_matplotlib=False):
+def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to_plot=None, colormap='inferno', use_matplotlib=False):
 
     # is optical_config a Waveblocks object or a dictionary?
     wave_blocks_found = True
@@ -32,7 +32,7 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, use_mat
 
     z1,y1,x1 = ray_entry
     z2,y2,x2 = ray_exit
-    offset = 0.5
+    offset = 0
     z_indices = np.array([x for (x,y,z) in colition_indexes])
     y_indices = np.array([y for (x,y,z) in colition_indexes])
     x_indices = np.array([z for (x,y,z) in colition_indexes])
@@ -43,9 +43,9 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, use_mat
     # Define grid 
     z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
     
-    x_coords += 0.5
-    y_coords += 0.5
-    z_coords += 0.5
+    x_coords -= 0.5
+    y_coords -= 0.5
+    z_coords -= 0.5
     x_coords *= dxy
     y_coords *= dxy
     z_coords *= dz
@@ -77,23 +77,13 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, use_mat
         # plt.savefig('output.png')
         plt.show()
     else:
+
+        
         import plotly.graph_objects as go
         
-        fig = go.Figure(data=go.Volume(
-            x=z_coords[:-1,:-1,:-1].flatten(),
-            y=y_coords[:-1,:-1,:-1].flatten(),
-            z=x_coords[:-1,:-1,:-1].flatten(),
-            value=voxels.flatten(),
-            isomin=0,
-            isomax=0.1,
-            opacity=0.01, # needs to be small to see through all surfaces
-            surface_count=20, # needs to be a large number for good volume rendering
-            ))
-        fig.add_scatter3d(  x=(z_indices+offset)*dz,
-                            y=(y_indices+offset)*dxy,
-                            z=(x_indices+offset)*dxy)
-        
-        fig.add_scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2],
+
+        # Draw entry and exit point
+        fig = go.Figure(data=go.Scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2],
             marker=dict(
             size=12,
             color='blue',  # set color to an array/list of desired values
@@ -103,7 +93,47 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, use_mat
             width=3,
             color='blue',  # set color to an array/list of desired values
             colorscale='Viridis',   # choose a colorscale
-            ))
+            )))
+
+        # Draw the whole volume span
+        fig.add_mesh3d(
+                # 8 vertices of a cube
+                x=[0, 0, volume_size_um[0], volume_size_um[0], 0, 0, volume_size_um[0], volume_size_um[0]],
+                y=[0, volume_size_um[1], volume_size_um[1], 0, 0, volume_size_um[1], volume_size_um[1], 0],
+                z=[0, 0, 0, 0, volume_size_um[2], volume_size_um[2], volume_size_um[2], volume_size_um[2]],
+                colorbar_title='z',
+                colorscale='inferno',
+                opacity=0.1,
+                # Intensity of each vertex, which will be interpolated and color-coded
+                intensity = np.linspace(0, 1, 8, endpoint=True),
+                # i, j and k give the vertices of triangles
+                i = [7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+                j = [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+                k = [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+            )
+        
+        # Draw all the voxels
+        cmap = matplotlib.cm.get_cmap(colormap)
+        for vix in range(len(z_indices)):
+            
+            voxel_color = 0.5 / len(z_indices)
+            opacity = data_to_plot[vix] / max(data_to_plot)
+            if data_to_plot is not None:
+                rgba = cmap(opacity)
+                voxel_color = f'rgb({int(rgba[0]*255)},{int(rgba[1]*255)},{int(rgba[2]*255)})'
+            offset = 0
+            voxel_coord_low = [(z_indices[vix]+offset)*dz, (y_indices[vix]+offset)*dxy, (x_indices[vix]+offset)*dxy]
+            offset = 1
+            voxel_coord_top = [(z_indices[vix]+offset)*dz, (y_indices[vix]+offset)*dxy, (x_indices[vix]+offset)*dxy]
+            fig.add_mesh3d(
+                # 8 vertices of a cube
+                x=[voxel_coord_low[0], voxel_coord_low[0], voxel_coord_top[0], voxel_coord_top[0], voxel_coord_low[0], voxel_coord_low[0], voxel_coord_top[0], voxel_coord_top[0]],
+                y=[voxel_coord_low[1], voxel_coord_top[1], voxel_coord_top[1], voxel_coord_low[1], voxel_coord_low[1], voxel_coord_top[1], voxel_coord_top[1], voxel_coord_low[1]],
+                z=[voxel_coord_low[2], voxel_coord_low[2], voxel_coord_low[2], voxel_coord_low[2], voxel_coord_top[2], voxel_coord_top[2], voxel_coord_top[2], voxel_coord_top[2]],
+                alphahull=5,
+                opacity=opacity/2,
+                color=voxel_color)
+        
         
         fig.update_layout(
         scene = dict(
