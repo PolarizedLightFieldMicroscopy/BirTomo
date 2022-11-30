@@ -18,8 +18,12 @@ def rotation_matrix(axis, angle):
 
 def voxRayJM(Delta_n, opticAxis, rayDir, ell):
     '''Compute Jones matrix associated with a particular ray and voxel combination'''
+    # Azimuth is the angle of the sloq axis of retardance.
     azim = np.arctan2(np.dot(opticAxis, rayDir[1]), np.dot(opticAxis, rayDir[2]))
-    # add dependence of azim on birefringence
+    if Delta_n == 0:
+        azim = 0
+    elif Delta_n < 0:
+        azim = azim + np.pi / 2
     print(f"Azimuth angle of index ellipsoid is {np.around(np.rad2deg(azim), decimals=0)} degrees.")
     ret = abs(Delta_n) * (1 - np.dot(opticAxis, rayDir[0]) ** 2) * 2 * np.pi * ell / wavelength
     print(f"Accumulated retardance from index ellipsoid is {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")

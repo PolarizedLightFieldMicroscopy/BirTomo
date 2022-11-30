@@ -8,6 +8,8 @@ from plotting_tools import *
 # Import waveblocks objects
 from waveblocks.blocks.optic_config import *
 
+plot_ray = True
+
 magnObj = 60
 nrCamPix = 16 # num pixels behind lenslet
 camPixPitch = 6.5
@@ -87,7 +89,8 @@ def main():
     ell_in_voxels = siddon_lengths(start, stop, siddon_list)
 
     # Plot
-    plot_ray_path(start, stop, voxels_of_segs, optic_config, ell_in_voxels, colormap='hot')
+    if plot_ray:
+        plot_ray_path(start, stop, voxels_of_segs, optic_config, ell_in_voxels, colormap='hot')
     # {
     #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
     #     'volume_size_um' : }optic_config)
@@ -102,6 +105,9 @@ def main():
         JM_list.append(JM)
     effective_JM = rayJM(JM_list)
     print(f"Effective Jones matrix for the ray hitting pixel {i, j}: {effective_JM}")
+    ret = calc_retardance(effective_JM)
+    azim = calc_azimuth(effective_JM)
+    print(f"Cummulated retardance: {round(ret / np.pi, 2)}*pi, azimuth {round(azim / np.pi, 2)}*pi")
 
 if __name__ == '__main__':
     main()
