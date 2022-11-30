@@ -68,3 +68,47 @@ def calc_rayDir(ray):
     ray_perp1 = np.dot(Rinv, scope_perp1)
     ray_perp2 = np.dot(Rinv, scope_perp2)
     return [ray, ray_perp1, ray_perp2]
+
+def calc_retardance(JM):
+    '''Calculates the retardance magnitude in radians from a Jones matrix
+    Parameters:
+        JM (np.array): 2x2 Jones matrix
+    Returns:
+        retardance (float): retardance magnitude in radians
+    '''
+    diag_sum = JM[0, 0] + JM[1, 1]
+    diag_diff = JM[1, 1] - JM[0, 0]
+    off_diag_sum = JM[0, 1] + JM[1, 0]
+    # print(f"sqrt portion: {np.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2)}")
+    # Note: np.arctan(1j) and np.arctan(-1j) gives an divide by zero error
+    arctan = np.arctan(1j * np.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2))
+    retardance = 2 * np.real(arctan)
+    return retardance
+
+def calc_azimuth(JM):
+    '''Calculates the retardance azimuth in radians from a Jones matrix
+    Parameters:
+        JM (np.array): 2x2 Jones matrix
+    Returns:
+        azimuth (float): azimuth of slow axis orientation in radians 
+                            between -3pi/4 and pi/4
+    '''
+    diag_sum = JM[0, 0] + JM[1, 1]
+    diag_diff = JM[1, 1] - JM[0, 0]
+    off_diag_sum = JM[0, 1] + JM[1, 0]
+    a = np.imag(diag_diff / diag_sum)
+    b = np.imag(off_diag_sum / diag_sum)
+    if a == 0 and b == 0:
+        azimuth = 0
+    else:
+        azimuth = np.real(np.arctan2(a, b)) / 2 + np.pi / 2
+    return azimuth
+
+def main():
+    JM = np.array([[3, 0], [0, 0]])
+    ret = calc_retardance(JM)
+    azim = calc_azimuth(JM)
+    print(ret / np.pi, azim / np.pi)
+
+if __name__ == '__main__':
+    main()

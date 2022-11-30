@@ -1,7 +1,6 @@
 import numpy as np
 from my_siddon import *
 from object import *
-from ray_optics import *
 from jones import *
 from plotting_tools import *
 
@@ -59,7 +58,7 @@ if not use_default_values:
     optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
     optic_config.mla_config.n_mlas = 100
 
-    optic_config.volume_config.volume_shape = [voxNrX, voxNrYZ, voxNrYZ]
+    optic_config.volume_config.volume_shape = [voxNrX,voxNrYZ,voxNrYZ]
     optic_config.volume_config.voxel_size_um = [axialPitch, voxPitch, voxPitch]
     optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 else:
@@ -74,7 +73,7 @@ else:
     optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
     optic_config.mla_config.n_mlas = 100
 
-    optic_config.volume_config.volume_shape = [10, 10, 10]
+    optic_config.volume_config.volume_shape = [10,10,10]
     optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
     optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
@@ -83,56 +82,49 @@ else:
 
 set_wavelength(wavelength)
 
-
-
 def main():
     '''Finding angles to/between central lenset, which is the angle going to each 
     of the 16 pixels for each microlens.'''
-    if False:
-        nrCamPix = 16
-        microLensCtr = [8, 8] # (unit: camera pixels)
-        rNA = 7.5 # radius of edge of microlens lens (unit:camera pixels), 
-                    # can be measured in back focal plane of microlenses
-        camPixRays = np.zeros([nrCamPix, nrCamPix])
-        i = np.linspace(1, nrCamPix, nrCamPix)
-        j = np.linspace(1, nrCamPix, nrCamPix)
-        jv, iv = np.meshgrid(i, j) # row/column defined instead of by coordinate
-        distFromCtr = np.sqrt((iv-0.5-microLensCtr[0])**2 + (jv-0.5-microLensCtr[1])**2)
-        camPixRays[distFromCtr > rNA] = np.NaN
-        iRel2Ctr = iv-0.5-microLensCtr[0]
-        jRel2Ctr = jv-0.5-microLensCtr[1]
-        camPixRaysAzim = np.round(np.rad2deg(np.arctan2(jRel2Ctr, iRel2Ctr)))
-        camPixRaysAzim[distFromCtr > rNA] = np.NaN
-        distFromCtr[distFromCtr > rNA] = np.NaN
-        camPixRaysTilt = np.round(np.rad2deg(np.arcsin(distFromCtr/rNA*naObj/nMedium)))
 
-        '''Camera ray entrance. For each inital ray position, we find the position on the 
-        entrance face of the object cube for which the ray enters.
-        This is bascially the same as "rayEnter". Here x=0.'''
-        camRayEntranceX = np.zeros([nrCamPix, nrCamPix])
-        camRayEntranceY = volCtr[0]*np.tan(np.deg2rad(camPixRaysTilt))*np.sin(np.deg2rad(camPixRaysAzim))+volCtr[1]
-        camRayEntranceZ = volCtr[0]*np.tan(np.deg2rad(camPixRaysTilt))*np.cos(np.deg2rad(camPixRaysAzim))+volCtr[2]
-        camRayEntranceX[np.isnan(camRayEntranceY)] = np.NaN
-        nrRays = np.sum(~np.isnan(camRayEntranceY)) # Number of all rays in use
-        camRayEntrance = np.array([camRayEntranceX, camRayEntranceY, camRayEntranceZ])
-        rayEnter = camRayEntrance.copy()
-        volCtrGridTemp = np.array([np.full((nrCamPix,nrCamPix), volCtr[i]) for i in range(3)])
-        rayExit = rayEnter + 2 * (volCtrGridTemp - rayEnter)
+    microLensCtr = [8, 8] # (unit: camera pixels)
+    rNA = 7.5 # radius of edge of microlens lens (unit:camera pixels), 
+                # can be measured in back focal plane of microlenses
+    camPixRays = np.zeros([nrCamPix, nrCamPix])
+    i = np.linspace(1, nrCamPix, nrCamPix)
+    j = np.linspace(1, nrCamPix, nrCamPix)
+    jv, iv = np.meshgrid(i, j) # row/column defined instead of by coordinate
+    distFromCtr = np.sqrt((iv-0.5-microLensCtr[0])**2 + (jv-0.5-microLensCtr[1])**2)
+    camPixRays[distFromCtr > rNA] = np.NaN
+    iRel2Ctr = iv-0.5-microLensCtr[0]
+    jRel2Ctr = jv-0.5-microLensCtr[1]
+    camPixRaysAzim = np.round(np.rad2deg(np.arctan2(jRel2Ctr, iRel2Ctr)))
+    camPixRaysAzim[distFromCtr > rNA] = np.NaN
+    distFromCtr[distFromCtr > rNA] = np.NaN
+    camPixRaysTilt = np.round(np.rad2deg(np.arcsin(distFromCtr/rNA*naObj/nMedium)))
 
-        # Plot
-        # plot_rays_at_sample(rayEnter, rayExit, colormap='inferno', optical_config=optic_config)
+    '''Camera ray entrance. For each inital ray position, we find the position on the 
+    entrance face of the object cube for which the ray enters.
+    This is bascially the same as "rayEnter". Here x=0.'''
+    camRayEntranceX = np.zeros([nrCamPix, nrCamPix])
+    camRayEntranceY = volCtr[0]*np.tan(np.deg2rad(camPixRaysTilt))*np.sin(np.deg2rad(camPixRaysAzim))+volCtr[1]
+    camRayEntranceZ = volCtr[0]*np.tan(np.deg2rad(camPixRaysTilt))*np.cos(np.deg2rad(camPixRaysAzim))+volCtr[2]
+    camRayEntranceX[np.isnan(camRayEntranceY)] = np.NaN
+    nrRays = np.sum(~np.isnan(camRayEntranceY)) # Number of all rays in use
+    camRayEntrance = np.array([camRayEntranceX, camRayEntranceY, camRayEntranceZ])
+    rayEnter = camRayEntrance.copy()
+    volCtrGridTemp = np.array([np.full((nrCamPix,nrCamPix), volCtr[i]) for i in range(3)])
+    rayExit = rayEnter + 2 * (volCtrGridTemp - rayEnter)
 
-        '''Direction of the rays at the exit plane'''
-        rayDiff = rayExit - rayEnter
-        rayDiff = rayDiff / np.linalg.norm(rayDiff, axis=0)
-    else:
-        # Using function instead of code above
-        pixels_per_ml = 17
-        rayEnter, rayExit, rayDiff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
+    # Plot
+    # plot_rays_at_sample(rayEnter, rayExit, colormap='inferno', optical_config=optic_config)
+
+    '''Direction of the rays at the exit plane'''
+    rayDiff = rayExit - rayEnter
+    rayDiff = rayDiff / np.linalg.norm(rayDiff, axis=0)
 
     '''For the (i,j) pixel behind a single microlens'''
     i = 8
-    j = 1
+    j = 5
     start = rayEnter[:,i,j]
     stop = rayExit[:,i,j]
     siddon_list = siddon_params(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
@@ -141,7 +133,7 @@ def main():
     ell_in_voxels = siddon_lengths(start, stop, siddon_list)
 
     # Plot
-    plot_ray_path(start, stop, voxels_of_segs, optic_config, ell_in_voxels, colormap='hot')
+    plot_ray_path(start, stop, voxels_of_segs, optic_config)
     # {
     #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
     #     'volume_size_um' : }optic_config)

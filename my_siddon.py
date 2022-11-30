@@ -7,29 +7,26 @@ def siddon_params(start, stop, vox_pitch, vox_count):
     dx, dy, dz = vox_pitch
     pix_numx, pix_numy, pix_numz = vox_count
 
-    #first, compute starting and ending parametric values in each dimension
-    if (x2 - x1) != 0:
-        ax_0 = -x1/(x2 - x1)
-        ax_N = (pix_numx*dx - x1)/(x2 - x1)
+    # Compute starting and ending parametric values in each dimension
+    ray_diff = stop - start
+    print(f"Difference between start and stop: {ray_diff}")
+    if np.all(ray_diff):
+        a_0 = - start / ray_diff
+        a_N = (np.array(vox_count) * np.array(vox_pitch) - start) / ray_diff
     else:
-        ax_0 = 0
-        ax_N = 1
-    if (y2 - y1) != 0:
-        ay_0 = -y1/(y2 - y1)
-        ay_N = (pix_numy*dy - y1)/(y2 - y1)
-    else:
-        ay_0 = 0
-        ay_N = 1
-    if (z2 - z1) != 0:
-        az_0 = -z1/(z2 - z1)
-        az_N = (pix_numz*dz - z1)/(z2 - z1) #todo: geneva, was this an error? not multiplying by dz
-    else:
-        az_0 = 0
-        az_N = 1
-        
-    #then calculate absolute max and min parametric values
-    a_min = max(0, min(ax_0, ax_N), min(ay_0, ay_N), min(az_0, az_N))
-    a_max = min(1, max(ax_0, ax_N), max(ay_0, ay_N), max(az_0, az_N))
+        # Start and stop rays are on the same x, y, or z plane
+        a_0 = np.zeros(3)
+        a_N = np.zeros(3)
+        for i in range(len(ray_diff)):
+            if ray_diff[i] == 0:
+                a_0[i] = 0
+                a_N[i] = 1
+            else:
+                a_0[i] = - start[i] / ray_diff[i]
+                a_N[i] = (np.array(vox_count)[i] * np.array(vox_pitch)[i] - start[i]) / ray_diff[i]
+    # Calculate absolute max and min parametric values
+    a_min = max(0, max([min(a_0[i], a_N[i]) for i in range(3)]))
+    a_max = min(1, min([max(a_0[i], a_N[i]) for i in range(3)]))
 
     #now find range of indices corresponding to max/min a values
     if (x2 - x1) >= 0:
