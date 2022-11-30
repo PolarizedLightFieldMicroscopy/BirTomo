@@ -1,11 +1,7 @@
 import numpy as np
 
 global wavelength
-
 wavelength = 0.550
-
-def set_wavelength(wl):
-    wavelength = wl
 
 def rotation_matrix(axis, angle):
     '''Generates the rotation matrix that will rotate a 3D vector

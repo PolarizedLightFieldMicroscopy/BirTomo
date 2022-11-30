@@ -50,3 +50,17 @@ def rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr):
     ray_diff = ray_exit - ray_enter
     ray_diff = ray_diff / np.linalg.norm(ray_diff, axis=0)
     return ray_enter, ray_exit, ray_diff
+
+def main():
+    # Volume shape
+    voxNrX = 5
+    voxNrYZ = 5
+    voxPitch = 1
+    axialPitch = voxPitch
+    # voxCtr = np.array([(voxNrX - 1) / 2, (voxNrYZ - 1) / 2, (voxNrYZ - 1) / 2]) # in index units
+    voxCtr = np.array([voxNrX / 2, voxNrYZ / 2, voxNrYZ / 2]) # in index units
+    volCtr = [voxCtr[0] * axialPitch, voxCtr[1] * voxPitch, voxCtr[2] * voxPitch]   # in vol units (um)
+    ray_enter, ray_exit, ray_diff = rays_through_vol(17, 1.2, 1.52, volCtr)
+
+if __name__ == '__main__':
+    main()
