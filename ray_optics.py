@@ -24,7 +24,7 @@ def rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr):
     # Units are in pixel indicies, referring to the pixel that is centered up 0.5 units
     #   Ex: if ml_ctr = [8, 8], then the spatial center pixel is at [8.5, 8.5]
     ml_ctr = [(pixels_per_ml - 1)/ 2, (pixels_per_ml - 1)/ 2]
-    ml_radius = pixels_per_ml / 2
+    ml_radius = 7.5 # pixels_per_ml / 2
     i = np.linspace(0, pixels_per_ml - 1, pixels_per_ml)
     j = np.linspace(0, pixels_per_ml - 1, pixels_per_ml)
     jv, iv = np.meshgrid(i, j)

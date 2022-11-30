@@ -8,12 +8,12 @@ from plotting_tools import *
 # Import waveblocks objects
 from waveblocks.blocks.optic_config import *
 
-plot_ray = True
+plot = True
 
 magnObj = 60
-nrCamPix = 16 # num pixels behind lenslet
+pixels_per_ml = 17 # num pixels behind lenslet
 camPixPitch = 6.5
-microLensPitch = nrCamPix * camPixPitch / magnObj
+microLensPitch = pixels_per_ml * camPixPitch / magnObj
 # voxPitch is the width of each voxel in um (dividing by 5 to supersample)
 voxPitch = microLensPitch / 1
 # voxPitch = 1
@@ -33,12 +33,11 @@ nVoxX = axialPitch * voxNrX
 nVoxYZ = voxPitch * voxNrYZ
 
 voxCtr = np.array([voxNrX / 2, voxNrYZ / 2, voxNrYZ / 2]) # okay if not integers
-# voxCtr = np.array([(voxNrX - 1) / 2, (voxNrYZ - 1) / 2, (voxNrYZ - 1) / 2]) # in index units
 volCtr = [voxCtr[0] * axialPitch, voxCtr[1] * voxPitch, voxCtr[2] * voxPitch]   # in vol units (um)
 
 wavelength = 0.550
 naObj = 1.2
-nMedium = 1.52
+nMedium = 1.33 # 1.52
 
 # Populate OpticConfig from WaveBlocks with these values, to start migration
 optic_config = OpticConfig()
@@ -50,7 +49,7 @@ if not use_default_values:
     optic_config.PSF_config.ni = nMedium   # Refractive index of sample (experimental)
     optic_config.PSF_config.ni0 = nMedium  # Refractive index of sample (design value)
     optic_config.PSF_config.wvl = wavelength
-    optic_config.mla_config.n_pixels_per_mla = nrCamPix
+    optic_config.mla_config.n_pixels_per_mla = pixels_per_ml
     optic_config.camera_config.sensor_pitch = camPixPitch
     optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
     optic_config.mla_config.n_mlas = 100
@@ -75,25 +74,25 @@ else:
     optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
 def main():
-    pixels_per_ml = 17
-    rayEnter, rayExit, rayDiff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
+    ray_enter, ray_exit, rayDiff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
 
     '''For the (i,j) pixel behind a single microlens'''
     i = 3
-    j = 14
-    start = rayEnter[:,i,j]
-    stop = rayExit[:,i,j]
+    j = 10
+    start = ray_enter[:,i,j]
+    stop = ray_exit[:,i,j]
     siddon_list = siddon_params(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
     seg_mids = siddon_midpoints(start, stop, siddon_list)
     voxels_of_segs = vox_indices(seg_mids, optic_config.volume_config.voxel_size_um)
     ell_in_voxels = siddon_lengths(start, stop, siddon_list)
 
-    # Plot
-    if plot_ray:
+    if plot:
+        # plot_rays_at_sample(ray_enter, ray_exit, colormap='inferno', optical_config=None, use_matplotlib=False)
         plot_ray_path(start, stop, voxels_of_segs, optic_config, ell_in_voxels, colormap='hot')
     # {
     #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
     #     'volume_size_um' : }optic_config)
+
     ray = rayDiff[:,i,j]
     rayDir = calc_rayDir(ray)
     JM_list = []
