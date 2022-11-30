@@ -61,11 +61,11 @@ class VolumeLFM(OpticBlock):
             z=x_coords[:-1,:-1,:-1].flatten(),
             value=voxels.flatten(),
             isomin=0,
-            isomax=1,
-            opacity=0.01, # needs to be small to see through all surfaces
+            isomax=.1,
+            opacity=1, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
             ))
-        
+        fig.data = fig.data[::-1]
         # Draw the whole volume span
         fig.add_mesh3d(
                 # 8 vertices of a cube
@@ -104,8 +104,8 @@ class RayTraceLFM(OpticBlock):
         # Pre-compute rays and paths through the volume
         # This are defined in compute_rays_geometry
         self.ray_valid_indexes = None
-        self.ray_vol_col_indexes = None
-        self.ray_vol_col_lengths = None
+        self.ray_vol_colli_indexes = None
+        self.ray_vol_colli_lengths = None
 
     def forward(self, volume_in : VolumeLFM=None):
         # Check if type of volume is the same as input volume, if one is provided
@@ -141,8 +141,8 @@ class RayTraceLFM(OpticBlock):
         i_range,j_range = self.ray_entry.shape[1:]
         # Compute Siddon's algorithm for each ray
         ray_valid_indexes = []
-        ray_vol_col_indexes = []
-        ray_vol_col_lengths = []
+        ray_vol_colli_indexes = []
+        ray_vol_colli_lengths = []
         for ii in range(i_range):
             for jj in range(j_range):
                 start = ray_enter[:,ii,jj]
@@ -156,32 +156,33 @@ class RayTraceLFM(OpticBlock):
 
                 # Store in a temporary list
                 ray_valid_indexes.append((ii,jj))
-                ray_vol_col_indexes.append(voxels_of_segs)
-                ray_vol_col_lengths.append(voxel_intersection_lengths)
+                ray_vol_colli_indexes.append(voxels_of_segs)
+                ray_vol_colli_lengths.append(voxel_intersection_lengths)
         
         # Maximum number of interactions, to define 
-        max_ray_voxels_collision = np.max([len(D) for D in ray_vol_col_indexes])
+        max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indexes])
         n_valid_rays = len(ray_valid_indexes)
 
         # Create the information to store
         self.ray_valid_indexes = ray_valid_indexes
         # Store as tuples for now
-        self.ray_vol_col_indexes = ray_vol_col_indexes #torch.zeros(n_valid_rays, max_ray_voxels_collision)
-        self.ray_vol_col_lengths = torch.zeros(n_valid_rays, max_ray_voxels_collision)
+        self.ray_vol_colli_indexes = ray_vol_colli_indexes #torch.zeros(n_valid_rays, max_ray_voxels_collision)
+        self.ray_vol_colli_lengths = torch.zeros(n_valid_rays, max_ray_voxels_collision)
 
         # Fill these tensors
+        # todo: indexes is indices 
         for valid_ray in range(n_valid_rays):
             # Fetch the ray-voxel collision indexes for this ray
-            # val_indexes = ray_vol_col_indexes[valid_ray]
-            # self.ray_vol_col_indexes[valid_ray, :len(val_indexes)] = val_indexes
+            # val_indexes = ray_vol_colli_indexes[valid_ray]
+            # self.ray_vol_colli_indexes[valid_ray, :len(val_indexes)] = val_indexes
             # Fetch the ray-voxel intersection length for this ray
-            val_lengths = ray_vol_col_lengths[valid_ray]
-            self.ray_vol_col_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
+            val_lengths = ray_vol_colli_lengths[valid_ray]
+            self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
         
         if filename is not None:
             self.pickle(filename)
             print(f'Saved RayTraceLFM object from {filename}')
-        return 0
+        return self
 
     def pickle(self, filename):
         f = open(filename, 'wb')
