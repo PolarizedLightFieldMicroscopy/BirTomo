@@ -64,9 +64,9 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         z_ranges = np.linspace(0, z_size-1, n_planes*2).astype(int)
 
         if n_planes==1:
-            vol[0, z_size//2, :, :] = np.pi
-            vol[1, z_size//2, :, :] = 0.5
-            vol[2, z_size//2, :, :] = 0.5
+            vol[0, z_size//2, :, :] = 0.1
+            vol[1, z_size//2, :, :] = 1
+            # vol[2, z_size//2, :, :] = 1
             return vol
         random_data = BirefringentRaytraceLFM.generate_random_volume([n_planes])
         for z_ix in range(0,n_planes):

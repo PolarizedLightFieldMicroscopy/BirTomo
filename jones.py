@@ -20,7 +20,7 @@ def rotation_matrix(axis, angle):
 
 def voxRayJM(Delta_n, opticAxis, rayDir, ell):
     '''Compute Jones matrix associated with a particular ray and voxel combination'''
-    # Azimuth is the angle of the sloq axis of retardance.
+    # Azimuth is the angle of the slow axis of retardance.
     azim = np.arctan2(np.dot(opticAxis, rayDir[1]), np.dot(opticAxis, rayDir[2]))
     if Delta_n == 0:
         azim = 0
@@ -32,6 +32,10 @@ def voxRayJM(Delta_n, opticAxis, rayDir, ell):
     offdiag = 1j * np.sin(2 * azim) * np.sin(ret / 2)
     diag1 = np.cos(ret / 2) + 1j * np.cos(2 * azim) * np.sin(ret / 2)
     diag2 = np.conj(diag1)
+    # Check JM computation: Set ell=wavelength
+    # JM00 = np.exp(1j*ret/2) * np.cos(azim)**2 + np.exp(-1j*ret/2) * np.sin(azim)**2
+    # JM10 = 2j * np.sin(azim) * np.cos(azim) * np.sin(ret/2)
+    # JM11 = np.exp(-1j*ret/2) * np.cos(azim)**2 + np.exp(1j*ret/2) * np.sin(azim)**2
     return np.matrix([[diag1, offdiag], [offdiag, diag2]])
 
 def rayJM(JMlist):
@@ -46,7 +50,7 @@ def rayJM(JMlist):
 def find_orthogonal_vec(v1, v2):
     '''v1 and v2 are numpy arrays (3d vectors)
     This function accomodates for a divide by zero error.'''
-    x = np.dot(v1, v2) / (np.norm(v1) * np.norm(v2))
+    x = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
     # Check if vectors are parallel or anti-parallel
     if x == 1 or x == -1:
         if v1[1] == 0:
@@ -129,7 +133,12 @@ def calc_retardance(JM):
     else:
         arctan = np.arctan(1j * np.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2))
         retardance = 2 * np.real(arctan)
-    return retardance
+    
+    # Alternative way of computing this, according to:
+    # "Three-dimensional polarization ray-tracing calculus II: retardance"
+    # x = np.linalg.eigvals(JM)
+    # retardance = np.angle(x[1], deg=False)-np.angle([x[0]], deg=False)
+    return np.abs(retardance)
 
 def calc_azimuth(JM):
     '''Calculates the retardance azimuth in radians from a Jones matrix
@@ -148,6 +157,7 @@ def calc_azimuth(JM):
         azimuth = 0
     else:
         azimuth = np.real(np.arctan2(a, b)) / 2 + np.pi / 2
+
     return azimuth
 
 def main():
