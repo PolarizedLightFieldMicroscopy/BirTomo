@@ -43,6 +43,25 @@ def rayJM(JMlist):
         product = product @ JM
     return product
 
+def find_orthogonal_vec(v1, v2):
+    '''v1 and v2 are numpy arrays (3d vectors)
+    This function accomodates for a divide by zero error.'''
+    x = np.dot(v1, v2) / (np.norm(v1) * np.norm(v2))
+    # Check if vectors are parallel or anti-parallel
+    if x == 1 or x == -1:
+        if v1[1] == 0:
+            normal_vec = np.array([0, 1, 0])
+        elif v1[2] == 0:
+            normal_vec = np.array([0, 0, 1])
+        elif v1[0] == 0:
+            normal_vec = np.array([1, 0, 0])
+        else:
+            non_par_vec = np.array([1, 0, 0])
+            normal_vec = np.cross(v1, non_par_vec) / np.linalg.norm(np.cross(v1, non_par_vec))
+    else:
+        normal_vec = np.cross(v1, v2) / np.linalg.norm(np.cross(v1, v2))
+    return normal_vec
+
 def calc_rayDir(ray):
     '''
     Allows to the calculations to be done in ray-space coordinates
@@ -62,7 +81,8 @@ def calc_rayDir(ray):
     scope_perp2 = np.array([0,0,1])
     theta = np.arccos(np.dot(ray, scope_axis))
     # print(f"Rotating by {np.around(np.rad2deg(theta), decimals=0)} degrees")
-    normal_vec = np.cross(ray, scope_axis) / np.linalg.norm(np.cross(ray, scope_axis))
+    normal_vec = find_orthogonal_vec(ray, scope_axis)
+    # normal_vec = np.cross(ray, scope_axis) / np.linalg.norm(np.cross(ray, scope_axis))
     Rinv = rotation_matrix(normal_vec, -theta)
     # Extracting basis vectors that are orthogonal to the ray and will be parallel
     # to the laboratory axes that are not the optic axis after a rotation.
@@ -102,10 +122,13 @@ def calc_retardance(JM):
     diag_sum = JM[0, 0] + JM[1, 1]
     diag_diff = JM[1, 1] - JM[0, 0]
     off_diag_sum = JM[0, 1] + JM[1, 0]
-    # print(f"sqrt portion: {np.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2)}")
     # Note: np.arctan(1j) and np.arctan(-1j) gives an divide by zero error
-    arctan = np.arctan(1j * np.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2))
-    retardance = 2 * np.real(arctan)
+    value = np.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2)
+    if value == 1 or value == -1:
+        retardance = 0
+    else:
+        arctan = np.arctan(1j * np.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2))
+        retardance = 2 * np.real(arctan)
     return retardance
 
 def calc_azimuth(JM):
@@ -129,6 +152,12 @@ def calc_azimuth(JM):
 
 def main():
     JM = np.array([[3, 0], [0, 0]])
+    ret = calc_retardance(JM)
+    azim = calc_azimuth(JM)
+    print(ret / np.pi, azim / np.pi)
+
+    JM = voxRayJM(1, np.array([1, 0, 0]), [np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])], 1)
+    print(JM)
     ret = calc_retardance(JM)
     azim = calc_azimuth(JM)
     print(ret / np.pi, azim / np.pi)
