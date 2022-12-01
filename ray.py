@@ -73,27 +73,12 @@ else:
     optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
     optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
-def main():
-    ray_enter, ray_exit, rayDiff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
-
+def calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j):
     '''For the (i,j) pixel behind a single microlens'''
-    i = 3
-    j = 10
     start = ray_enter[:,i,j]
     stop = ray_exit[:,i,j]
-    siddon_list = siddon_params(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
-    seg_mids = siddon_midpoints(start, stop, siddon_list)
-    voxels_of_segs = vox_indices(seg_mids, optic_config.volume_config.voxel_size_um)
-    ell_in_voxels = siddon_lengths(start, stop, siddon_list)
-
-    if plot:
-        # plot_rays_at_sample(ray_enter, ray_exit, colormap='inferno', optical_config=None, use_matplotlib=False)
-        plot_ray_path(start, stop, voxels_of_segs, optic_config, ell_in_voxels, colormap='hot')
-    # {
-    #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
-    #     'volume_size_um' : }optic_config)
-
-    ray = rayDiff[:,i,j]
+    voxels_of_segs, ell_in_voxels = siddon(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
+    ray = ray_diff[:,i,j]
     rayDir = calc_rayDir(ray)
     JM_list = []
     for m in range(len(ell_in_voxels)):
@@ -103,6 +88,25 @@ def main():
         JM = voxRayJM(Delta_n, opticAxis, rayDir, ell)
         JM_list.append(JM)
     effective_JM = rayJM(JM_list)
+    return effective_JM
+
+def main():
+    ray_enter, ray_exit, ray_diff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
+    i = 3
+    j = 10
+    effective_JM = calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j)
+
+    if plot:
+        # plot_rays_at_sample(ray_enter, ray_exit, colormap='inferno', optical_config=None, use_matplotlib=False)
+        start = ray_enter[:,i,j]
+        stop = ray_exit[:,i,j]
+        voxels_of_segs, ell_in_voxels = siddon(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
+        plot_ray_path(start, stop, voxels_of_segs, optic_config, ell_in_voxels, colormap='hot')
+    # {
+    #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
+    #     'volume_size_um' : }optic_config)
+
+
     print(f"Effective Jones matrix for the ray hitting pixel {i, j}: {effective_JM}")
     ret = calc_retardance(effective_JM)
     azim = calc_azimuth(effective_JM)

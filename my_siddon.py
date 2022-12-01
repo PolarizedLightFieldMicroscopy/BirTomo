@@ -108,3 +108,10 @@ def siddon_lengths(start, stop, a_list):
     for m in range(1, len(a_list)):
         lengths.append(entire_length * (a_list[m] - a_list[m - 1]))
     return lengths
+
+def siddon(start, stop, voxel_size, volume_shape):
+    siddon_list = siddon_params(start, stop, voxel_size, volume_shape)
+    seg_mids = siddon_midpoints(start, stop, siddon_list)
+    voxels_of_segs = vox_indices(seg_mids, voxel_size)
+    ell_in_voxels = siddon_lengths(start, stop, siddon_list)
+    return voxels_of_segs, ell_in_voxels
