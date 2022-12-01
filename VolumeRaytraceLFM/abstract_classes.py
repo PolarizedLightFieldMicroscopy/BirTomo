@@ -61,10 +61,11 @@ class VolumeLFM(OpticBlock):
             y=y_coords[:-1,:-1,:-1].flatten(),
             z=x_coords[:-1,:-1,:-1].flatten(),
             value=voxels.flatten(),
-            isomin=0,
-            isomax=.1,
+            # isomin=-0.1,
+            # isomax=0.1,
             opacity=opacity, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
+            colorscale='inferno'
             ))
         fig.data = fig.data[::-1]
         # Draw the whole volume span

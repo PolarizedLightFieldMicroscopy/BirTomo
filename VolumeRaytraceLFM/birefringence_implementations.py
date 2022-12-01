@@ -37,8 +37,9 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             volume_ref.voxel_parameters = torch.zeros([4,] + volume_ref.config.volume_shape)
         elif init_mode=='random':
             volume_ref.voxel_parameters = self.generate_random_volume(volume_ref.config.volume_shape)
-        elif init_mode=='3planes':
-            volume_ref.voxel_parameters = self.generate_planes_volume(volume_ref.config.volume_shape) # Perpendicular optic axes each with constant birefringence and orientation 
+        elif 'planes' in init_mode:
+            n_planes = int(init_mode[0])
+            volume_ref.voxel_parameters = self.generate_planes_volume(volume_ref.config.volume_shape, n_planes) # Perpendicular optic axes each with constant birefringence and orientation 
         elif init_mode=='psf':
             volume_ref.voxel_parameters = torch.zeros([4,] + volume_ref.config.volume_shape)
             volume_ref.voxel_parameters[:, ]
@@ -57,11 +58,16 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         return torch.cat((Delta_n.unsqueeze(0), (a_0/norm_A).unsqueeze(0), (a_1/norm_A).unsqueeze(0), (a_2/norm_A).unsqueeze(0)),0)
     
     @staticmethod
-    def generate_planes_volume(volume_shape, n_planes=3):
+    def generate_planes_volume(volume_shape, n_planes=1):
         vol = torch.zeros([4,] + volume_shape)
         z_size = volume_shape[0]
         z_ranges = np.linspace(0, z_size-1, n_planes*2).astype(int)
 
+        if n_planes==1:
+            vol[0, z_size//2, :, :] = np.pi
+            vol[1, z_size//2, :, :] = 0.5
+            vol[2, z_size//2, :, :] = 0.5
+            return vol
         random_data = BirefringentRaytraceLFM.generate_random_volume([n_planes])
         for z_ix in range(0,n_planes):
             vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = random_data[:,z_ix].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1,1,volume_shape[1],volume_shape[2])
