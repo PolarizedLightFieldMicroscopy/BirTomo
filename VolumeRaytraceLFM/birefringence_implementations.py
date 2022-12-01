@@ -8,6 +8,7 @@ from waveblocks.blocks.optic_block import OpticBlock
 from waveblocks.blocks.optic_config import *
 
 from VolumeRaytraceLFM.abstract_classes import *
+from jones_torch import *
 
 ############ Implementations
 
@@ -24,10 +25,44 @@ class BirefringentRaytraceLFM(RayTraceLFM):
 
         # We either define a volume here or use one provided by the user
 
-    def ray_trace(self, volume_in : VolumeLFM = None):
-        #todo
+    def ray_trace_through_volume(self, volume_in : VolumeLFM = None):
+        
         return 0
     
+    def calc_cummulative_JM_of_ray(self, ray_ix, voxel_parameters):
+        '''For the (i,j) pixel behind a single microlens'''
+        i,j = self.ray_valid_indexes[ray_ix]
+        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indexes[ray_ix], self.ray_vol_colli_lengths[ray_ix]
+        ray = self.ray_direction[:,i,j]
+        rayDir = calc_rayDir(ray)
+        JM_list = []
+        for m in range(len(voxels_of_segs)):
+            ell = ell_in_voxels[m]
+            vox = voxels_of_segs[m]
+            my_params = voxel_parameters[:, vox[0], vox[1], vox[2]]
+            Delta_n = my_params[0]
+            opticAxis = my_params[1:]
+            # Only compute if there's an opticAxis, if not, return identity
+            if torch.all(opticAxis==0):
+                JM = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64)
+            else:
+                JM = voxRayJM(Delta_n, opticAxis, rayDir, ell)
+            JM_list.append(JM)
+        effective_JM = rayJM(JM_list)
+        return effective_JM
+
+    def ret_and_azim_images(self, volume_in : VolumeLFM = None):
+        pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
+        ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
+        azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
+        for ray_ix, (i,j) in enumerate(self.ray_valid_indexes):
+            effective_JM = self.calc_cummulative_JM_of_ray(ray_ix, volume_in.voxel_parameters)
+            ret_image[i, j] = calc_retardance(effective_JM)
+            azim_image[i, j] = calc_azimuth(effective_JM)
+        return ret_image, azim_image
+
+
+########### Generate different birefringent volumes 
     def init_volume(self, volume_ref : VolumeLFM = None, init_mode='zeros'):
         # IF the user doesn't provide a volume, let's create one and return it
         if volume_ref is None:

@@ -117,7 +117,7 @@ class RayTraceLFM(OpticBlock):
         if volume_in is not None:
             assert volume_in.simul_type == self.simul_type, f"Error: wrong type of volume provided, this \
             ray-tracer works for {self.simul_type} and a volume {volume_in.simul_type} was provided"
-        return self.ray_trace(volume_in)
+        return self.ray_trace_through_volume(volume_in)
     
     def compute_rays_geometry(self, filename=None):
         if filename is not None and exists(filename):
@@ -141,9 +141,9 @@ class RayTraceLFM(OpticBlock):
 
         # Store locally
         # 2D to 1D index
-        self.ray_entry = torch.from_numpy(ray_enter)
-        self.ray_exit = torch.from_numpy(ray_exit)
-        self.ray_direction = torch.from_numpy(ray_diff)
+        self.ray_entry = torch.from_numpy(ray_enter).float()
+        self.ray_exit = torch.from_numpy(ray_exit).float()
+        self.ray_direction = torch.from_numpy(ray_diff).float()
 
         i_range,j_range = self.ray_entry.shape[1:]
         # Compute Siddon's algorithm for each ray
@@ -206,7 +206,7 @@ class RayTraceLFM(OpticBlock):
 
 
     ######## Not implemented: These functions need an implementation in derived objects
-    def ray_trace(self, volume_in : VolumeLFM=None):
+    def ray_trace_through_volume(self, volume_in : VolumeLFM=None):
         """ We have a separate function as we have some basic functionality that is shared"""
         raise NotImplementedError
     
