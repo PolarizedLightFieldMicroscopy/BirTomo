@@ -36,7 +36,7 @@ volume_3_planes = BF_raytrace.init_volume(init_mode='3planes')
 
 my_volume = BF_raytrace.init_volume(init_mode='zeros')
 my_volume.voxel_parameters[:, BF_raytrace.vox_ctr_idx[0], BF_raytrace.vox_ctr_idx[1], BF_raytrace.vox_ctr_idx[2]] = torch.tensor([np.pi, 1, 0, 0])
-my_volume.plot_volume_plotly()
+my_volume.plot_volume_plotly(opacity=0.5)
 
 ray_enter, ray_exit, ray_diff = rays_through_vol(optic_config.mla_config.n_pixels_per_mla, optic_config.PSF_config.NA, optic_config.PSF_config.ni, BF_raytrace.volCtr)
 ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, optic_config.mla_config.n_pixels_per_mla, my_volume.voxel_parameters)

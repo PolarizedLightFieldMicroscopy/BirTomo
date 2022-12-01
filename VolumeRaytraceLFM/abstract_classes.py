@@ -37,7 +37,7 @@ class VolumeLFM(OpticBlock):
         """ This function samples the volume on a given coordinate or list of coordinates"""
         return self.voxel_parameters[coords,...]
     
-    def plot_volume_plotly(self, voxels=None):
+    def plot_volume_plotly(self, voxels=None, opacity=0.5):
         
         if voxels is None:
             voxels = self.voxel_parameters[0,...].clone()
@@ -63,7 +63,7 @@ class VolumeLFM(OpticBlock):
             value=voxels.flatten(),
             isomin=0,
             isomax=.1,
-            opacity=1, # needs to be small to see through all surfaces
+            opacity=opacity, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
             ))
         fig.data = fig.data[::-1]
