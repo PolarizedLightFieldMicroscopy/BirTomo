@@ -1,4 +1,6 @@
 import numpy as np
+from my_siddon import siddon
+from object import get_ellipsoid
 
 global wavelength
 wavelength = 0.550
@@ -24,9 +26,9 @@ def voxRayJM(Delta_n, opticAxis, rayDir, ell):
         azim = 0
     elif Delta_n < 0:
         azim = azim + np.pi / 2
-    print(f"Azimuth angle of index ellipsoid is {np.around(np.rad2deg(azim), decimals=0)} degrees.")
+    # print(f"Azimuth angle of index ellipsoid is {np.around(np.rad2deg(azim), decimals=0)} degrees.")
     ret = abs(Delta_n) * (1 - np.dot(opticAxis, rayDir[0]) ** 2) * 2 * np.pi * ell / wavelength
-    print(f"Accumulated retardance from index ellipsoid is {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
+    # print(f"Accumulated retardance from index ellipsoid is {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
     offdiag = 1j * np.sin(2 * azim) * np.sin(ret / 2)
     diag1 = np.cos(ret / 2) + 1j * np.cos(2 * azim) * np.sin(ret / 2)
     diag2 = np.conj(diag1)
@@ -59,7 +61,7 @@ def calc_rayDir(ray):
     scope_perp1 = np.array([0,1,0])
     scope_perp2 = np.array([0,0,1])
     theta = np.arccos(np.dot(ray, scope_axis))
-    print(f"Rotating by {np.around(np.rad2deg(theta), decimals=0)} degrees")
+    # print(f"Rotating by {np.around(np.rad2deg(theta), decimals=0)} degrees")
     normal_vec = np.cross(ray, scope_axis) / np.linalg.norm(np.cross(ray, scope_axis))
     Rinv = rotation_matrix(normal_vec, -theta)
     # Extracting basis vectors that are orthogonal to the ray and will be parallel
@@ -68,6 +70,27 @@ def calc_rayDir(ray):
     ray_perp1 = np.dot(Rinv, scope_perp1)
     ray_perp2 = np.dot(Rinv, scope_perp2)
     return [ray, ray_perp1, ray_perp2]
+
+def calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, optic_config, voxel_parameters):
+    '''For the (i,j) pixel behind a single microlens'''
+    start = ray_enter[:,i,j]
+    stop = ray_exit[:,i,j]
+    voxels_of_segs, ell_in_voxels = siddon(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
+    ray = ray_diff[:,i,j]
+    rayDir = calc_rayDir(ray)
+    JM_list = []
+    for m in range(len(ell_in_voxels)):
+        ell = ell_in_voxels[m]
+        vox = voxels_of_segs[m]
+        my_params = voxel_parameters[:, vox[0], vox[1], vox[2]].numpy()
+        Delta_n = my_params[0]
+        opticAxis = my_params[1:]
+        # get_ellipsoid(vox)
+        JM = voxRayJM(Delta_n, opticAxis, rayDir, ell)
+        JM_list.append(JM)
+    effective_JM = rayJM(JM_list)
+    return effective_JM
+
 
 def calc_retardance(JM):
     '''Calculates the retardance magnitude in radians from a Jones matrix

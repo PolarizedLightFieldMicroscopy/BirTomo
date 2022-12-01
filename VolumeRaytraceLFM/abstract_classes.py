@@ -30,6 +30,7 @@ class VolumeLFM(OpticBlock):
         self.config = optic_config.volume_config
 
         # List of voxels with parameters assigned to each voxel. The parameters will depend on the simul_type.
+        # array of parameters, followed by x, y, z, coordinates
         self.voxel_parameters = None
     
     def forward(self, coords : list):
@@ -85,6 +86,9 @@ class VolumeLFM(OpticBlock):
         fig.show()
         return
 
+    def get_vox_params(self, vox_index):
+        '''vox_index is a tuple'''
+        return self.voxel_parameters[:, vox_index]
 
 
 class RayTraceLFM(OpticBlock):
@@ -126,11 +130,13 @@ class RayTraceLFM(OpticBlock):
         nMedium = self.optic_config.PSF_config.ni
         vol_shape = self.optic_config.volume_config.volume_shape
         axial_pitch,xy_pitch,xy_pitch = self.optic_config.volume_config.voxel_size_um
-        voxCtr = np.array([(vol_shape[0] - 1) / 2, (vol_shape[1] - 1) / 2, (vol_shape[2] - 1) / 2]) # in index units
-        volCtr = [voxCtr[0] * axial_pitch, voxCtr[1] * xy_pitch, voxCtr[2] * xy_pitch]   # in vol units (um)
+        vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
+        self.vox_ctr_idx = vox_ctr_idx.astype(int)
+        self.voxCtr = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
+        self.volCtr = [self.voxCtr[0] * axial_pitch, self.voxCtr[1] * xy_pitch, self.voxCtr[2] * xy_pitch]   # in vol units (um)
         
         # Call Geneva's function
-        ray_enter, ray_exit, ray_diff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
+        ray_enter, ray_exit, ray_diff = rays_through_vol(pixels_per_ml, naObj, nMedium, self.volCtr)
 
         # Store locally
         # 2D to 1D index

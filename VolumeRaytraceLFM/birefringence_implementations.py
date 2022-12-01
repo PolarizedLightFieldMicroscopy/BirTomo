@@ -39,6 +39,10 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             volume_ref.voxel_parameters = self.generate_random_volume(volume_ref.config.volume_shape)
         elif init_mode=='3planes':
             volume_ref.voxel_parameters = self.generate_planes_volume(volume_ref.config.volume_shape) # Perpendicular optic axes each with constant birefringence and orientation 
+        elif init_mode=='psf':
+            volume_ref.voxel_parameters = torch.zeros([4,] + volume_ref.config.volume_shape)
+            volume_ref.voxel_parameters[:, ]
+        
         return volume_ref
 
     

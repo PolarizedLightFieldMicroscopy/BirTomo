@@ -9,7 +9,7 @@ def siddon_params(start, stop, vox_pitch, vox_count):
 
     # Compute starting and ending parametric values in each dimension
     ray_diff = stop - start
-    print(f"Difference between start and stop: {ray_diff}")
+    # print(f"Difference between start and stop: {ray_diff}")
     if np.all(ray_diff):
         a_0 = - start / ray_diff
         a_N = (np.array(vox_count) * np.array(vox_pitch) - start) / ray_diff

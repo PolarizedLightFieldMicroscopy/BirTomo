@@ -8,7 +8,7 @@ from plotting_tools import *
 # Import waveblocks objects
 from waveblocks.blocks.optic_config import *
 
-plot = True
+plot = False
 
 magnObj = 60
 pixels_per_ml = 17 # num pixels behind lenslet
@@ -73,28 +73,25 @@ else:
     optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
     optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
-def calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j):
-    '''For the (i,j) pixel behind a single microlens'''
-    start = ray_enter[:,i,j]
-    stop = ray_exit[:,i,j]
-    voxels_of_segs, ell_in_voxels = siddon(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
-    ray = ray_diff[:,i,j]
-    rayDir = calc_rayDir(ray)
-    JM_list = []
-    for m in range(len(ell_in_voxels)):
-        ell = ell_in_voxels[m]
-        vox = voxels_of_segs[m]
-        Delta_n, opticAxis = get_ellipsoid(vox)
-        JM = voxRayJM(Delta_n, opticAxis, rayDir, ell)
-        JM_list.append(JM)
-    effective_JM = rayJM(JM_list)
-    return effective_JM
+def ret_and_azim_images(ray_enter, ray_exit, ray_diff, pixels_per_ml, voxel_parameters):
+    ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
+    azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
+    for i in range(pixels_per_ml):
+        for j in range(pixels_per_ml):
+            if np.isnan(ray_enter[0, i, j]):
+                ret_image[i, j] = 0
+                azim_image[i, j] = 0
+            else:
+                effective_JM = calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, optic_config, voxel_parameters)
+                ret_image[i, j] = calc_retardance(effective_JM)
+                azim_image[i, j] = calc_azimuth(effective_JM)
+    return ret_image, azim_image
 
 def main():
     ray_enter, ray_exit, ray_diff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
-    i = 3
-    j = 10
-    effective_JM = calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j)
+    # i = 3
+    # j = 10
+    # effective_JM = calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j)
 
     if plot:
         # plot_rays_at_sample(ray_enter, ray_exit, colormap='inferno', optical_config=None, use_matplotlib=False)
@@ -105,6 +102,20 @@ def main():
     # {
     #     'volume_shape' : [voxNrX,voxNrYZ,voxNrYZ], 
     #     'volume_size_um' : }optic_config)
+
+    ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
+    azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
+    for i in range(pixels_per_ml):
+        for j in range(pixels_per_ml):
+            if np.isnan(ray_enter[0, i, j]):
+                ret_image[i, j] = 0
+                azim_image[i, j] = 0
+            else:
+                effective_JM = calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j)
+                ret_image[i, j] = calc_retardance(effective_JM)
+                azim_image[i, j] = calc_azimuth(effective_JM)
+    plt.imshow(ret_image)
+    plt.show()
 
 
     print(f"Effective Jones matrix for the ray hitting pixel {i, j}: {effective_JM}")
