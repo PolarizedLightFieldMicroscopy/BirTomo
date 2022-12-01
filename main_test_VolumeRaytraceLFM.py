@@ -40,7 +40,8 @@ else: # whole plane
 my_volume.plot_volume_plotly(opacity=0.1)
 
 ray_enter, ray_exit, ray_diff = rays_through_vol(optic_config.mla_config.n_pixels_per_mla, optic_config.PSF_config.NA, optic_config.PSF_config.ni, BF_raytrace.volCtr)
-ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, optic_config.mla_config.n_pixels_per_mla, my_volume.voxel_parameters)
+# Comparing ray_enter/exit/diff with BF_raytrace.ray_entry/exit/direction... All the same :) 
+ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, optic_config.mla_config.n_pixels_per_mla, my_volume.voxel_parameters, optic_config)
 
 
 plt.subplot(1,2,1)
