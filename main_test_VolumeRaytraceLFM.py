@@ -39,16 +39,33 @@ else: # whole plane
     my_volume = BF_raytrace.init_volume(init_mode='1planes')
 my_volume.plot_volume_plotly(opacity=0.1)
 
+
+# Computed with numpy functions
 ray_enter, ray_exit, ray_diff = rays_through_vol(optic_config.mla_config.n_pixels_per_mla, optic_config.PSF_config.NA, optic_config.PSF_config.ni, BF_raytrace.volCtr)
+
 # Comparing ray_enter/exit/diff with BF_raytrace.ray_entry/exit/direction... All the same :) 
 ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, optic_config.mla_config.n_pixels_per_mla, my_volume.voxel_parameters, optic_config)
 
-
-plt.subplot(1,2,1)
+plt.figure()
+plt.subplot(2,2,1)
 plt.imshow(ret_image)
 plt.colorbar()
-plt.title('Retardance')
-plt.subplot(1,2,2)
+plt.title('Retardance Ray.py')
+plt.subplot(2,2,2)
+plt.imshow(azim_image)
+plt.colorbar()
+plt.title('Azimuth')
+
+# Computed with BF_raytrace
+ray_enter, ray_exit, ray_diff = BF_raytrace.ray_entry.numpy(), BF_raytrace.ray_exit.numpy(), BF_raytrace.ray_direction.numpy()
+# Comparing ray_enter/exit/diff with BF_raytrace.ray_entry/exit/direction... All the same :) 
+ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, optic_config.mla_config.n_pixels_per_mla, my_volume.voxel_parameters, optic_config)
+
+plt.subplot(2,2,3)
+plt.imshow(ret_image)
+plt.colorbar()
+plt.title('Retardance BF_raytrace')
+plt.subplot(2,2,4)
 plt.imshow(azim_image)
 plt.colorbar()
 plt.title('Azimuth')
