@@ -148,6 +148,7 @@ class RayTraceLFM(OpticBlock):
         i_range,j_range = self.ray_entry.shape[1:]
         # Compute Siddon's algorithm for each ray
         ray_valid_indexes = []
+        ray_valid_direction = []
         ray_vol_colli_indexes = []
         ray_vol_colli_lengths = []
         for ii in range(i_range):
@@ -165,6 +166,8 @@ class RayTraceLFM(OpticBlock):
                 ray_valid_indexes.append((ii,jj))
                 ray_vol_colli_indexes.append(voxels_of_segs)
                 ray_vol_colli_lengths.append(voxel_intersection_lengths)
+                ray_valid_direction.append(self.ray_direction[:,ii,jj])
+
         
         # Maximum number of interactions, to define 
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indexes])
@@ -175,6 +178,7 @@ class RayTraceLFM(OpticBlock):
         # Store as tuples for now
         self.ray_vol_colli_indexes = ray_vol_colli_indexes #torch.zeros(n_valid_rays, max_ray_voxels_collision)
         self.ray_vol_colli_lengths = torch.zeros(n_valid_rays, max_ray_voxels_collision)
+        self.ray_valid_direction = torch.zeros(n_valid_rays, 3)
 
         # Fill these tensors
         # todo: indexes is indices 
@@ -185,6 +189,7 @@ class RayTraceLFM(OpticBlock):
             # Fetch the ray-voxel intersection length for this ray
             val_lengths = ray_vol_colli_lengths[valid_ray]
             self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
+            self.ray_valid_direction[valid_ray, :] = ray_valid_direction[valid_ray]
         
         if filename is not None:
             self.pickle(filename)

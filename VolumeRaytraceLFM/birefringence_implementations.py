@@ -29,36 +29,78 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         
         return 0
     
-    def calc_cummulative_JM_of_ray(self, ray_ix, voxel_parameters):
-        '''For the (i,j) pixel behind a single microlens'''
-        i,j = self.ray_valid_indexes[ray_ix]
-        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indexes[ray_ix], self.ray_vol_colli_lengths[ray_ix]
-        ray = self.ray_direction[:,i,j]
-        rayDir = calc_rayDir(ray)
+    def calc_cummulative_JM_of_ray(self, voxel_parameters):
+        '''This function computes the Jones Matrices of all rays defined in this object.
+            It uses pytorch's batch dimension to store each ray, and process them in parallel'''
+
+        # Fetch the voxels traversed per ray and the lengths that each ray travels through every voxel
+        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indexes, self.ray_vol_colli_lengths
+        # Fetch the ray's directions
+        rays = self.ray_valid_direction
+        # Calculate the ray's direction with the two normalized perpendicular directions
+        # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
+        rayDir = calc_rayDir(rays)
+        # Init an array to store the Jones matrices.
         JM_list = []
-        for m in range(len(voxels_of_segs)):
-            ell = ell_in_voxels[m]
-            vox = voxels_of_segs[m]
-            my_params = voxel_parameters[:, vox[0], vox[1], vox[2]]
+
+        # Iterate the interactions of all rays with the m-th voxel
+        # Some rays interact with less voxels, so we mask the rays valid
+        # for this step with rays_with_voxels
+        for m in range(self.ray_vol_colli_lengths.shape[1]):
+            # Check which rays still have voxels to traverse
+            rays_with_voxels = [len(vx)>m for vx in voxels_of_segs]
+            # How many rays at this step
+            n_rays_with_voxels = sum(rays_with_voxels)
+            # The lengths these rays traveled through the current voxels
+            ell = ell_in_voxels[rays_with_voxels,m]
+            # The voxel coordinates each ray collides with
+            vox = [vx[m] for ix,vx in enumerate(voxels_of_segs) if rays_with_voxels[ix]]
+
+            # Extract the information from the volume
+            my_params = voxel_parameters[:, [v[0] for v in vox], [v[1] for v in vox], [v[2] for v in vox]]
+            # Retardance
             Delta_n = my_params[0]
-            opticAxis = my_params[1:]
-            # Only compute if there's an opticAxis, if not, return identity
-            if torch.all(opticAxis==0):
-                JM = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64)
-            else:
-                JM = voxRayJM(Delta_n, opticAxis, rayDir, ell)
+            # And axis
+            opticAxis = my_params[1:].permute(1,0)
+
+            # Grab the subset of precomputed ray directions that have voxels in this step
+            filtered_rayDir = [rayDir[0][rays_with_voxels,:], rayDir[1][rays_with_voxels,:], rayDir[2][rays_with_voxels,:]]
+
+            # Initiallize identity Jones Matrices, shape [n_rays_with_voxels, 2, 2]
+            JM = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64).unsqueeze(0).repeat(n_rays_with_voxels,1,1)
+            # Only compute if there's an Delta_n
+            # Create a mask of the valid voxels
+            valid_voxel = Delta_n!=0
+            # Compute the interaction from the rays with their corresponding voxels
+            JM[valid_voxel, :, :] = voxRayJM(Delta_n = Delta_n[valid_voxel], 
+                                            opticAxis = opticAxis[valid_voxel, :], 
+                                            rayDir = [filtered_rayDir[0][valid_voxel], filtered_rayDir[1][valid_voxel], filtered_rayDir[2][valid_voxel]], 
+                                            ell = ell[valid_voxel])
+            # Store current interaction step
             JM_list.append(JM)
-        effective_JM = rayJM(JM_list)
+        # JM_list contains m steps of rays interacting with voxels
+        # Each JM_list[m] is shaped [n_rays, 2, 2]
+        # We pass voxels_of_segs to compute which rays have a voxel in each step
+        effective_JM = rayJM(JM_list, voxels_of_segs)
         return effective_JM
 
-    def ret_and_azim_images(self, volume_in : VolumeLFM = None):
+    def ret_and_azim_images(self, volume_in : VolumeLFM):
+        '''This function computes the retardance and azimuth images of the precomputed rays going through a volume'''
+        # Fetch needed variables
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
-        ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
-        azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
+        # Create output images
+        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml))
+        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml))
+        
+        # Calculate Jones Matrices for all rays
+        effective_JM = self.calc_cummulative_JM_of_ray(volume_in.voxel_parameters)
+        # Calculate retardance and azimuth
+        retardance = calc_retardance(effective_JM)
+        azimuth = calc_azimuth(effective_JM)
+        # Assign the computed ray values to the image pixels
         for ray_ix, (i,j) in enumerate(self.ray_valid_indexes):
-            effective_JM = self.calc_cummulative_JM_of_ray(ray_ix, volume_in.voxel_parameters)
-            ret_image[i, j] = calc_retardance(effective_JM)
-            azim_image[i, j] = calc_azimuth(effective_JM)
+            ret_image[i, j] = retardance[ray_ix]
+            azim_image[i, j] = azimuth[ray_ix]
         return ret_image, azim_image
 
 

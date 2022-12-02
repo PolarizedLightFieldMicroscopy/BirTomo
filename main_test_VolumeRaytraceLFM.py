@@ -16,7 +16,7 @@ optic_config.camera_config.sensor_pitch = 6.5
 optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
 optic_config.mla_config.n_mlas = 100
 
-optic_config.volume_config.volume_shape = [21, 11, 11]
+optic_config.volume_config.volume_shape = [3, 11, 11]
 optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
 optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
@@ -32,10 +32,10 @@ volume = BF_raytrace.init_volume(init_mode='random')
 
 
 # Single voxel
-if True:
+if False:
     my_volume = BF_raytrace.init_volume(init_mode='zeros')
     offset = 0
-    my_volume.voxel_parameters[:, BF_raytrace.vox_ctr_idx[0], BF_raytrace.vox_ctr_idx[1]+offset, BF_raytrace.vox_ctr_idx[2]+offset] = torch.tensor([0.25, 1, 0, 0])
+    my_volume.voxel_parameters[:, BF_raytrace.vox_ctr_idx[0], BF_raytrace.vox_ctr_idx[1]+offset, BF_raytrace.vox_ctr_idx[2]+offset] = torch.tensor([0.25, -0.5, 0.5, 0])
 else: # whole plane
     my_volume = BF_raytrace.init_volume(init_mode='1planes')
 # my_volume.plot_volume_plotly(opacity=0.1)
@@ -44,7 +44,11 @@ else: # whole plane
 ray_enter, ray_exit, ray_diff = rays_through_vol(optic_config.mla_config.n_pixels_per_mla, optic_config.PSF_config.NA, optic_config.PSF_config.ni, BF_raytrace.volCtr)
 
 # Comparing ray_enter/exit/diff with BF_raytrace.ray_entry/exit/direction... All the same :) 
+import time
+startTime = time.time()
 ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, optic_config.mla_config.n_pixels_per_mla, my_volume.voxel_parameters, optic_config)
+executionTime = (time.time() - startTime)
+print('Execution time in seconds with Numpy: ' + str(executionTime))
 
 plt.figure(figsize=(6,3))
 plt.subplot(2,2,1)
@@ -58,8 +62,10 @@ plt.title('Azimuth')
 
 
 # Perform same calculation with torch
+startTime = time.time()
 ret_image_torch, azim_image_torch = BF_raytrace.ret_and_azim_images(my_volume)
-
+executionTime = (time.time() - startTime)
+print('Execution time in seconds with Torch: ' + str(executionTime))
 plt.subplot(2,2,3)
 plt.imshow(ret_image_torch)
 plt.colorbar()
