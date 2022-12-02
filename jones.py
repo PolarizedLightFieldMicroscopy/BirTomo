@@ -95,18 +95,19 @@ def calc_rayDir(ray):
     ray_perp2 = np.dot(Rinv, scope_perp2)
     return [ray, ray_perp1, ray_perp2]
 
-def calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, optic_config, voxel_parameters):
+def calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, voxel_size_um, voxel_parameters):
     '''For the (i,j) pixel behind a single microlens'''
+    volume_shape = voxel_parameters.shape[1:]
     start = ray_enter[:,i,j]
     stop = ray_exit[:,i,j]
-    voxels_of_segs, ell_in_voxels = siddon(start, stop, optic_config.volume_config.voxel_size_um, optic_config.volume_config.volume_shape)
+    voxels_of_segs, ell_in_voxels = siddon(start, stop, voxel_size_um, volume_shape)
     ray = ray_diff[:,i,j]
     rayDir = calc_rayDir(ray)
     JM_list = []
     for m in range(len(ell_in_voxels)):
         ell = ell_in_voxels[m]
         vox = voxels_of_segs[m]
-        my_params = voxel_parameters[:, vox[0], vox[1], vox[2]].numpy()
+        my_params = voxel_parameters[:, vox[0], vox[1], vox[2]]
         Delta_n = my_params[0]
         opticAxis = my_params[1:]
         # get_ellipsoid(vox)

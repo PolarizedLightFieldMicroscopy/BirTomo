@@ -9,15 +9,15 @@ import time
 optic_config = OpticConfig()
 optic_config.PSF_config.M = 60      # Objective magnification
 optic_config.PSF_config.NA = 1.2    # Objective NA
-optic_config.PSF_config.ni = 1.52   # Refractive index of sample (experimental)
-optic_config.PSF_config.ni0 = 1.52  # Refractive index of sample (design value)
+optic_config.PSF_config.ni = 1.33   # Refractive index of sample (experimental)
+optic_config.PSF_config.ni0 = 1.33  # Refractive index of sample (design value)
 optic_config.PSF_config.wvl = 0.550
 optic_config.mla_config.n_pixels_per_mla = 17
 optic_config.camera_config.sensor_pitch = 6.5
 optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
 optic_config.mla_config.n_mlas = 100
 
-optic_config.volume_config.volume_shape = [111, 111, 111]
+optic_config.volume_config.volume_shape = [1, 3, 3]
 optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
 optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
@@ -39,45 +39,33 @@ volume = BF_raytrace.init_volume(init_mode='random')
 if True:
     my_volume = BF_raytrace.init_volume(init_mode='zeros')
     offset = 0
-    my_volume.voxel_parameters[:, BF_raytrace.vox_ctr_idx[0], BF_raytrace.vox_ctr_idx[1]+offset, BF_raytrace.vox_ctr_idx[2]+offset] = torch.tensor([1, -0.5, 0.5, 0])
+    my_volume.voxel_parameters.requires_grad = False
+    my_volume.voxel_parameters[
+            :, 
+            BF_raytrace.vox_ctr_idx[0], 
+            BF_raytrace.vox_ctr_idx[1]+offset, 
+            BF_raytrace.vox_ctr_idx[2]+offset] \
+            = torch.tensor([0.1, 0, 1, 0])
 else: # whole plane
     my_volume = BF_raytrace.init_volume(init_mode='1planes')
 # my_volume.plot_volume_plotly(opacity=0.1)
-
-# Computed with numpy functions
-ray_enter, ray_exit, ray_diff = rays_through_vol(optic_config.mla_config.n_pixels_per_mla, optic_config.PSF_config.NA, optic_config.PSF_config.ni, BF_raytrace.volCtr)
-
-# Comparing ray_enter/exit/diff with BF_raytrace.ray_entry/exit/direction... All the same :) 
-
-startTime = time.time()
-ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, optic_config.mla_config.n_pixels_per_mla, my_volume.voxel_parameters, optic_config)
-executionTime = (time.time() - startTime)
-print('Execution time in seconds with Numpy: ' + str(executionTime))
-
-plt.figure(figsize=(6,3))
-plt.subplot(2,2,1)
-plt.imshow(ret_image)
-plt.colorbar()
-plt.title('Retardance Ray.py')
-plt.subplot(2,2,2)
-plt.imshow(azim_image)
-plt.colorbar()
-plt.title('Azimuth')
-
 
 # Perform same calculation with torch
 startTime = time.time()
 ret_image_torch, azim_image_torch = BF_raytrace.ret_and_azim_images(my_volume)
 executionTime = (time.time() - startTime)
+
+
 print('Execution time in seconds with Torch: ' + str(executionTime))
-plt.subplot(2,2,3)
+plt.figure(figsize=(6,3))
+plt.subplot(1,2,1)
 plt.imshow(ret_image_torch)
 plt.colorbar()
-plt.title('Retardance BF_raytrace')
-plt.subplot(2,2,4)
+plt.title('Retardance torch')
+plt.subplot(1,2,2)
 plt.imshow(azim_image_torch)
 plt.colorbar()
-plt.title('Azimuth')
+plt.title('Azimuth torch')
 plt.show(block=True)
 
 # plt.imshow(ret_image)
