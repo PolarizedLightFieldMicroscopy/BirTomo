@@ -71,11 +71,12 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             # Only compute if there's an Delta_n
             # Create a mask of the valid voxels
             valid_voxel = Delta_n!=0
-            # Compute the interaction from the rays with their corresponding voxels
-            JM[valid_voxel, :, :] = voxRayJM(Delta_n = Delta_n[valid_voxel], 
-                                            opticAxis = opticAxis[valid_voxel, :], 
-                                            rayDir = [filtered_rayDir[0][valid_voxel], filtered_rayDir[1][valid_voxel], filtered_rayDir[2][valid_voxel]], 
-                                            ell = ell[valid_voxel])
+            if valid_voxel.sum() > 0:
+                # Compute the interaction from the rays with their corresponding voxels
+                JM[valid_voxel, :, :] = voxRayJM(Delta_n = Delta_n[valid_voxel], 
+                                                opticAxis = opticAxis[valid_voxel, :], 
+                                                rayDir = [filtered_rayDir[0][valid_voxel], filtered_rayDir[1][valid_voxel], filtered_rayDir[2][valid_voxel]], 
+                                                ell = ell[valid_voxel])
             # Store current interaction step
             JM_list.append(JM)
         # JM_list contains m steps of rays interacting with voxels
@@ -89,14 +90,16 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         # Fetch needed variables
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
         # Create output images
-        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml))
-        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml))
+        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), requires_grad=True)
+        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), requires_grad=True)
         
         # Calculate Jones Matrices for all rays
         effective_JM = self.calc_cummulative_JM_of_ray(volume_in.voxel_parameters)
         # Calculate retardance and azimuth
         retardance = calc_retardance(effective_JM)
         azimuth = calc_azimuth(effective_JM)
+        ret_image.requires_grad = False
+        azim_image.requires_grad = False
         # Assign the computed ray values to the image pixels
         for ray_ix, (i,j) in enumerate(self.ray_valid_indexes):
             ret_image[i, j] = retardance[ray_ix]
@@ -121,12 +124,14 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             volume_ref.voxel_parameters = torch.zeros([4,] + volume_ref.config.volume_shape)
             volume_ref.voxel_parameters[:, ]
         
+        # Enable gradients for auto-differentiation 
+        volume_ref.voxel_parameters.requires_grad = True
         return volume_ref
 
     
     @staticmethod
     def generate_random_volume(volume_shape):
-        Delta_n = torch.FloatTensor(*volume_shape).uniform_(-5, 5)
+        Delta_n = torch.FloatTensor(*volume_shape).uniform_(0, .01)
         # Random axis
         a_0 = torch.FloatTensor(*volume_shape).uniform_(-5, 5)
         a_1 = torch.FloatTensor(*volume_shape).uniform_(-5, 5)
@@ -142,8 +147,8 @@ class BirefringentRaytraceLFM(RayTraceLFM):
 
         if n_planes==1:
             vol[0, z_size//2, :, :] = 0.1
-            vol[1, z_size//2, :, :] = 1
-            # vol[2, z_size//2, :, :] = 1
+            # vol[1, z_size//2, :, :] = 0.5
+            vol[2, z_size//2, :, :] = 1
             return vol
         random_data = BirefringentRaytraceLFM.generate_random_volume([n_planes])
         for z_ix in range(0,n_planes):
