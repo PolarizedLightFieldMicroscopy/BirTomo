@@ -142,17 +142,22 @@ class BirefringentRaytraceLFM(RayTraceLFM):
     @staticmethod
     def generate_planes_volume(volume_shape, n_planes=1):
         vol = torch.zeros([4,] + volume_shape)
+        vol.requires_grad = False
         z_size = volume_shape[0]
         z_ranges = np.linspace(0, z_size-1, n_planes*2).astype(int)
 
         if n_planes==1:
-            vol[0, z_size//2, :, :] = 0.1
+            z_offset = 4
+            # Birefringence
+            vol[0, z_size//2+z_offset, :, :] = 0.1
+            # Axis
             # vol[1, z_size//2, :, :] = 0.5
-            vol[2, z_size//2, :, :] = 1
+            vol[1, z_size//2+z_offset, :, :] = 1
             return vol
         random_data = BirefringentRaytraceLFM.generate_random_volume([n_planes])
         for z_ix in range(0,n_planes):
             vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = random_data[:,z_ix].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1,1,volume_shape[1],volume_shape[2])
         
+        vol.requires_grad = True
         return vol
 
