@@ -50,23 +50,27 @@ with torch.no_grad():
     else: # whole plane
         my_volume = BF_raytrace.init_volume(init_mode='1planes')
     # Plot the volume in 3D
-    my_volume.plot_volume_plotly(opacity=0.1)
+    # my_volume.plot_volume_plotly(opacity=0.1)
 
     # Traverse volume for every ray, and generate retardance and azimuth images
     startTime = time.time()
     ret_image_torch, azim_image_torch = BF_raytrace.ret_and_azim_images(my_volume)
     executionTime = (time.time() - startTime)
 
-    plot_birefringence_lines(ret_image_torch.numpy(), azim_image_torch.numpy())
-
     print('Execution time in seconds with Torch: ' + str(executionTime))
-    plt.figure(figsize=(6,3))
-    plt.subplot(1,2,1)
-    plt.imshow(ret_image_torch)
+
+    colormap = 'viridis'
+    plt.figure(figsize=(10,2.5))
+    plt.subplot(1,3,1)
+    plt.imshow(ret_image_torch,cmap=colormap)
     plt.colorbar()
     plt.title('Retardance torch')
-    plt.subplot(1,2,2)
-    plt.imshow(azim_image_torch)
+    plt.subplot(1,3,2)
+    plt.imshow(azim_image_torch,cmap=colormap)
     plt.colorbar()
     plt.title('Azimuth torch')
+    ax = plt.subplot(1,3,3)
+    im = plot_birefringence_lines(ret_image_torch.numpy(), azim_image_torch.numpy(),cmap=colormap, line_color='white', ax=ax)
+    plt.colorbar(im)
+    plt.title('Ret+Azim')
     plt.show(block=True)

@@ -2,6 +2,7 @@ import time
 import matplotlib.pyplot as plt
 from jones import *
 from ray_optics import *
+from plotting_tools import *
 
 """ This script using numpy and main_test_VolumeRaytraceLFM using Pytorch
     have the exact same functionality:
@@ -47,7 +48,7 @@ voxel_parameters[
     vox_ctr_idx[0], 
     vox_ctr_idx[1]+offset, 
     vox_ctr_idx[2]+offset] \
-    = np.array([.1, 0, 1.0, 0])
+    = np.array([.1, 1, 0.0, 0])
 
 # Traverse volume for every ray, and generate retardance and azimuth images
 startTime = time.time()
@@ -59,14 +60,20 @@ executionTime = (time.time() - startTime)
 print('Execution time in seconds with Numpy: ' + str(executionTime))
 
 # Plot
-plt.figure(figsize=(6,3))
-plt.subplot(1,2,1)
-plt.imshow(ret_image)
+colormap = 'viridis'
+plt.figure(figsize=(10,2.5))
+plt.subplot(1,3,1)
+plt.imshow(ret_image,cmap=colormap)
 plt.colorbar()
 plt.title('Retardance numpy')
-plt.subplot(1,2,2)
-plt.imshow(azim_image)
+plt.subplot(1,3,2)
+plt.imshow(azim_image,cmap=colormap)
 plt.colorbar()
 plt.title('Azimuth numpy')
+ax = plt.subplot(1,3,3)
+im = plot_birefringence_lines(ret_image, azim_image,cmap=colormap, line_color='white', ax=ax)
+plt.colorbar(im)
+plt.title('Ret+Azim')
+plt.show(block=True)
 
 plt.show(block=True)

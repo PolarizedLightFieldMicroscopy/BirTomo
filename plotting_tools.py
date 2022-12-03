@@ -262,7 +262,7 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
 
 
 
-def plot_birefringence_lines(retardance_img, azimuth_img, upscale=1, colormap='Wistia_r'):
+def plot_birefringence_lines(retardance_img, azimuth_img, upscale=1, cmap='Wistia_r', line_color='blue', ax=None):
     # Get pixel coords
     s_i,s_j = retardance_img.shape
     ii,jj = np.meshgrid(np.arange(s_i)*upscale, np.arange(s_j)*upscale)
@@ -275,14 +275,14 @@ def plot_birefringence_lines(retardance_img, azimuth_img, upscale=1, colormap='W
 
     lc_data = [[(l_ii[ix], l_jj[ix]), (h_ii[ix], h_jj[ix])] for ix in range(len(l_ii))]
     colors = retardance_img.flatten()
-    cmap = matplotlib.cm.get_cmap(colormap)
+    cmap = matplotlib.cm.get_cmap(cmap)
     rgba = cmap(colors/(2*np.pi))
 
-    lc = matplotlib.collections.LineCollection(lc_data, colors='black', linewidths=2)
-    fig,ax = plt.subplots()
-    ax.imshow(retardance_img, cmap=colormap)
+    lc = matplotlib.collections.LineCollection(lc_data, colors=line_color, linewidths=1)
+    if ax is None:
+        fig,ax = plt.subplots()
+    im = ax.imshow(retardance_img, cmap=cmap)
     ax.add_collection(lc)
     ax.autoscale()
     ax.margins(0.1)
-    # plt.show()
-    return 0
+    return im
