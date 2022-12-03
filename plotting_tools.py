@@ -259,3 +259,30 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
             )
 
         fig.show()
+
+
+
+def plot_birefringence_lines(retardance_img, azimuth_img, upscale=1, colormap='Wistia_r'):
+    # Get pixel coords
+    s_i,s_j = retardance_img.shape
+    ii,jj = np.meshgrid(np.arange(s_i)*upscale, np.arange(s_j)*upscale)
+    upscale *= 0.75
+    l_ii = (ii - 0.5*upscale*np.cos(azimuth_img)).flatten()
+    h_ii = (ii + 0.5*upscale*np.cos(azimuth_img)).flatten()
+
+    l_jj = (jj - 0.5*upscale*np.sin(azimuth_img)).flatten()
+    h_jj = (jj + 0.5*upscale*np.sin(azimuth_img)).flatten()
+
+    lc_data = [[(l_ii[ix], l_jj[ix]), (h_ii[ix], h_jj[ix])] for ix in range(len(l_ii))]
+    colors = retardance_img.flatten()
+    cmap = matplotlib.cm.get_cmap(colormap)
+    rgba = cmap(colors/(2*np.pi))
+
+    lc = matplotlib.collections.LineCollection(lc_data, colors='black', linewidths=2)
+    fig,ax = plt.subplots()
+    ax.imshow(retardance_img, cmap=colormap)
+    ax.add_collection(lc)
+    ax.autoscale()
+    ax.margins(0.1)
+    # plt.show()
+    return 0
