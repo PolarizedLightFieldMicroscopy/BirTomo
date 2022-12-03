@@ -23,14 +23,12 @@ pixels_per_ml = 17 # num pixels behind lenslet
 microLensPitch = pixels_per_ml * camPixPitch / magnObj
 # voxPitch is the width of each voxel in um (dividing by 5 to supersample)
 voxPitch = microLensPitch / 1
-axialPitch = 1
+axialPitch = voxPitch
 voxel_size_um = [axialPitch, voxPitch, voxPitch]
 # Volume shape
 volume_shape = [11, 11, 11]
 
 # Volume span in um
-nVoxX = axialPitch * volume_shape[0]
-nVoxYZ = voxPitch * volume_shape[1]
 voxCtr = np.array([volume_shape[0] / 2, volume_shape[1] / 2, volume_shape[2] / 2]) # okay if not integers
 vox_ctr_idx = voxCtr.astype(int)
 volCtr = [voxCtr[0] * axialPitch, voxCtr[1] * voxPitch, voxCtr[2] * voxPitch]   # in vol units (um)
