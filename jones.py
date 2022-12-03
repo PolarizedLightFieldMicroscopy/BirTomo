@@ -95,6 +95,23 @@ def calc_rayDir(ray):
     ray_perp2 = np.dot(Rinv, scope_perp2)
     return [ray, ray_perp1, ray_perp2]
 
+
+def ret_and_azim_images(ray_enter, ray_exit, ray_diff, pixels_per_ml, voxel_parameters, voxel_size_um):
+    '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
+    ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
+    azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
+    for i in range(pixels_per_ml):
+        for j in range(pixels_per_ml):
+            if np.isnan(ray_enter[0, i, j]):
+                ret_image[i, j] = 0
+                azim_image[i, j] = 0
+            else:
+                effective_JM = calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, voxel_size_um, voxel_parameters)
+                ret_image[i, j] = calc_retardance(effective_JM)
+                azim_image[i, j] = calc_azimuth(effective_JM)
+    return ret_image, azim_image
+
+
 def calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, voxel_size_um, voxel_parameters):
     '''For the (i,j) pixel behind a single microlens'''
     volume_shape = voxel_parameters.shape[1:]

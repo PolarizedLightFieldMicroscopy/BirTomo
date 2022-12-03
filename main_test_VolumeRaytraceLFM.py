@@ -9,8 +9,8 @@ import time
 optic_config = OpticConfig()
 optic_config.PSF_config.M = 60      # Objective magnification
 optic_config.PSF_config.NA = 1.2    # Objective NA
-optic_config.PSF_config.ni = 1.33   # Refractive index of sample (experimental)
-optic_config.PSF_config.ni0 = 1.33  # Refractive index of sample (design value)
+optic_config.PSF_config.ni = 1.52   # Refractive index of sample (experimental)
+optic_config.PSF_config.ni0 = 1.52  # Refractive index of sample (design value)
 optic_config.PSF_config.wvl = 0.550
 optic_config.mla_config.n_pixels_per_mla = 17
 optic_config.camera_config.sensor_pitch = 6.5
@@ -20,6 +20,9 @@ optic_config.mla_config.n_mlas = 100
 optic_config.volume_config.volume_shape = [11, 11, 11]
 optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
 optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
+
+
+############### Implementation
 
 # Disable torch gradients, as we aren't doing any training or optimization 
 with torch.no_grad():
@@ -33,11 +36,7 @@ with torch.no_grad():
     executionTime = (time.time() - startTime)
     print('Ray-tracing time in seconds: ' + str(executionTime))
 
-    # Create a Birefringent volume, with random 
-    volume = BF_raytrace.init_volume(init_mode='random')
-
-
-    # Single voxel
+    # Create a Birefringent volume, with a single birefringent voxel
     if True:
         my_volume = BF_raytrace.init_volume(init_mode='zeros')
         offset = 0
@@ -47,12 +46,13 @@ with torch.no_grad():
                 BF_raytrace.vox_ctr_idx[0], 
                 BF_raytrace.vox_ctr_idx[1]+offset, 
                 BF_raytrace.vox_ctr_idx[2]+offset] \
-                = torch.tensor([0.1, np.sqrt(2), 0, np.sqrt(2)])
+                = torch.tensor([0.1, 0, 1, 0])
     else: # whole plane
         my_volume = BF_raytrace.init_volume(init_mode='1planes')
+    # Plot the volume in 3D
     # my_volume.plot_volume_plotly(opacity=0.1)
 
-    # Perform same calculation with torch
+    # Traverse volume for every ray, and generate retardance and azimuth images
     startTime = time.time()
     ret_image_torch, azim_image_torch = BF_raytrace.ret_and_azim_images(my_volume)
     executionTime = (time.time() - startTime)

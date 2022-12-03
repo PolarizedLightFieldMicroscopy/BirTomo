@@ -73,20 +73,6 @@ else:
     optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
     optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
-def ret_and_azim_images(ray_enter, ray_exit, ray_diff, pixels_per_ml, voxel_parameters, voxel_size_um):
-    ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
-    azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
-    for i in range(pixels_per_ml):
-        for j in range(pixels_per_ml):
-            if np.isnan(ray_enter[0, i, j]):
-                ret_image[i, j] = 0
-                azim_image[i, j] = 0
-            else:
-                effective_JM = calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, voxel_size_um, voxel_parameters)
-                ret_image[i, j] = calc_retardance(effective_JM)
-                azim_image[i, j] = calc_azimuth(effective_JM)
-    return ret_image, azim_image
-
 def main():
     ray_enter, ray_exit, ray_diff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
     # i = 3
