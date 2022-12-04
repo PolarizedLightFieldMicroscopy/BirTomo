@@ -125,11 +125,16 @@ class RayTraceLFM(OpticBlock):
             print(f'Loaded RayTraceLFM object from {filename}')
             return data
 
+
+        # The valid workspace is defined by the number of micro-lenses
+        valid_vol_shape = self.optic_config.mla_config.n_micro_lenses
+
+
         # Fetch needed variables
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
         naObj = self.optic_config.PSF_config.NA
         nMedium = self.optic_config.PSF_config.ni
-        vol_shape = self.optic_config.volume_config.volume_shape
+        vol_shape = [self.optic_config.volume_config.volume_shape[0],] + 2*[valid_vol_shape]
         axial_pitch,xy_pitch,xy_pitch = self.optic_config.volume_config.voxel_size_um
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
         self.vox_ctr_idx = vox_ctr_idx.astype(int)
@@ -144,6 +149,7 @@ class RayTraceLFM(OpticBlock):
         self.ray_entry = torch.from_numpy(ray_enter).float()
         self.ray_exit = torch.from_numpy(ray_exit).float()
         self.ray_direction = torch.from_numpy(ray_diff).float()
+        self.voxel_span_per_ml = 0
 
         i_range,j_range = self.ray_entry.shape[1:]
         # Compute Siddon's algorithm for each ray
@@ -157,7 +163,7 @@ class RayTraceLFM(OpticBlock):
                 stop = ray_exit[:,ii,jj]
                 if np.any(np.isnan(start)) or np.any(np.isnan(stop)):
                     continue
-                siddon_list = siddon_params(start, stop, self.optic_config.volume_config.voxel_size_um, self.optic_config.volume_config.volume_shape)
+                siddon_list = siddon_params(start, stop, self.optic_config.volume_config.voxel_size_um, vol_shape)
                 seg_mids = siddon_midpoints(start, stop, siddon_list)
                 voxels_of_segs = vox_indices(seg_mids, self.optic_config.volume_config.voxel_size_um)
                 voxel_intersection_lengths = siddon_lengths(start, stop, siddon_list)
@@ -167,6 +173,9 @@ class RayTraceLFM(OpticBlock):
                 ray_vol_colli_indexes.append(voxels_of_segs)
                 ray_vol_colli_lengths.append(voxel_intersection_lengths)
                 ray_valid_direction.append(self.ray_direction[:,ii,jj])
+
+                # What is the maximum span of the rays of a micro lens?
+                self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in ray_vol_colli_indexes[0]])
 
         
         # Maximum number of interactions, to define 
@@ -180,6 +189,7 @@ class RayTraceLFM(OpticBlock):
         self.ray_vol_colli_lengths = torch.zeros(n_valid_rays, max_ray_voxels_collision)
         self.ray_valid_direction = torch.zeros(n_valid_rays, 3)
 
+
         # Fill these tensors
         # todo: indexes is indices 
         for valid_ray in range(n_valid_rays):
@@ -191,6 +201,14 @@ class RayTraceLFM(OpticBlock):
             self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
             self.ray_valid_direction[valid_ray, :] = ray_valid_direction[valid_ray]
         
+        # Update volume shape information, to account for the whole workspace
+        vol_shape = self.optic_config.volume_config.volume_shape
+        axial_pitch,xy_pitch,xy_pitch = self.optic_config.volume_config.voxel_size_um
+        vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
+        self.vox_ctr_idx = vox_ctr_idx.astype(int)
+        self.voxCtr = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
+        self.volCtr = [self.voxCtr[0] * axial_pitch, self.voxCtr[1] * xy_pitch, self.voxCtr[2] * xy_pitch]   # in vol units (um)
+
         if filename is not None:
             self.pickle(filename)
             print(f'Saved RayTraceLFM object from {filename}')

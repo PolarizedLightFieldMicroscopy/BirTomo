@@ -41,7 +41,7 @@ if True:
     my_volume = BF_raytrace.init_volume(init_mode='zeros')
     voxel_birefringence = 0.1
     voxel_birefringence_axis = torch.tensor([-0.5,0.5,0])
-    # voxel_birefringence_axis /= voxel_birefringence_axis.norm()
+    voxel_birefringence_axis /= voxel_birefringence_axis.norm()
     offset = 0
     # Disable gradients in volume, as in-place assignment on tensors with gradients is not allowed in Pytorch
     my_volume.voxel_parameters.requires_grad = False
@@ -79,19 +79,28 @@ my_volume = BF_raytrace.init_volume(init_mode='random')
 optimizer = torch.optim.Adam([my_volume.voxel_parameters], lr=0.0001)
 n_epochs = 5000
 sparse_lambda = 0.1
-loss_function = torch.nn.MSELoss()
+loss_function = torch.nn.L1Loss()
 
 # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
 losses = []
 plt.ion()
-figure = plt.figure(figsize=(5,5))
+figure = plt.figure(figsize=(15,15))
 
+co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
 for ep in tqdm(range(n_epochs), "Minimizing"):
     optimizer.zero_grad()
     ret_image_current, azim_image_current = BF_raytrace.ret_and_azim_images(my_volume)
+    # Vector difference
+    co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
+    # L = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).sqrt().mean()
     L = loss_function(ret_image_measured, ret_image_current) + \
-        loss_function(azim_image_measured, azim_image_current) \
-        # + sparse_lambda * my_volume.voxel_parameters.abs().mean()
+        0.1*(torch.cos(azim_image_measured) - torch.cos(azim_image_current)).abs().mean() #+ 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
+    #     (torch.cos(azim_image_measured-azim_image_current)**2 + torch.sin(azim_image_measured-azim_image_current)**2).abs().mean()
+        # cos + sine
+        # 0.1*(torch.cos(azim_image_measured) - torch.cos(azim_image_current)).abs().mean() + 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
+        # (torch.atan2(torch.sin(azim_image_measured - azim_image_current), torch.cos(azim_image_measured - azim_image_current))).abs().mean()
+        # (2 * (1 - torch.cos(azim_image_measured - azim_image_current))).mean() 
+        # loss_function(azim_image_measured, azim_image_current)
     
     # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
     L.backward()
@@ -136,5 +145,5 @@ for ep in tqdm(range(n_epochs), "Minimizing"):
 
 
 # Display
-
+plt.savefig("Optimization_cosine_diff.pdf")
 plt.show()
