@@ -103,7 +103,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             my_params = voxel_parameters[:, [v[0] for v in vox], [v[1]+micro_lens_offset[0] for v in vox], [v[2]+micro_lens_offset[1] for v in vox]]
 
             # Initiallize identity Jones Matrices, shape [n_rays_with_voxels, 2, 2]
-            JM = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64).unsqueeze(0).repeat(n_rays_with_voxels,1,1)
+            JM = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64, device=self.get_device()).unsqueeze(0).repeat(n_rays_with_voxels,1,1)
 
             if not torch.all(my_params==0):
                 # Retardance
@@ -118,6 +118,8 @@ class BirefringentRaytraceLFM(RayTraceLFM):
                 # Create a mask of the valid voxels
                 valid_voxel = Delta_n!=0
                 if valid_voxel.sum() > 0:
+                    # make sure that everything is in the right computing device
+                    # assert 
                     # Compute the interaction from the rays with their corresponding voxels
                     JM[valid_voxel, :, :] = voxRayJM(Delta_n = Delta_n[valid_voxel], 
                                                     opticAxis = opticAxis[valid_voxel, :], 
@@ -174,9 +176,11 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             n_planes = int(init_mode[0])
             volume_ref.voxel_parameters = self.generate_planes_volume(volume_ref.config.volume_shape, n_planes) # Perpendicular optic axes each with constant birefringence and orientation 
         elif init_mode=='ellipsoid':
-            volume_ref.voxel_parameters = self.generate_ellipsoid_volume(volume_ref.config.volume_shape)
+            volume_ref.voxel_parameters = self.generate_ellipsoid_volume(volume_ref.config.volume_shape, radius=[5,7,7], delta_n=0.1)
         
         # Enable gradients for auto-differentiation 
+        volume_ref.voxel_parameters = volume_ref.voxel_parameters.to(self.get_device())
+        volume_ref.voxel_parameters = volume_ref.voxel_parameters.detach()
         volume_ref.voxel_parameters.requires_grad = True
         return volume_ref
 

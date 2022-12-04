@@ -40,7 +40,7 @@ class VolumeLFM(OpticBlock):
     def plot_volume_plotly(self, voxels=None, opacity=0.5):
         
         if voxels is None:
-            voxels = self.voxel_parameters[0,...].clone()
+            voxels = self.voxel_parameters[0,...].clone().cpu().detach()
 
         import plotly.graph_objects as go
         import numpy as np
@@ -186,8 +186,11 @@ class RayTraceLFM(OpticBlock):
         self.ray_valid_indexes = ray_valid_indexes
         # Store as tuples for now
         self.ray_vol_colli_indexes = ray_vol_colli_indexes #torch.zeros(n_valid_rays, max_ray_voxels_collision)
-        self.ray_vol_colli_lengths = torch.zeros(n_valid_rays, max_ray_voxels_collision)
-        self.ray_valid_direction = torch.zeros(n_valid_rays, 3)
+        # Save as nn.Parameters so Pytorch can handle them correctly, for things like moving this whole class to GPU
+        self.ray_vol_colli_lengths = nn.Parameter(torch.zeros(n_valid_rays, max_ray_voxels_collision))
+        self.ray_vol_colli_lengths.requires_grad = False
+        self.ray_valid_direction = nn.Parameter(torch.zeros(n_valid_rays, 3))
+        self.ray_valid_direction.requires_grad = False
 
 
         # Fill these tensors

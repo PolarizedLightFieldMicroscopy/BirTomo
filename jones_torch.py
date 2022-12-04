@@ -11,7 +11,7 @@ def rotation_matrix(axis, angle):
     s = torch.sin(angle)
     c = torch.cos(angle)
     u = 1 - c
-    R = torch.zeros([angle.shape[0],3,3])
+    R = torch.zeros([angle.shape[0],3,3], device=axis.device)
     # R_tuple = ( ( ax*ax*u + c,    ax*ay*u - az*s, ax*az*u + ay*s ),
     #     ( ay*ax*u + az*s, ay*ay*u + c,    ay*az*u - ax*s ),
     #     ( az*ax*u - ay*s, az*ay*u + ax*s, az*az*u + c    ) )
@@ -32,7 +32,7 @@ def voxRayJM(Delta_n, opticAxis, rayDir, ell):
     '''Compute Jones matrix associated with a particular ray and voxel combination'''
     n_voxels = opticAxis.shape[0]
     if not torch.is_tensor(opticAxis):
-        opticAxis = torch.from_numpy(opticAxis)
+        opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
     # Azimuth is the angle of the sloq axis of retardance.
     azim = torch.arctan2(torch.linalg.vecdot(opticAxis , rayDir[1]), torch.linalg.vecdot(opticAxis , rayDir[2])) # todo: pvjosue dangerous, vecdot similar to dot?
     azim[Delta_n==0] = 0
@@ -44,7 +44,7 @@ def voxRayJM(Delta_n, opticAxis, rayDir, ell):
     diag1 = torch.cos(ret / 2) + 1j * torch.cos(2 * azim) * torch.sin(ret / 2)
     diag2 = torch.conj(diag1)
     # Construct Jones Matrix
-    JM = torch.zeros([Delta_n.shape[0], 2, 2], dtype=torch.complex64)
+    JM = torch.zeros([Delta_n.shape[0], 2, 2], dtype=torch.complex64, device=Delta_n.device)
     JM[:,0,0] = diag1
     JM[:,0,1] = offdiag
     JM[:,1,0] = offdiag
@@ -56,7 +56,7 @@ def rayJM(JMlist, voxels_of_segs):
     Equivalent method: torch.linalg.multi_dot([JM1, JM2])
     '''
     n_rays = len(JMlist[0])
-    product = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64).unsqueeze(0).repeat(n_rays,1,1)
+    product = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64, device=JMlist[0].device).unsqueeze(0).repeat(n_rays,1,1)
     for ix,JM in enumerate(JMlist):
         rays_with_voxels = [len(vx)>ix for vx in voxels_of_segs]
         product[rays_with_voxels,...] = product[rays_with_voxels,...] @ JM
@@ -70,7 +70,7 @@ def find_orthogonal_vec(v1, v2):
     normal_vec = torch.zeros_like(v1)
 
     # Search for invalid indices 
-    invalid_indices = torch.isclose(x.abs(),torch.ones([1]))
+    invalid_indices = torch.isclose(x.abs(),torch.ones([1], device=x.device))
     valid_indices = ~invalid_indices
     # Compute the invalid normal_vectors
     if invalid_indices.sum():
@@ -79,7 +79,7 @@ def find_orthogonal_vec(v1, v2):
             # Turn off fixed indices
             invalid_indices[v1[:,n_axis]==0] = False
         if invalid_indices.sum(): # treat remaning ones
-            non_par_vec = torch.tensor([1.0, 0, 0]).unsqueeze(0).repeat(v1.shape[0],1)
+            non_par_vec = torch.tensor([1.0, 0, 0], device=x.device).unsqueeze(0).repeat(v1.shape[0],1)
             C = torch.cross(v1[invalid_indices,:], non_par_vec[invalid_indices,:])
             normal_vec[invalid_indices,:] = C / torch.linalg.norm(C,dim=1)
 
@@ -103,11 +103,11 @@ def calc_rayDir(ray_in):
         ray = torch.from_numpy(ray_in)
     else:
         ray = ray_in
-    theta = torch.arccos(torch.linalg.multi_dot((ray, torch.tensor([1.0,0,0],dtype=ray.dtype))))
+    theta = torch.arccos(torch.linalg.multi_dot((ray, torch.tensor([1.0,0,0] ,dtype=ray.dtype, device=ray_in.device))))
     # Unit vectors that give the laboratory axes, can be changed
-    scope_axis = torch.tensor([1.0,0,0],dtype=ray.dtype)
-    scope_perp1 = torch.tensor([0,1.0,0],dtype=ray.dtype)
-    scope_perp2 = torch.tensor([0,0,1.0],dtype=ray.dtype)
+    scope_axis = torch.tensor([1.0,0,0],dtype=ray.dtype, device=ray_in.device)
+    scope_perp1 = torch.tensor([0,1.0,0],dtype=ray.dtype, device=ray_in.device)
+    scope_perp2 = torch.tensor([0,0,1.0],dtype=ray.dtype, device=ray_in.device)
     # print(f"Rotating by {np.around(torch.rad2deg(theta).numpy(), decimals=0)} degrees")
     normal_vec = find_orthogonal_vec(ray, scope_axis)
     Rinv = rotation_matrix(normal_vec, -theta)
