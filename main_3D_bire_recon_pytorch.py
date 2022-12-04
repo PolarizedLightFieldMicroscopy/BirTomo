@@ -16,7 +16,7 @@ optic_config.PSF_config.wvl = 0.550
 optic_config.mla_config.n_pixels_per_mla = 17
 optic_config.camera_config.sensor_pitch = 6.5
 optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
-optic_config.mla_config.n_micro_lenses = 11
+optic_config.mla_config.n_micro_lenses = 3
 
 optic_config.volume_config.volume_shape = [21, 111, 111]
 optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
@@ -60,9 +60,9 @@ if False:
     my_volume.voxel_parameters.requires_grad = True
 
 else: # whole plane
-    my_volume = BF_raytrace.init_volume(init_mode='ellipsoid')
-    volume = BF_raytrace.generate_ellipsoid_volume(volume_shape=optic_config.volume_config.volume_shape, radius=[3,5,5], delta_n=0.1)
-    my_volume.voxel_parameters = volume.to(BF_raytrace.get_device())
+    my_volume = BF_raytrace.init_volume(init_mode='1planes')
+    volume = BF_raytrace.generate_ellipsoid_volume(volume_shape=optic_config.volume_config.volume_shape, radius=[5,5.5,5.5], delta_n=0.1)
+    my_volume.voxel_parameters = volume
 # my_volume.plot_volume_plotly(opacity=0.1)
 
 
@@ -85,14 +85,14 @@ with torch.no_grad():
 # Initial guess
 my_volume = BF_raytrace.init_volume(init_mode='random')
 optimizer = torch.optim.Adam([my_volume.voxel_parameters], lr=0.0001)
-n_epochs = 5000
+n_epochs = 500
 sparse_lambda = 0.1
 loss_function = torch.nn.L1Loss()
 
 # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
 losses = []
 plt.ion()
-figure = plt.figure(figsize=(15,15))
+figure = plt.figure(figsize=(10,5))
 
 co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
 for ep in tqdm(range(n_epochs), "Minimizing"):
@@ -120,32 +120,32 @@ for ep in tqdm(range(n_epochs), "Minimizing"):
 
 
     if ep%10==0:
-        plt.subplot(3,3,1)
+        plt.subplot(2,4,1)
         plt.imshow(ret_image_measured.detach().cpu().numpy())
         plt.colorbar()
         plt.title('Initial Retardance')
-        plt.subplot(3,3,2)
+        plt.subplot(2,4,2)
         plt.imshow(azim_image_measured.detach().cpu().numpy())
         plt.colorbar()
         plt.title('Initial Azimuth')
-        plt.subplot(3,3,3)
+        plt.subplot(2,4,3)
         plt.imshow(volume_2_projections(volume_GT.unsqueeze(0))[0,0].detach().cpu().numpy())
         plt.colorbar()
         plt.title('Initial volume MIP')
 
-        plt.subplot(3,3,4)
+        plt.subplot(2,4,5)
         plt.imshow(ret_image_current.detach().cpu().numpy())
         plt.colorbar()
         plt.title('Final Retardance')
-        plt.subplot(3,3,5)
+        plt.subplot(2,4,6)
         plt.imshow(azim_image_current.detach().cpu().numpy())
         plt.colorbar()
         plt.title('Final Azimuth')
-        plt.subplot(3,3,6)
+        plt.subplot(2,4,7)
         plt.imshow(volume_2_projections(my_volume.voxel_parameters[0].unsqueeze(0))[0,0].detach().cpu().numpy())
         plt.colorbar()
         plt.title('Final Volume MIP')
-        plt.subplot(3,1,3)
+        plt.subplot(2,4,8)
         plt.plot(list(range(len(losses))),losses)
 
         figure.canvas.draw()

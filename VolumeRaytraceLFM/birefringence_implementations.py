@@ -176,7 +176,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             n_planes = int(init_mode[0])
             volume_ref.voxel_parameters = self.generate_planes_volume(volume_ref.config.volume_shape, n_planes) # Perpendicular optic axes each with constant birefringence and orientation 
         elif init_mode=='ellipsoid':
-            volume_ref.voxel_parameters = self.generate_ellipsoid_volume(volume_ref.config.volume_shape, radius=[5,7,7], delta_n=0.1)
+            volume_ref.voxel_parameters = self.generate_ellipsoid_volume(volume_ref.config.volume_shape, radius=[5,7.5,7.5], delta_n=0.1)
         
         # Enable gradients for auto-differentiation 
         volume_ref.voxel_parameters = volume_ref.voxel_parameters.to(self.get_device())
@@ -224,9 +224,9 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         
         kk,jj,ii = np.meshgrid(np.arange(volume_shape[0]), np.arange(volume_shape[1]), np.arange(volume_shape[2]), indexing='ij')
         # shift to center
-        kk = center[0]*volume_shape[0] - kk.astype(float)
-        jj = center[1]*volume_shape[1] - jj.astype(float)
-        ii = center[2]*volume_shape[2] - ii.astype(float)
+        kk = floor(center[0]*volume_shape[0]) - kk.astype(float)
+        jj = floor(center[1]*volume_shape[1]) - jj.astype(float)
+        ii = floor(center[2]*volume_shape[2]) - ii.astype(float)
 
         ellipsoid_border = (kk**2) / (radius[0]**2) + (jj**2) / (radius[1]**2) + (ii**2) / (radius[2]**2)
         ellipsoid_border_mask = np.abs(ellipsoid_border-alpha) <= 1
@@ -236,6 +236,8 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         jj_normal = 2 * jj / radius[1]
         ii_normal = 2 * ii / radius[2]
         norm_factor = np.sqrt(kk_normal**2 + jj_normal**2 + ii_normal**2)
+        # Avoid division by zero
+        norm_factor[norm_factor==0] = 1
         vol[1,...] = torch.from_numpy(kk_normal / norm_factor) * vol[0,...]
         vol[2,...] = torch.from_numpy(jj_normal / norm_factor) * vol[0,...]
         vol[3,...] = torch.from_numpy(ii_normal / norm_factor) * vol[0,...]
