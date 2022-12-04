@@ -173,9 +173,8 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         elif 'planes' in init_mode:
             n_planes = int(init_mode[0])
             volume_ref.voxel_parameters = self.generate_planes_volume(volume_ref.config.volume_shape, n_planes) # Perpendicular optic axes each with constant birefringence and orientation 
-        elif init_mode=='psf':
-            volume_ref.voxel_parameters = torch.zeros([4,] + volume_ref.config.volume_shape)
-            volume_ref.voxel_parameters[:, ]
+        elif init_mode=='ellipsoid':
+            volume_ref.voxel_parameters = self.generate_ellipsoid_volume(volume_ref.config.volume_shape)
         
         # Enable gradients for auto-differentiation 
         volume_ref.voxel_parameters.requires_grad = True
@@ -212,5 +211,32 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = random_data[:,z_ix].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1,1,volume_shape[1],volume_shape[2])
         
         vol.requires_grad = True
+        return vol
+    
+    @staticmethod
+    def generate_ellipsoid_volume(volume_shape, center=[0.5,0.5,0.5], radius=[10,10,10], alpha=0.1, delta_n=0.1):
+        vol = torch.zeros([4,] + volume_shape)
+        vol.requires_grad = False
+        
+        kk,jj,ii = np.meshgrid(np.arange(volume_shape[0]), np.arange(volume_shape[1]), np.arange(volume_shape[2]), indexing='ij')
+        # shift to center
+        kk = center[0]*volume_shape[0] - kk.astype(float)
+        jj = center[1]*volume_shape[1] - jj.astype(float)
+        ii = center[2]*volume_shape[2] - ii.astype(float)
+
+        ellipsoid_border = (kk**2) / (radius[0]**2) + (jj**2) / (radius[1]**2) + (ii**2) / (radius[2]**2)
+        ellipsoid_border_mask = np.abs(ellipsoid_border-alpha) <= 1
+        vol[0,...] = torch.from_numpy(ellipsoid_border_mask.astype(float))
+        # Compute normals
+        kk_normal = 2 * kk / radius[0]
+        jj_normal = 2 * jj / radius[1]
+        ii_normal = 2 * ii / radius[2]
+        norm_factor = np.sqrt(kk_normal**2 + jj_normal**2 + ii_normal**2)
+        vol[1,...] = torch.from_numpy(kk_normal / norm_factor) * vol[0,...]
+        vol[2,...] = torch.from_numpy(jj_normal / norm_factor) * vol[0,...]
+        vol[3,...] = torch.from_numpy(ii_normal / norm_factor) * vol[0,...]
+        vol[0,...] *= delta_n
+        vol.requires_grad = True
+        # vol = vol.permute(0,2,1,3)
         return vol
 

@@ -16,9 +16,9 @@ optic_config.PSF_config.wvl = 0.550
 optic_config.mla_config.n_pixels_per_mla = 17
 optic_config.camera_config.sensor_pitch = 6.5
 optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
-optic_config.mla_config.n_mlas = 100
+optic_config.mla_config.n_micro_lenses = 11
 
-optic_config.volume_config.volume_shape = [11, 11, 11]
+optic_config.volume_config.volume_shape = [21, 111, 111]
 optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
 optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
 
@@ -57,12 +57,15 @@ if True:
 
 else: # whole plane
     my_volume = BF_raytrace.init_volume(init_mode='1planes')
+    volume = BF_raytrace.generate_ellipsoid_volume(volume_shape=optic_config.volume_config.volume_shape, radius=[5,7,7], delta_n=0.1)
+    my_volume.voxel_parameters = volume
 # my_volume.plot_volume_plotly(opacity=0.1)
+
 
 
 # Perform same calculation with torch
 startTime = time.time()
-ret_image_measured, azim_image_measured = BF_raytrace.ret_and_azim_images(my_volume)
+ret_image_measured, azim_image_measured = BF_raytrace.ray_trace_through_volume(my_volume) #BF_raytrace.ret_and_azim_images(my_volume)
 executionTime = (time.time() - startTime)
 print('Execution time in seconds with Torch: ' + str(executionTime))
 
@@ -89,9 +92,9 @@ figure = plt.figure(figsize=(15,15))
 co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
 for ep in tqdm(range(n_epochs), "Minimizing"):
     optimizer.zero_grad()
-    ret_image_current, azim_image_current = BF_raytrace.ret_and_azim_images(my_volume)
+    ret_image_current, azim_image_current = BF_raytrace.ray_trace_through_volume(my_volume)
     # Vector difference
-    co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
+    # co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
     # L = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).sqrt().mean()
     L = loss_function(ret_image_measured, ret_image_current) + \
         0.1*(torch.cos(azim_image_measured) - torch.cos(azim_image_current)).abs().mean() #+ 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
@@ -145,5 +148,5 @@ for ep in tqdm(range(n_epochs), "Minimizing"):
 
 
 # Display
-plt.savefig("Optimization_cosine_diff.pdf")
+plt.savefig("Optimization_ellipse_cosine_diff.pdf")
 plt.show()
