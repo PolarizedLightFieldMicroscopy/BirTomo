@@ -286,3 +286,18 @@ def plot_birefringence_lines(retardance_img, azimuth_img, upscale=1, cmap='Wisti
     ax.autoscale()
     ax.margins(0.1)
     return im
+
+
+def plot_birefringence_colorized(retardance_img, azimuth_img, ax=None):
+    # Get pixel coords
+    colors = 0.5*np.ones([azimuth_img.shape[0], azimuth_img.shape[0], 3])
+    A = azimuth_img * 1
+    A = np.fmod(A,np.pi)
+    colors[:,:,0] = A / A.max()
+    colors[:,:,2] = retardance_img / retardance_img.max()
+    colors[np.isnan(colors)] = 0
+    # Back to original size
+    if ax is None:
+        fig,ax = plt.subplots()
+    im = ax.imshow(colors, cmap='hsv')
+    return im
