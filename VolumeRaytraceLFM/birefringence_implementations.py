@@ -78,11 +78,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
 
         # Fetch the voxels traversed per ray and the lengths that each ray travels through every voxel
         voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indexes, self.ray_vol_colli_lengths
-        # Fetch the ray's directions
-        rays = self.ray_valid_direction
-        # Calculate the ray's direction with the two normalized perpendicular directions
-        # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
-        rayDir = calc_rayDir(rays)
+            
         # Init an array to store the Jones matrices.
         JM_list = []
 
@@ -112,7 +108,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
                 opticAxis = my_params[1:].permute(1,0)
 
                 # Grab the subset of precomputed ray directions that have voxels in this step
-                filtered_rayDir = [rayDir[0][rays_with_voxels,:], rayDir[1][rays_with_voxels,:], rayDir[2][rays_with_voxels,:]]
+                filtered_rayDir = [self.ray_direction_normalized[0][rays_with_voxels,:], self.ray_direction_normalized[1][rays_with_voxels,:], self.ray_direction_normalized[2][rays_with_voxels,:]]
 
                 # Only compute if there's an Delta_n
                 # Create a mask of the valid voxels
