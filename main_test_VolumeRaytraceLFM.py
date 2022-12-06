@@ -49,7 +49,7 @@ with torch.no_grad():
                 BF_raytrace.vox_ctr_idx[0], 
                 BF_raytrace.vox_ctr_idx[1]+offset, 
                 BF_raytrace.vox_ctr_idx[2]+offset] \
-                = torch.tensor([0.1, 1, 0, 0])
+                = torch.tensor([-0.1, 1/2, np.sqrt(3)/2, 0])    # birefringence and optic axis
     else: # whole plane
         my_volume = BF_raytrace.init_volume(init_mode='1planes')
     # Plot the volume in 3D
@@ -65,15 +65,15 @@ with torch.no_grad():
     colormap = 'viridis'
     plt.figure(figsize=(10,2.5))
     plt.subplot(1,3,1)
-    plt.imshow(ret_image_torch,cmap=colormap)
+    plt.imshow(ret_image_torch, origin='lower', cmap=colormap)
     plt.colorbar()
     plt.title('Retardance torch')
     plt.subplot(1,3,2)
-    plt.imshow(azim_image_torch,cmap=colormap)
+    plt.imshow(azim_image_torch, origin='lower', cmap=colormap)
     plt.colorbar()
     plt.title('Azimuth torch')
     ax = plt.subplot(1,3,3)
-    im = plot_birefringence_lines(ret_image_torch.numpy(), azim_image_torch.numpy(),cmap=colormap, line_color='white', ax=ax)
+    im = plot_birefringence_lines(ret_image_torch.numpy(), azim_image_torch.numpy(), origin='lower', cmap=colormap, line_color='white', ax=ax)
     plt.colorbar(im)
     plt.title('Ret+Azim')
     plt.show(block=True)

@@ -174,17 +174,17 @@ def calc_azimuth(JM):
     if a == 0 and b == 0:
         azimuth = 0
     else:
-        azimuth = np.real(np.arctan2(a, b)) / 2 + np.pi / 2
-
+        azimuth = np.pi / 2 - np.arctan2(b, -a) / 2
     return azimuth
 
 def main():
-    JM = np.array([[3, 0], [0, 0]])
+    JM = voxRayJM(1, np.array([0, 1, 0]), [np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])], 1)
+    print(JM)
     ret = calc_retardance(JM)
     azim = calc_azimuth(JM)
     print(ret / np.pi, azim / np.pi)
 
-    JM = voxRayJM(1, np.array([1, 0, 0]), [np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])], 1)
+    JM = voxRayJM(1, np.array([0, 0, 1]), [np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])], 1)
     print(JM)
     ret = calc_retardance(JM)
     azim = calc_azimuth(JM)

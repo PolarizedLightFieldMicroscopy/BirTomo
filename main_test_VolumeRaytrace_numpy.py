@@ -48,7 +48,7 @@ voxel_parameters[
     vox_ctr_idx[0], 
     vox_ctr_idx[1]+offset, 
     vox_ctr_idx[2]+offset] \
-    = np.array([.1, 1, 0.0, 0])
+    = np.array([-0.1, 1/2, np.sqrt(3)/2, 0])  # birefringence and optic axis
 
 # Traverse volume for every ray, and generate retardance and azimuth images
 startTime = time.time()
@@ -63,15 +63,15 @@ print('Execution time in seconds with Numpy: ' + str(executionTime))
 colormap = 'viridis'
 plt.figure(figsize=(10,2.5))
 plt.subplot(1,3,1)
-plt.imshow(ret_image,cmap=colormap)
+plt.imshow(ret_image, origin='lower', cmap=colormap)
 plt.colorbar()
 plt.title('Retardance numpy')
 plt.subplot(1,3,2)
-plt.imshow(azim_image,cmap=colormap)
+plt.imshow(azim_image, origin='lower',cmap=colormap)
 plt.colorbar()
 plt.title('Azimuth numpy')
 ax = plt.subplot(1,3,3)
-im = plot_birefringence_lines(ret_image, azim_image,cmap=colormap, line_color='white', ax=ax)
+im = plot_birefringence_lines(ret_image, azim_image, origin='lower', cmap=colormap, line_color='white', ax=ax)
 plt.colorbar(im)
 plt.title('Ret+Azim')
 plt.show(block=True)
