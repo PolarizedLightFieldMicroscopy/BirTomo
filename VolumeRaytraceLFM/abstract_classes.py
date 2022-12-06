@@ -11,6 +11,7 @@ from waveblocks.blocks.optic_block import OpticBlock
 from waveblocks.blocks.optic_config import *
 # todo: move this to a place inside the library, like utils
 from ray_optics import rays_through_vol
+from jones_torch import *
 from my_siddon import *
 
 class SimulType(Enum):
@@ -111,6 +112,7 @@ class RayTraceLFM(OpticBlock):
         self.ray_valid_indexes = None
         self.ray_vol_colli_indexes = None
         self.ray_vol_colli_lengths = None
+        self.ray_direction_normalized = None
 
     def forward(self, volume_in : VolumeLFM=None):
         # Check if type of volume is the same as input volume, if one is provided
@@ -204,6 +206,10 @@ class RayTraceLFM(OpticBlock):
             self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
             self.ray_valid_direction[valid_ray, :] = ray_valid_direction[valid_ray]
         
+        # Calculate the ray's direction with the two normalized perpendicular directions
+        # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
+        self.ray_direction_normalized = calc_rayDir(self.ray_valid_direction)
+
         # Update volume shape information, to account for the whole workspace
         vol_shape = self.optic_config.volume_config.volume_shape
         axial_pitch,xy_pitch,xy_pitch = self.optic_config.volume_config.voxel_size_um

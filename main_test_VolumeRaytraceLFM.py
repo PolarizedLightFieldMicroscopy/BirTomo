@@ -19,7 +19,7 @@ optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic
 optic_config.mla_config.n_micro_lenses = 1
 
 # Define workspace
-volume_shape = [11, 501, 501]
+volume_shape = [11, 11, 11]
 optic_config.volume_config.volume_shape = volume_shape
 optic_config.volume_config.voxel_size_um = 3*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
 optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
