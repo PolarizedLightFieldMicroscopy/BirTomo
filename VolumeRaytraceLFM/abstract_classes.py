@@ -37,14 +37,14 @@ class BackEnds(Enum):
 
 # todo: rename optical_info to optical_optical_info
 # Optical Element, split in two
-class AnisotropicOpticalElement(OpticBlock):
+class OpticalElement(OpticBlock):
     ''' Abstract class defining a birefringent object'''
     def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
                 optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
                 'n_medium' : 1.52, 'wavelength' : 0.550}):
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
-            super(AnisotropicOpticalElement, self).__init__(optic_config=torch_args['optic_config'], 
+            super(OpticalElement, self).__init__(optic_config=torch_args['optic_config'], 
                     members_to_learn=torch_args['members_to_learn'] if 'members_to_learn' in torch_args.keys() else [])
         self.back_end = back_end
         self.simul_type = SimulType.BIREFRINGENT
@@ -92,9 +92,9 @@ class AnisotropicOpticalElement(OpticBlock):
             azim (float): azimuth angle of fast axis [radians]
         Return: Jones matrix    
         '''
-        retardor_azim0 = AnisotropicOpticalElement.LR_azim0(ret)
-        R = AnisotropicOpticalElement.rotator(azim)
-        Rinv = AnisotropicOpticalElement.rotator(-azim)
+        retardor_azim0 = OpticalElement.LR_azim0(ret)
+        R = OpticalElement.rotator(azim)
+        Rinv = OpticalElement.rotator(-azim)
         return R @ retardor_azim0 @ Rinv
 
     @staticmethod
@@ -119,7 +119,7 @@ class AnisotropicOpticalElement(OpticBlock):
         Linear retarder with lambda/4 or equiv pi/2 radians
         Commonly used to convert linear polarized light to circularly polarized light'''
         ret = np.pi / 2
-        return AnisotropicOpticalElement.LR(ret, azim)
+        return OpticalElement.LR(ret, azim)
 
     @staticmethod
     def HWP(azim):
@@ -161,20 +161,20 @@ class AnisotropicOpticalElement(OpticBlock):
     @staticmethod
     def RCR(ret):
         '''Right Circular Retarder'''
-        return AnisotropicOpticalElement.rotator(-ret / 2)
+        return OpticalElement.rotator(-ret / 2)
     @staticmethod
     def LCR(ret):
         '''Left Circular Retarder'''
-        return AnisotropicOpticalElement.rotator(ret / 2)
+        return OpticalElement.rotator(ret / 2)
 
 
 
 
 
 ###########################################################################################
-# Implementations of AnisotropicOpticalElement
+# Implementations of OpticalElement
 # todo: rename to BirefringentVolume inherits 
-class AnisotropicVoxel(AnisotropicOpticalElement):
+class AnisotropicVoxel(OpticalElement):
     '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
     def __init__(self, back_end=BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, 
         optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550},
@@ -348,7 +348,7 @@ class AnisotropicVoxel(AnisotropicOpticalElement):
         return self.voxel_parameters[:, vox_index]
 
 ###########################################################################################
-class RayTraceLFM(AnisotropicOpticalElement):
+class RayTraceLFM(OpticalElement):
     '''This is a base class that takes a volume geometry and LFM geometry and calculates which arrive to each of the pixels behind each micro-lense, and discards the rest.
        This class also pre-computes how each rays traverses the volume with the Siddon algorithm.
        The interaction between the voxels and the rays is defined by each specialization of this class.'''

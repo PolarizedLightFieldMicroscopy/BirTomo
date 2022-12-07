@@ -243,7 +243,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
 
 
     # todo: once validated merge this with numpy function
-    # todo: these are re-implemented in abstract_classes in AnisotropicOpticalElement
+    # todo: these are re-implemented in abstract_classes in OpticalElement
     @staticmethod
     def voxRayJM_numpy(Delta_n, opticAxis, rayDir, ell, wavelength):
         '''Compute Jones matrix associated with a particular ray and voxel combination'''
