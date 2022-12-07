@@ -38,11 +38,21 @@ class BackEnds(Enum):
 
 class OpticalElement(OpticBlock):
     ''' Abstract class defining a elements, with a back-end ans some optical information'''
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
+    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
                 optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
                 'n_medium' : 1.52, 'wavelength' : 0.550}):
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
+            # If no optic_config is provided, create one
+            if 'optic_config' not in torch_args.keys():
+                torch_args['optic_config'] = OpticConfig()
+                torch_args['optic_config'].volume_config.volume_shape = optical_info['volume_shape']
+                torch_args['optic_config'].volume_config.voxel_size_um = optical_info['voxel_size_um']
+                torch_args['optic_config'].mla_config.n_pixels_per_mla = optical_info['pixels_per_ml']
+                torch_args['optic_config'].PSF_config.NA = optical_info['na_obj']
+                torch_args['optic_config'].PSF_config.ni = optical_info['n_medium']
+                torch_args['optic_config'].PSF_config.wvl = optical_info['wavelength']
+
             super(OpticalElement, self).__init__(optic_config=torch_args['optic_config'], 
                     members_to_learn=torch_args['members_to_learn'] if 'members_to_learn' in torch_args.keys() else [])
 
@@ -62,7 +72,6 @@ class OpticalElement(OpticBlock):
                     'wavelength' : self.optic_config.PSF_config.wvl}
 
 
-
 ###########################################################################################
 class RayTraceLFM(OpticalElement):
     '''This is a base class that takes a volume geometry and LFM geometry and calculates which arrive to each of the pixels behind each micro-lense, and discards the rest.
@@ -70,7 +79,7 @@ class RayTraceLFM(OpticalElement):
        The interaction between the voxels and the rays is defined by each specialization of this class.'''
 
     def __init__(
-        self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
+        self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
             optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
         super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
         

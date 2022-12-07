@@ -3,7 +3,7 @@ from VolumeRaytraceLFM.abstract_classes import *
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
+    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
                 optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
                 'n_medium' : 1.52, 'wavelength' : 0.550}):
         super(BirefringentElement, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
@@ -16,7 +16,7 @@ class BirefringentElement(OpticalElement):
 # todo: rename to BirefringentVolume inherits 
 class BirefringentVolume(BirefringentElement):
     '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
-    def __init__(self, back_end=BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, 
+    def __init__(self, back_end=BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []}, 
         optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550},
         Delta_n=0, optic_axis=[1, 0, 0]):
         '''BirefringentVolume
@@ -187,7 +187,7 @@ class BirefringentVolume(BirefringentElement):
 class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     """This class extends RayTraceLFM, and implements the forward function, where voxels contribute to ray's Jones-matrices with a retardance and axis in a non-commutative matter"""
     def __init__(
-            self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
+            self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
             optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
         # optic_config contains mla_config and volume_config
         super(BirefringentRaytraceLFM, self).__init__(
@@ -313,8 +313,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         for m in range(len(voxels_of_segs[n_ray])):
             ell = ell_in_voxels[n_ray][m]
             vox = voxels_of_segs[n_ray][m]
+            # try:
             Delta_n = volume_in.Delta_n[vox[0], vox[1], vox[2]]
             opticAxis = volume_in.optic_axis[:, vox[0], vox[1], vox[2]]
+            # except:
+            #     print('hola')
             # get_ellipsoid(vox)
             JM = self.voxRayJM(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
             JM_list.append(JM)

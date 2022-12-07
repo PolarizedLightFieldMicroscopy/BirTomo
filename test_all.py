@@ -125,8 +125,8 @@ def test_voxel_array_creation(global_data, iteration):
         3*[7],
         3*[8],
         3*[11],
-        # 3*[21],
-        # 3*[50],
+        3*[21],
+        3*[50],
     ])
 def test_compute_JonesMatrices(global_data, volume_shape_in):
     # Define the voxel parameters
@@ -157,11 +157,11 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
 
     # Create voxel array in numpy
     voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY, 
-                                    Delta_n=delta_n, optic_axis=optic_axis)
+                                    Delta_n=delta_n, optic_axis=optic_axis, optical_info=optical_info)
 
     # Create a voxel array in torch                          
     voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
-                                    Delta_n=delta_n, optic_axis=optic_axis)
+                                    Delta_n=delta_n, optic_axis=optic_axis, optical_info=optical_info)
        
 
     # Create arrays to store images
@@ -214,6 +214,8 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
             f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
             any_fail = True
     
+    # Use this in debug console to visualize errors
+    # plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
     assert any_fail==False, 'No errors in Jones Matrices, but there were mismatches between Retardance and Azimuth in numpy vs torch'
 
 @pytest.mark.parametrize('iteration', range(0, 4))
@@ -238,15 +240,15 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
 
     volume_shape = volume_shapes_to_test[iteration]#[1, 6, 6]
     # pixels_per_ml = 17
-    optic_config.volume_config.volume_shape = volume_shape
-    optic_config.mla_config.n_micro_lenses = volume_shape[1]
+    # optic_config.volume_config.volume_shape = volume_shape
+    # optic_config.mla_config.n_micro_lenses = volume_shape[1]
     
     optical_info['volume_shape'] = volume_shape
     # optical_info['pixels_per_ml'] = pixels_per_ml
 
     # Create numpy and pytorch raytracer
     BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
-    BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config})
+    BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, optical_info=optical_info)# torch_args={'optic_config':optic_config})
     
     # Compute ray-volume geometry and Siddon algorithm
     BF_raytrace_numpy.compute_rays_geometry()
@@ -275,9 +277,8 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
     assert np.all(np.isclose(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-5)), "Error when comparing azimuth computations"
 
-
 def main():
-    # test_compute_retardance_and_azimuth_images(global_data(),0)
+    test_compute_JonesMatrices(global_data(), 3*[1])
     # test_voxel_array_creation(global_data(),1)
     # torch.set_default_tensor_type(torch.DoubleTensor)
     # Objective configuration
@@ -353,10 +354,6 @@ def main():
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
     
-
-
-
-
 
 def plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch):
     plt.rcParams['image.origin'] = 'lower'
