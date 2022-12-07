@@ -93,24 +93,24 @@ def test_voxel_array_creation(global_data, iteration):
     
     # Create voxels in different ways
     # Passing a single value for delta n and optic axis
-    voxel_numpy_single_value = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
+    voxel_numpy_single_value = BirefringentVolume(back_end=BackEnds.NUMPY, 
                                     Delta_n=delta_n, optic_axis=optic_axis)
 
-    voxel_torch_single_value = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config' : optic_config},
+    voxel_torch_single_value = BirefringentVolume(back_end=BackEnds.PYTORCH, torch_args={'optic_config' : optic_config},
                                     Delta_n=delta_n, optic_axis=optic_axis)
                                     
     # Passing an already build 3D array                            
-    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
+    voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
                                     Delta_n=delta_n*torch.ones(volume_shape), 
                                     optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2])
                                     )
                                     
     # Passing an already build 3D array                            
-    voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY,
+    voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY,
                                     Delta_n=delta_n*torch.ones(volume_shape).numpy(), 
                                     optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2]).numpy()
                                     )
-    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
+    voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
                                     Delta_n=delta_n*torch.ones(volume_shape), optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2]))
     
     # Check that the initialization and normalization of optical axes are correct
@@ -156,11 +156,11 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
     BF_raytrace_torch.compute_rays_geometry()
 
     # Create voxel array in numpy
-    voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
+    voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY, 
                                     Delta_n=delta_n, optic_axis=optic_axis)
 
     # Create a voxel array in torch                          
-    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
+    voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
                                     Delta_n=delta_n, optic_axis=optic_axis)
        
 
@@ -253,11 +253,11 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     BF_raytrace_torch.compute_rays_geometry()
 
     # Create voxel array in numpy
-    voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
+    voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY, 
                                     Delta_n=delta_n, optic_axis=optic_axis)
 
     # Create a voxel array in torch                          
-    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
+    voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
                                     Delta_n=delta_n, optic_axis=optic_axis)
     
     # Compute retardance and azimuth images with both methods
@@ -338,11 +338,11 @@ def main():
     # Create voxels in different ways
 
     # Passing a single value for delta n and optic axis
-    voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
+    voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY, 
                                     Delta_n=delta_n, optic_axis=optic_axis, optical_info=optical_info)
 
     # Passing an already build 3D array                            
-    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config}, 
+    voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config}, 
                                     Delta_n=delta_n*torch.ones(volume_shape), optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2]))
        
 

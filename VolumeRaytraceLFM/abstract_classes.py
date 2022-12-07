@@ -22,6 +22,7 @@ except:
 
 class SimulType(Enum):
     ''' Defines which types of volumes we can have, as each type has a different ray-voxel interaction'''
+    NOT_SPECIFIED   = 0
     FLUOR_INTENS    = 1     # Voxels add intensity as the ray goes trough the volume: commutative
     BIREFRINGENT    = 2     # Voxels modify polarization as the ray goes trough: non commutative
     # FLUOR_POLAR     = 3     # 
@@ -35,10 +36,8 @@ class BackEnds(Enum):
     PYTORCH     = 2     # Use Pytorch, with auto-differentiation and GPU support.
 
 
-# todo: rename optical_info to optical_optical_info
-# Optical Element, split in two
 class OpticalElement(OpticBlock):
-    ''' Abstract class defining a birefringent object'''
+    ''' Abstract class defining a elements, with a back-end ans some optical information'''
     def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
                 optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
                 'n_medium' : 1.52, 'wavelength' : 0.550}):
@@ -46,8 +45,10 @@ class OpticalElement(OpticBlock):
         if back_end==BackEnds.PYTORCH:
             super(OpticalElement, self).__init__(optic_config=torch_args['optic_config'], 
                     members_to_learn=torch_args['members_to_learn'] if 'members_to_learn' in torch_args.keys() else [])
+
+        # Store variables
         self.back_end = back_end
-        self.simul_type = SimulType.BIREFRINGENT
+        self.simul_type = SimulType.NOT_SPECIFIED
         self.optical_info = optical_info
 
         # if we are using pytorch and waveblocks, grab system info from optic_config
@@ -62,12 +63,27 @@ class OpticalElement(OpticBlock):
 
 
 
+class BirefringentElement(OpticalElement):
+    ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
+    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
+                optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
+                'n_medium' : 1.52, 'wavelength' : 0.550}):
+        super(BirefringentElement, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
+
+        self.simul_type = SimulType.BIREFRINGENT
+
+
+
 
 ###########################################################################################
     # Constructors for different types of elements
     # This methods are constructors only, they don't support torch optimization of internal variables
     # todo: rename such that it is clear that these are presets for different birefringent objects
-    # todo: this are analyzer polarizer jones matrix initiallizers, see Geneva's diagram :) 
+
+class BirefringentJMgenerators(BirefringentElement):
+    def __init__(self, back_end : BackEnds = BackEnds.NUMPY):
+        super(BirefringentElement, self).__init__(back_end=back_end, torch_args={}, optical_info={})
+
     @staticmethod
     def rotator(angle, back_end=BackEnds.NUMPY):
         '''2D rotation matrix
@@ -174,12 +190,12 @@ class OpticalElement(OpticBlock):
 ###########################################################################################
 # Implementations of OpticalElement
 # todo: rename to BirefringentVolume inherits 
-class AnisotropicVoxel(OpticalElement):
+class BirefringentVolume(BirefringentElement):
     '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
     def __init__(self, back_end=BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, 
         optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550},
         Delta_n=0, optic_axis=[1, 0, 0]):
-        '''AnisotropicVoxel
+        '''BirefringentVolume
         Args:
             back_end (BackEnd):     A computation BackEnd (Numpy vs Pytorch). If Pytorch is used, torch_args are required
                                     to initialize the head class OpticBlock from Waveblocks.
@@ -199,7 +215,7 @@ class AnisotropicVoxel(OpticalElement):
                                     Defines the optic axis per voxel.
                                     If a single 3D vector is passed all the voxels will share this optic axis.
             '''
-        super(AnisotropicVoxel, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
+        super(BirefringentVolume, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
        
 
         if self.back_end == BackEnds.NUMPY:
@@ -354,12 +370,10 @@ class RayTraceLFM(OpticalElement):
        The interaction between the voxels and the rays is defined by each specialization of this class.'''
 
     def __init__(
-        self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, simul_type : SimulType = SimulType.BIREFRINGENT,
+        self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
             optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
         super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
         
-        # Store system information
-        self.simul_type = simul_type
         
         # Create dummy variables for pre-computed rays and paths through the volume
         # This are defined in compute_rays_geometry
@@ -368,7 +382,7 @@ class RayTraceLFM(OpticalElement):
         self.ray_vol_colli_lengths = None
         self.ray_direction_basis = None
 
-    def forward(self, volume_in : AnisotropicVoxel=None):
+    def forward(self, volume_in : BirefringentVolume=None):
         # Check if type of volume is the same as input volume, if one is provided
         if volume_in is not None:
             assert volume_in.simul_type == self.simul_type, f"Error: wrong type of volume provided, this \
@@ -754,11 +768,11 @@ class RayTraceLFM(OpticalElement):
 
 
     ######## Not implemented: These functions need an implementation in derived objects
-    def ray_trace_through_volume(self, volume_in : AnisotropicVoxel=None):
+    def ray_trace_through_volume(self, volume_in : BirefringentVolume=None):
         ''' We have a separate function as we have some basic functionality that is shared'''
         raise NotImplementedError
     
-    def init_volume(self, volume_in : AnisotropicVoxel=None):
+    def init_volume(self, volume_in : BirefringentVolume=None):
         ''' This function assigns a volume the correct internal structure for a given simul_type
         For example: a single value per voxel for fluorescence, or two values for birefringence'''
         raise NotImplementedError
