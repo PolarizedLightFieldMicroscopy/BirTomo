@@ -35,11 +35,12 @@ class BackEnds(Enum):
     PYTORCH     = 2     # Use Pytorch, with auto-differentiation and GPU support.
 
 
-
+# todo: rename optical_info to optical_optical_info
+# Optical Element, split in two
 class AnisotropicOpticalElement(OpticBlock):
     ''' Abstract class defining a birefringent object'''
     def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
-                system_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
+                optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
                 'n_medium' : 1.52, 'wavelength' : 0.550}):
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
@@ -47,11 +48,11 @@ class AnisotropicOpticalElement(OpticBlock):
                     members_to_learn=torch_args['members_to_learn'] if 'members_to_learn' in torch_args.keys() else [])
         self.back_end = back_end
         self.simul_type = SimulType.BIREFRINGENT
-        self.system_info = system_info
+        self.optical_info = optical_info
 
         # if we are using pytorch and waveblocks, grab system info from optic_config
         if self.back_end == BackEnds.PYTORCH:
-            self.system_info = \
+            self.optical_info = \
                     {'volume_shape' : self.optic_config.volume_config.volume_shape, 
                     'voxel_size_um' : self.optic_config.volume_config.voxel_size_um, 
                     'pixels_per_ml' : self.optic_config.mla_config.n_pixels_per_mla, 
@@ -66,7 +67,7 @@ class AnisotropicOpticalElement(OpticBlock):
     # Constructors for different types of elements
     # This methods are constructors only, they don't support torch optimization of internal variables
     # todo: rename such that it is clear that these are presets for different birefringent objects
-
+    # todo: this are analyzer polarizer jones matrix initiallizers, see Geneva's diagram :) 
     @staticmethod
     def rotator(angle, back_end=BackEnds.NUMPY):
         '''2D rotation matrix
@@ -172,18 +173,18 @@ class AnisotropicOpticalElement(OpticBlock):
 
 ###########################################################################################
 # Implementations of AnisotropicOpticalElement
-
+# todo: rename to BirefringentVolume inherits 
 class AnisotropicVoxel(AnisotropicOpticalElement):
     '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
     def __init__(self, back_end=BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, 
-        system_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550},
+        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550},
         Delta_n=0, optic_axis=[1, 0, 0]):
         '''AnisotropicVoxel
         Args:
             back_end (BackEnd):     A computation BackEnd (Numpy vs Pytorch). If Pytorch is used, torch_args are required
                                     to initialize the head class OpticBlock from Waveblocks.
             torch_args (dic):       Required for PYTORCH back-end. Contains optic_config object and members_to_learn
-            system_info (dic):
+            optical_info (dic):
                                     volume_shape ([3]:[sz,sy,sz]):
                                                             Shape of the volume in voxel numbers per dimension.
                                     voxel_size_um ([3]):    Size of a voxel in micrometers.
@@ -198,11 +199,11 @@ class AnisotropicVoxel(AnisotropicOpticalElement):
                                     Defines the optic axis per voxel.
                                     If a single 3D vector is passed all the voxels will share this optic axis.
             '''
-        super(AnisotropicVoxel, self).__init__(back_end=back_end, torch_args=torch_args, system_info=system_info)
+        super(AnisotropicVoxel, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
        
 
         if self.back_end == BackEnds.NUMPY:
-            self.volume_shape = self.system_info['volume_shape']
+            self.volume_shape = self.optical_info['volume_shape']
             # In the case when an optic axis per voxel of a 3D volume is provided
             # e.g. [3,nz,ny,nx]
             if isinstance(optic_axis, np.ndarray) and len(optic_axis.shape) == 4:
@@ -260,9 +261,9 @@ class AnisotropicVoxel(AnisotropicOpticalElement):
     # maybe this section should be a subclass of JonesMatrix
     def calc_retardance(self, ray_dir, thickness):
         if self.back_end==BackEnds.NUMPY:
-            ret = abs(self.Delta_n) * (1 - np.dot(self.optic_axis, ray_dir) ** 2) * 2 * np.pi * thickness / self.system_info['wavelength']
+            ret = abs(self.Delta_n) * (1 - np.dot(self.optic_axis, ray_dir) ** 2) * 2 * np.pi * thickness / self.optical_info['wavelength']
         elif self.back_end==BackEnds.PYTORCH:
-            ret = abs(self.Delta_n) * (1 - torch.linalg.vecdot(self.optic_axis, ray_dir) ** 2) * 2 * torch.pi * thickness / self.system_info['wavelength']
+            ret = abs(self.Delta_n) * (1 - torch.linalg.vecdot(self.optic_axis, ray_dir) ** 2) * 2 * torch.pi * thickness / self.optical_info['wavelength']
         else:
             raise NotImplementedError
         # print(f"Accumulated retardance from index ellipsoid is {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
@@ -354,8 +355,8 @@ class RayTraceLFM(AnisotropicOpticalElement):
 
     def __init__(
         self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, simul_type : SimulType = SimulType.BIREFRINGENT,
-            system_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
-        super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args, system_info=system_info)
+            optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
+        super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
         
         # Store system information
         self.simul_type = simul_type
@@ -623,18 +624,18 @@ class RayTraceLFM(AnisotropicOpticalElement):
         # We need to revisit this when we start computing images with more than one micro-lens in numpy
         if self.back_end == BackEnds.NUMPY:
             # The valid workspace is defined by the number of micro-lenses
-            valid_vol_shape = self.system_info['volume_shape'][1]
+            valid_vol_shape = self.optical_info['volume_shape'][1]
         elif self.back_end == BackEnds.PYTORCH:
             valid_vol_shape = self.optic_config.mla_config.n_micro_lenses
         
 
 
         # Fetch needed variables
-        pixels_per_ml = self.system_info['pixels_per_ml']
-        naObj = self.system_info['na_obj']
-        nMedium = self.system_info['n_medium']
-        vol_shape = [self.system_info['volume_shape'][0],] + 2*[valid_vol_shape]
-        voxel_size_um = self.system_info['voxel_size_um']
+        pixels_per_ml = self.optical_info['pixels_per_ml']
+        naObj = self.optical_info['na_obj']
+        nMedium = self.optical_info['n_medium']
+        vol_shape = [self.optical_info['volume_shape'][0],] + 2*[valid_vol_shape]
+        voxel_size_um = self.optical_info['voxel_size_um']
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
         self.vox_ctr_idx = vox_ctr_idx.astype(int)
         self.volume_ctr_um = vox_ctr_idx * voxel_size_um # in vol units (um)
@@ -719,7 +720,7 @@ class RayTraceLFM(AnisotropicOpticalElement):
         
         # Update volume shape information, to account for the whole workspace
         # todo: mainly for pytorch multi-lenslet computation
-        vol_shape = self.system_info['volume_shape']
+        vol_shape = self.optical_info['volume_shape']
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
         self.vox_ctr_idx = vox_ctr_idx.astype(int)
         self.volume_ctr_um = vox_ctr_idx * voxel_size_um

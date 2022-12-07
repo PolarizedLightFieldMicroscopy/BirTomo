@@ -5,11 +5,11 @@ class BirefringentRaytraceLFM(RayTraceLFM):
     """This class extends RayTraceLFM, and implements the forward function, where voxels contribute to ray's Jones-matrices with a retardance and axis in a non-commutative matter"""
     def __init__(
             self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
-            system_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
+            optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
         # optic_config contains mla_config and volume_config
         super(BirefringentRaytraceLFM, self).__init__(
             back_end=back_end, torch_args=torch_args, 
-            simul_type=SimulType.BIREFRINGENT, system_info=system_info
+            simul_type=SimulType.BIREFRINGENT, optical_info=optical_info
         )
         
         
@@ -123,7 +123,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
 
     def ret_and_azim_images_numpy(self, volume_in : AnisotropicVoxel):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
-        pixels_per_ml = self.system_info['pixels_per_ml']
+        pixels_per_ml = self.optical_info['pixels_per_ml']
         ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
         azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
         for i in range(pixels_per_ml):
@@ -143,7 +143,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         # Fetch precomputed Siddon parameters
         voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
         # rays are stored in a 1D array, let's look for index i,j
-        n_ray = j + i *  self.system_info['pixels_per_ml']
+        n_ray = j + i *  self.optical_info['pixels_per_ml']
         rayDir = self.ray_direction_basis[n_ray][:]
 
         JM_list = []
@@ -153,7 +153,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             Delta_n = volume_in.Delta_n[vox[0], vox[1], vox[2]]
             opticAxis = volume_in.optic_axis[:, vox[0], vox[1], vox[2]]
             # get_ellipsoid(vox)
-            JM = BirefringentRaytraceLFM.voxRayJM_numpy(Delta_n, opticAxis, rayDir, ell, self.system_info['wavelength'])
+            JM = BirefringentRaytraceLFM.voxRayJM_numpy(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
             JM_list.append(JM)
         effective_JM = BirefringentRaytraceLFM.rayJM_numpy(JM_list)
         return effective_JM
@@ -205,7 +205,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
                                                                                 opticAxis = opticAxis[valid_voxel, :], 
                                                                                 rayDir = [filtered_rayDir[0][valid_voxel], filtered_rayDir[1][valid_voxel], filtered_rayDir[2][valid_voxel]], 
                                                                                 ell = ell[valid_voxel],
-                                                                                wavelength=self.system_info['wavelength'])
+                                                                                wavelength=self.optical_info['wavelength'])
             else:
                 pass
             # Store current interaction step
@@ -243,6 +243,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
 
 
     # todo: once validated merge this with numpy function
+    # todo: these are re-implemented in abstract_classes in AnisotropicOpticalElement
     @staticmethod
     def voxRayJM_numpy(Delta_n, opticAxis, rayDir, ell, wavelength):
         '''Compute Jones matrix associated with a particular ray and voxel combination'''

@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 
 @pytest.fixture(scope = 'module')
 def global_data():
-    '''Create global optic_setting and system_info containing all the optics and volume information
+    '''Create global optic_setting and optical_info containing all the optics and volume information
         The tests can access this by passing the name of this function as an argument for example:
         def test_something(global_data):
-            system_info = global_data['system_info]
+            optical_info = global_data['optical_info]
     '''
     # Objective configuration
     magnObj = 60
@@ -44,7 +44,7 @@ def global_data():
 
 
     # Prepate settings for numpy
-    system_info={
+    optical_info={
                 'volume_shape' : volume_shape, 
                 'voxel_size_um' : voxel_size_um, 
                 'pixels_per_ml' : pixels_per_ml, 
@@ -53,19 +53,18 @@ def global_data():
                 'wavelength' : wavelength}
 
 
-    return {'optic_config': optic_config, 'system_info' : system_info}
-
+    return {'optic_config': optic_config, 'optical_info' : optical_info}
 
 # todo: run with different volume sizes
 # @pytest.mark.parametrize('iteration', range(1, 10))
 def test_rays_computation(global_data):
     
     # Gather global data
-    system_info = global_data['system_info']
+    optical_info = global_data['optical_info']
     optic_config = global_data['optic_config']
 
     # Create numpy and pytorch raytracer
-    BF_raytrace_numpy = BirefringentRaytraceLFM(system_info=system_info)
+    BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config})
     
     # Compute ray-volume geometry and Siddon algorithm
@@ -81,7 +80,6 @@ def test_rays_computation(global_data):
         for n_ray in range(len(BF_raytrace_numpy.ray_direction_basis)):
             assert(np.all(np.isclose(BF_raytrace_numpy.ray_direction_basis[n_ray][n_basis], BF_raytrace_torch.ray_direction_basis[n_basis][n_ray]))), f"ray_direction_basis mismatch for ray: {n_ray}, basis: {n_basis}"
 
-
 @pytest.mark.parametrize('iteration', range(1, 10))
 def test_voxel_array_creation(global_data, iteration):
     
@@ -89,9 +87,9 @@ def test_voxel_array_creation(global_data, iteration):
     optic_axis = np.random.rand(3) #[1.0,3.0,1.0]
 
     # Gather global data
-    system_info = global_data['system_info']
+    optical_info = global_data['optical_info']
     optic_config = global_data['optic_config']
-    volume_shape = system_info['volume_shape']
+    volume_shape = optical_info['volume_shape']
     
     # Create voxels in different ways
     # Passing a single value for delta n and optic axis
@@ -122,36 +120,35 @@ def test_voxel_array_creation(global_data, iteration):
     assert np.all(np.isclose(voxel_numpy_single_value.Delta_n.flatten(), voxel_torch_single_value.Delta_n.detach().numpy().flatten()))
 
 # todo: failing with pixels_per_ml = 5
-@pytest.mark.parametrize('iteration', range(0, 4))
-def test_compute_JonesMatrices(global_data, iteration):
-    volume_shapes_to_test = [
+@pytest.mark.parametrize('volume_shape_in', [
         3*[1],
         3*[7],
         3*[8],
         3*[11],
-        3*[21],
-        3*[50],
-    ]
+        # 3*[21],
+        # 3*[50],
+    ])
+def test_compute_JonesMatrices(global_data, volume_shape_in):
     # Define the voxel parameters
     delta_n = 0.1
     optic_axis = [1.0,0.0,0]
 
     # Gather global data
-    system_info = global_data['system_info']
+    optical_info = global_data['optical_info']
     optic_config = global_data['optic_config']
-    volume_shape = system_info['volume_shape']
-    pixels_per_ml = system_info['pixels_per_ml']
+    volume_shape = optical_info['volume_shape']
+    pixels_per_ml = optical_info['pixels_per_ml']
 
-    volume_shape = volume_shapes_to_test[iteration]#[1, 6, 6]
+    volume_shape = volume_shape_in#[1, 6, 6]
     # pixels_per_ml = 17
     optic_config.volume_config.volume_shape = volume_shape
     optic_config.mla_config.n_micro_lenses = volume_shape[1]
     
-    system_info['volume_shape'] = volume_shape
-    # system_info['pixels_per_ml'] = pixels_per_ml
+    optical_info['volume_shape'] = volume_shape
+    # optical_info['pixels_per_ml'] = pixels_per_ml
 
     # Create numpy and pytorch raytracer
-    BF_raytrace_numpy = BirefringentRaytraceLFM(system_info=system_info)
+    BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config})
     
     # Compute ray-volume geometry and Siddon algorithm
@@ -234,21 +231,21 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     optic_axis = [1.0,0.0,0]
 
     # Gather global data
-    system_info = global_data['system_info']
+    optical_info = global_data['optical_info']
     optic_config = global_data['optic_config']
-    volume_shape = system_info['volume_shape']
-    pixels_per_ml = system_info['pixels_per_ml']
+    volume_shape = optical_info['volume_shape']
+    pixels_per_ml = optical_info['pixels_per_ml']
 
     volume_shape = volume_shapes_to_test[iteration]#[1, 6, 6]
     # pixels_per_ml = 17
     optic_config.volume_config.volume_shape = volume_shape
     optic_config.mla_config.n_micro_lenses = volume_shape[1]
     
-    system_info['volume_shape'] = volume_shape
-    # system_info['pixels_per_ml'] = pixels_per_ml
+    optical_info['volume_shape'] = volume_shape
+    # optical_info['pixels_per_ml'] = pixels_per_ml
 
     # Create numpy and pytorch raytracer
-    BF_raytrace_numpy = BirefringentRaytraceLFM(system_info=system_info)
+    BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config})
     
     # Compute ray-volume geometry and Siddon algorithm
@@ -319,10 +316,10 @@ def main():
 
 
     # Prepate settings for numpy
-    system_info={'volume_shape' : volume_shape, 'voxel_size_um' : voxel_size_um, 'pixels_per_ml' : pixels_per_ml, 'na_obj' : naObj, 'n_medium' : nMedium, 'wavelength' : wavelength}
+    optical_info={'volume_shape' : volume_shape, 'voxel_size_um' : voxel_size_um, 'pixels_per_ml' : pixels_per_ml, 'na_obj' : naObj, 'n_medium' : nMedium, 'wavelength' : wavelength}
 
         
-    BF_raytrace_numpy = BirefringentRaytraceLFM(system_info=system_info)
+    BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config})
     
     BF_raytrace_numpy.compute_rays_geometry()
@@ -342,7 +339,7 @@ def main():
 
     # Passing a single value for delta n and optic axis
     voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
-                                    Delta_n=delta_n, optic_axis=optic_axis, system_info=system_info)
+                                    Delta_n=delta_n, optic_axis=optic_axis, optical_info=optical_info)
 
     # Passing an already build 3D array                            
     voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config}, 
