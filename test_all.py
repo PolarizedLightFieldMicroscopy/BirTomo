@@ -96,7 +96,7 @@ def test_voxel_array_creation(global_data, iteration):
     # Create voxels in different ways
     # Passing a single value for delta n and optic axis
     voxel_numpy_single_value = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
-                                    Delta_n=delta_n, optic_axis=optic_axis, volume_shape=volume_shape)
+                                    Delta_n=delta_n, optic_axis=optic_axis)
 
     voxel_torch_single_value = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config' : optic_config},
                                     Delta_n=delta_n, optic_axis=optic_axis)
@@ -123,8 +123,16 @@ def test_voxel_array_creation(global_data, iteration):
 
 
 # todo: failing with pixels_per_ml = 5
-def test_compute_JonesMatrices_retardance_and_azimuth(global_data):
-
+@pytest.mark.parametrize('iteration', range(0, 4))
+def test_compute_JonesMatrices_retardance_and_azimuth(global_data, iteration):
+    volume_shapes_to_test = [
+        3*[1],
+        3*[7],
+        3*[8],
+        3*[11],
+        3*[21],
+        3*[50],
+    ]
     # Define the voxel parameters
     delta_n = 0.1
     optic_axis = [1.0,0.0,0]
@@ -135,10 +143,10 @@ def test_compute_JonesMatrices_retardance_and_azimuth(global_data):
     volume_shape = system_info['volume_shape']
     pixels_per_ml = system_info['pixels_per_ml']
 
-    volume_shape = [1, 6, 6]
+    volume_shape = volume_shapes_to_test[iteration]#[1, 6, 6]
     # pixels_per_ml = 17
     optic_config.volume_config.volume_shape = volume_shape
-    # optic_config.mla_config.n_pixels_per_mla = pixels_per_ml
+    optic_config.mla_config.n_micro_lenses = volume_shape[1]
     
     system_info['volume_shape'] = volume_shape
     # system_info['pixels_per_ml'] = pixels_per_ml
@@ -153,7 +161,7 @@ def test_compute_JonesMatrices_retardance_and_azimuth(global_data):
 
     # Create voxel array in numpy
     voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
-                                    Delta_n=delta_n, optic_axis=optic_axis, volume_shape=volume_shape)
+                                    Delta_n=delta_n, optic_axis=optic_axis)
 
     # Create a voxel array in torch                          
     voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
@@ -187,7 +195,7 @@ def test_compute_JonesMatrices_retardance_and_azimuth(global_data):
 
     # Fill in retardance and azimuth of torch into an image,
     # And compare with their corresponding numpy JM
-    for ray_ix, (i,j) in enumerate(BF_raytrace_torch.ray_valid_indexes):
+    for ray_ix, (i,j) in enumerate(BF_raytrace_torch.ray_valid_indices):
         ret_img_torch[i, j] = ret_torch[ray_ix].item()
         azi_img_torch[i, j] = azi_torch[ray_ix].item()
         JM_numpy = BF_raytrace_numpy.calc_cummulative_JM_of_ray_numpy(i, j, voxel_numpy)
@@ -212,7 +220,7 @@ def test_compute_JonesMatrices_retardance_and_azimuth(global_data):
 
 
 def main():
-    test_compute_JonesMatrices_retardance_and_azimuth(global_data())
+    test_compute_JonesMatrices_retardance_and_azimuth(global_data(),0)
     # test_voxel_array_creation(global_data(),1)
     # torch.set_default_tensor_type(torch.DoubleTensor)
     # Objective configuration
@@ -230,7 +238,7 @@ def main():
     axialPitch = voxPitch
     voxel_size_um = [axialPitch, voxPitch, voxPitch]
     # Volume shape
-    volume_shape = [1, 1, 1]
+    volume_shape = [11, 11, 11]
 
 
     optic_config = OpticConfig()
@@ -274,10 +282,10 @@ def main():
 
     # Passing a single value for delta n and optic axis
     voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
-                                    Delta_n=delta_n, optic_axis=optic_axis, volume_shape=volume_shape)
+                                    Delta_n=delta_n, optic_axis=optic_axis, system_info=system_info)
 
     # Passing an already build 3D array                            
-    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
+    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config}, 
                                     Delta_n=delta_n*torch.ones(volume_shape), optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2]))
        
 
@@ -301,7 +309,7 @@ def main():
     ret_img_torch = np.zeros([pixels_per_ml,pixels_per_ml])
     azi_img_torch = np.zeros([pixels_per_ml,pixels_per_ml])
 
-    for ray_ix, (i,j) in enumerate(BF_raytrace_torch.ray_valid_indexes):
+    for ray_ix, (i,j) in enumerate(BF_raytrace_torch.ray_valid_indices):
         ret_img_torch[i, j] = ret_torch[ray_ix].item()
         azi_img_torch[i, j] = azi_torch[ray_ix].item()
         JM_numpy = BF_raytrace_numpy.calc_cummulative_JM_of_ray_numpy(i, j, voxel_numpy)
@@ -310,13 +318,11 @@ def main():
         # Check retardance for this ray
         assert np.isclose(ret_img_numpy[i, j], ret_img_torch[i, j], atol=1e-5).all(), f'Retardance mismatch on coord: (i,j)= ({i},{j}):'
         # Check azimuth for this ray
-        assert np.isclose(azi_img_numpy[i, j], azi_img_torch[i, j], atol=1e-5).all(), f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
+        # assert np.isclose(azi_img_numpy[i, j], azi_img_torch[i, j], atol=1e-5).all(), f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
     
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
     
-
-
 
 
 

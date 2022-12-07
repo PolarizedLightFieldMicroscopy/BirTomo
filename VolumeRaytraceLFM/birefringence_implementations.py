@@ -1,16 +1,6 @@
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as f
-
-# Waveblocks imports
-from waveblocks.blocks.optic_config import *
-
 from VolumeRaytraceLFM.abstract_classes import *
-# from jones_torch import *
 
 ############ Implementations
-
 class BirefringentRaytraceLFM(RayTraceLFM):
     """This class extends RayTraceLFM, and implements the forward function, where voxels contribute to ray's Jones-matrices with a retardance and axis in a non-commutative matter"""
     def __init__(
@@ -21,10 +11,8 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             back_end=back_end, torch_args=torch_args, 
             simul_type=SimulType.BIREFRINGENT, system_info=system_info
         )
-        # Create tensors to store the Jones-matrices per ray
-
-        # We either define a volume here or use one provided by the user
-
+        
+        
     def ray_trace_through_volume(self, volume_in : AnisotropicVoxel = None):
         """ This function forward projects a whole volume, by iterating through the volume in front of each micro-lens in the system.
             By computing an offset (current_offset) that shifts the volume indices reached by each ray.
@@ -88,7 +76,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             raise NotImplementedError
         return retardance
 
-    def azimuth(self, JM): #todo: looks weird with delta_n=0.1 and axis =[1,0,0]
+    def azimuth(self, JM): #todo: looks weird with delta_n=0.1 and axis =[1,0,0] mainly on the diagonals
         '''Rotation angle of the fast axis (neg phase)'''
         if self.back_end == BackEnds.NUMPY:
             values, vectors = np.linalg.eig(JM)
@@ -105,6 +93,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
                 azim = np.arctan(fast_vector[0] / fast_vector[1])
             if azim < 0:
                 azim = azim + np.pi
+
         elif self.back_end == BackEnds.PYTORCH: 
             values, vectors = torch.linalg.eig(JM)
             real_vecs = vectors.real
@@ -132,7 +121,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             return self.calc_cummulative_JM_of_ray_torch(volume_in, micro_lens_offset)
 
 
-    def ret_and_azim_images(self, ray_enter, pixels_per_ml, Delta_n_vol, opticAxis_vol):
+    def ret_and_azim_images_numpy(self, ray_enter, pixels_per_ml, Delta_n_vol, opticAxis_vol):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
         ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
         azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
@@ -143,15 +132,15 @@ class BirefringentRaytraceLFM(RayTraceLFM):
                     azim_image[i, j] = 0
                 else:
                     effective_JM = self.calc_cummulative_JM_of_ray_numpy(i, j, Delta_n_vol, opticAxis_vol)
-                    ret_image[i, j] = calc_retardance(effective_JM)
-                    azim_image[i, j] = calc_azimuth(effective_JM)
+                    ret_image[i, j] = self.retardance(effective_JM)
+                    azim_image[i, j] = self.azimuth(effective_JM)
         return ret_image, azim_image
 
 
     def calc_cummulative_JM_of_ray_numpy(self, i, j, volume_in : AnisotropicVoxel):
         '''For the (i,j) pixel behind a single microlens'''
         # Fetch precomputed Siddon parameters
-        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indexes, self.ray_vol_colli_lengths
+        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
         # rays are stored in a 1D array, let's look for index i,j
         n_ray = j + i *  self.system_info['pixels_per_ml']
         rayDir = self.ray_direction_basis[n_ray][:]
@@ -173,7 +162,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             It uses pytorch's batch dimension to store each ray, and process them in parallel'''
 
         # Fetch the voxels traversed per ray and the lengths that each ray travels through every voxel
-        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indexes, self.ray_vol_colli_lengths
+        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
             
         # Init an array to store the Jones matrices.
         JM_list = []
@@ -247,7 +236,7 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         ret_image.requires_grad = False
         azim_image.requires_grad = False
         # Assign the computed ray values to the image pixels
-        for ray_ix, (i,j) in enumerate(self.ray_valid_indexes):
+        for ray_ix, (i,j) in enumerate(self.ray_valid_indices):
             ret_image[i, j] = retardance[ray_ix]
             azim_image[i, j] = azimuth[ray_ix]
         return ret_image, azim_image
@@ -255,7 +244,6 @@ class BirefringentRaytraceLFM(RayTraceLFM):
 
     # todo: once validated merge this with numpy function
     @staticmethod
-
     def voxRayJM_numpy(Delta_n, opticAxis, rayDir, ell, wavelength):
         '''Compute Jones matrix associated with a particular ray and voxel combination'''
         # Azimuth is the angle of the slow axis of retardance.

@@ -2,8 +2,12 @@
 from enum import Enum
 import pickle
 from os.path import exists
+from my_siddon import *
 
-# Waveblocks imports
+
+# Optional imports: as the classes here depend on Waveblocks Opticblock.
+# We create a dummy class for the case where either Waveblocks is not installed
+# Or the user just don't wan to use it
 try:
     import torch
     import torch.nn as nn
@@ -15,39 +19,53 @@ except:
             self, optic_config=None, members_to_learn=None,
         ):  
             pass
-# todo: move this to a place inside the library, like utils
-# from ray_optics import rays_through_vol
-# from jones_torch import *
-from my_siddon import *
 
 class SimulType(Enum):
-    """ Defines which types of volumes we can have, as each type has a different ray-voxel interaction"""
+    ''' Defines which types of volumes we can have, as each type has a different ray-voxel interaction'''
     FLUOR_INTENS    = 1     # Voxels add intensity as the ray goes trough the volume: commutative
     BIREFRINGENT    = 2     # Voxels modify polarization as the ray goes trough: non commutative
-    FLUOR_POLAR     = 3     # todo
-    DIPOLES         = 4     # Voxels add light depending with their angle with respect to the dipole
+    # FLUOR_POLAR     = 3     # 
+    # DIPOLES         = 4     # Voxels add light depending with their angle with respect to the dipole
     # etc. attenuators and di-attenuators (polarization dependent)
 
 
 class BackEnds(Enum):
-    """ Defines type of backend (numpy,pytorch,etc)"""
+    ''' Defines type of backend (numpy,pytorch,etc)'''
     NUMPY       = 1     # Use numpy back-end
     PYTORCH     = 2     # Use Pytorch, with auto-differentiation and GPU support.
 
 
 
 class AnisotropicOpticalElement(OpticBlock):
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}):
+    ''' Abstract class defining a birefringent object'''
+    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
+                system_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
+                'n_medium' : 1.52, 'wavelength' : 0.550}):
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
             super(AnisotropicOpticalElement, self).__init__(optic_config=torch_args['optic_config'], 
                     members_to_learn=torch_args['members_to_learn'] if 'members_to_learn' in torch_args.keys() else [])
         self.back_end = back_end
         self.simul_type = SimulType.BIREFRINGENT
+        self.system_info = system_info
+
+        # if we are using pytorch and waveblocks, grab system info from optic_config
+        if self.back_end == BackEnds.PYTORCH:
+            self.system_info = \
+                    {'volume_shape' : self.optic_config.volume_config.volume_shape, 
+                    'voxel_size_um' : self.optic_config.volume_config.voxel_size_um, 
+                    'pixels_per_ml' : self.optic_config.mla_config.n_pixels_per_mla, 
+                    'na_obj' : self.optic_config.PSF_config.NA, 
+                    'n_medium' : self.optic_config.PSF_config.ni,
+                    'wavelength' : self.optic_config.PSF_config.wvl}
+
+
+
 
 ###########################################################################################
     # Constructors for different types of elements
     # This methods are constructors only, they don't support torch optimization of internal variables
+    # todo: rename such that it is clear that these are presets for different birefringent objects
 
     @staticmethod
     def rotator(angle, back_end=BackEnds.NUMPY):
@@ -80,6 +98,7 @@ class AnisotropicOpticalElement(OpticBlock):
 
     @staticmethod
     def LR_azim0(ret, back_end=BackEnds.NUMPY):
+        '''todo'''
         if back_end == BackEnds.NUMPY:
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
@@ -87,6 +106,7 @@ class AnisotropicOpticalElement(OpticBlock):
 
     @staticmethod
     def LR_azim90(ret, back_end=BackEnds.NUMPY):
+        '''todo'''
         if back_end == BackEnds.NUMPY:
             return np.array([[np.exp(-1j * ret / 2), 0], [0, np.exp(1j * ret / 2)]])
         else:
@@ -151,16 +171,38 @@ class AnisotropicOpticalElement(OpticBlock):
 
 
 ###########################################################################################
+# Implementations of AnisotropicOpticalElement
 
 class AnisotropicVoxel(AnisotropicOpticalElement):
+    '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
     def __init__(self, back_end=BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, 
-        Delta_n=0, optic_axis=[1, 0, 0], volume_shape=[1,1,1], wavelength= 0.550):
-        
-        super(AnisotropicVoxel, self).__init__(back_end=back_end, torch_args=torch_args)
+        system_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550},
+        Delta_n=0, optic_axis=[1, 0, 0]):
+        '''AnisotropicVoxel
+        Args:
+            back_end (BackEnd):     A computation BackEnd (Numpy vs Pytorch). If Pytorch is used, torch_args are required
+                                    to initialize the head class OpticBlock from Waveblocks.
+            torch_args (dic):       Required for PYTORCH back-end. Contains optic_config object and members_to_learn
+            system_info (dic):
+                                    volume_shape ([3]:[sz,sy,sz]):
+                                                            Shape of the volume in voxel numbers per dimension.
+                                    voxel_size_um ([3]):    Size of a voxel in micrometers.
+                                    pixels_per_ml (int):    Number of pixels covered by a micro-lens in a light-field system
+                                    na_obj (float):         Numerical aperture of the objective.
+                                    n_medium (float):       Refractive index of immersion medium.
+                                    wavelength (float):     Wavelength of light used.
+            Delta_n (float or [sz,sy,sz] array):        
+                                    Defines the birefringence magnitude of the voxels.
+                                    If a float is passed, all the voxels will have the same Delta_n.
+            optic_axis ([3] or [3,sz,sy,sz]:             
+                                    Defines the optic axis per voxel.
+                                    If a single 3D vector is passed all the voxels will share this optic axis.
+            '''
+        super(AnisotropicVoxel, self).__init__(back_end=back_end, torch_args=torch_args, system_info=system_info)
        
 
         if self.back_end == BackEnds.NUMPY:
-            self.volume_shape = volume_shape
+            self.volume_shape = self.system_info['volume_shape']
             # In the case when an optic axis per voxel of a 3D volume is provided
             # e.g. [3,nz,ny,nx]
             if isinstance(optic_axis, np.ndarray) and len(optic_axis.shape) == 4:
@@ -210,7 +252,6 @@ class AnisotropicVoxel(AnisotropicOpticalElement):
                 self.optic_axis = nn.Parameter(self.optic_axis)
                 self.Delta_n = nn.Parameter(Delta_n * torch.ones(self.volume_shape))
 
-        self.wavelength = wavelength
 
         
 
@@ -219,9 +260,9 @@ class AnisotropicVoxel(AnisotropicOpticalElement):
     # maybe this section should be a subclass of JonesMatrix
     def calc_retardance(self, ray_dir, thickness):
         if self.back_end==BackEnds.NUMPY:
-            ret = abs(self.Delta_n) * (1 - np.dot(self.optic_axis, ray_dir) ** 2) * 2 * np.pi * thickness / self.wavelength
+            ret = abs(self.Delta_n) * (1 - np.dot(self.optic_axis, ray_dir) ** 2) * 2 * np.pi * thickness / self.system_info['wavelength']
         elif self.back_end==BackEnds.PYTORCH:
-            ret = abs(self.Delta_n) * (1 - torch.linalg.vecdot(self.optic_axis, ray_dir) ** 2) * 2 * torch.pi * thickness / self.wavelength
+            ret = abs(self.Delta_n) * (1 - torch.linalg.vecdot(self.optic_axis, ray_dir) ** 2) * 2 * torch.pi * thickness / self.system_info['wavelength']
         else:
             raise NotImplementedError
         # print(f"Accumulated retardance from index ellipsoid is {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
@@ -305,35 +346,24 @@ class AnisotropicVoxel(AnisotropicOpticalElement):
         '''vox_index is a tuple'''
         return self.voxel_parameters[:, vox_index]
 
-
+###########################################################################################
 class RayTraceLFM(AnisotropicOpticalElement):
-    """This is a base class that takes a volume geometry and LFM geometry and calculates which arrive to each of the pixels behind each micro-lense, and discards the rest.
+    '''This is a base class that takes a volume geometry and LFM geometry and calculates which arrive to each of the pixels behind each micro-lense, and discards the rest.
        This class also pre-computes how each rays traverses the volume with the Siddon algorithm.
-       The interaction between the voxels and the rays is defined by each specialization of this class."""
+       The interaction between the voxels and the rays is defined by each specialization of this class.'''
 
     def __init__(
         self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []}, simul_type : SimulType = SimulType.BIREFRINGENT,
             system_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
-        super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args)
+        super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args, system_info=system_info)
         
+        # Store system information
         self.simul_type = simul_type
-        if self.back_end == BackEnds.NUMPY:
-            self.system_info = system_info
-        elif self.back_end == BackEnds.PYTORCH:
-            self.system_info = \
-                    {'volume_shape' : self.optic_config.volume_config.volume_shape, 
-                    'voxel_size_um' : self.optic_config.volume_config.voxel_size_um, 
-                    'pixels_per_ml' : self.optic_config.mla_config.n_pixels_per_mla, 
-                    'na_obj' : self.optic_config.PSF_config.NA, 
-                    'n_medium' : self.optic_config.PSF_config.ni,
-                    'wavelength' : self.optic_config.PSF_config.wvl}
-        else:
-            raise NotImplementedError
         
-        # Pre-compute rays and paths through the volume
+        # Create dummy variables for pre-computed rays and paths through the volume
         # This are defined in compute_rays_geometry
-        self.ray_valid_indexes = None
-        self.ray_vol_colli_indexes = None
+        self.ray_valid_indices = None
+        self.ray_vol_colli_indices = None
         self.ray_vol_colli_lengths = None
         self.ray_direction_basis = None
 
@@ -365,7 +395,7 @@ class RayTraceLFM(AnisotropicOpticalElement):
     @staticmethod
     def find_orthogonal_vec(v1, v2):
         '''v1 and v2 are numpy arrays (3d vectors)
-        This function accomodates for a divide by zero error.'''
+        This function accommodates for a divide by zero error.'''
         value = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
         # Check if vectors are parallel or anti-parallel
         if np.linalg.norm(value) == 1:
@@ -381,36 +411,6 @@ class RayTraceLFM(AnisotropicOpticalElement):
         else:
             normal_vec = np.cross(v1, v2) / np.linalg.norm(np.cross(v1, v2))
         return normal_vec
-    
-    @staticmethod
-    def calc_rayDir(ray):
-        '''
-        Allows to the calculations to be done in ray-space coordinates
-        as oppossed to laboratory coordinates
-        Parameters:
-            ray (np.array): normalized 3D vector giving the direction 
-                            of the light ray
-        Returns:
-            ray (np.array): same as input
-            ray_perp1 (np.array): normalized 3D vector
-            ray_perp2 (np.array): normalized 3D vector
-        '''
-        # ray = ray / np.linalg.norm(ray)    # in case ray is not a unit vector <- does not need to be normalized
-        theta = np.arccos(np.dot(ray, np.array([1,0,0])))
-        # Unit vectors that give the laboratory axes, can be changed
-        scope_axis = np.array([1,0,0])
-        scope_perp1 = np.array([0,1,0])
-        scope_perp2 = np.array([0,0,1])
-        theta = np.arccos(np.dot(ray, scope_axis))
-        # print(f"Rotating by {np.around(np.rad2deg(theta), decimals=0)} degrees")
-        normal_vec = RayTraceLFM.find_orthogonal_vec(ray, scope_axis)
-        Rinv = RayTraceLFM.rotation_matrix(normal_vec, -theta)
-        # Extracting basis vectors that are orthogonal to the ray and will be parallel
-        # to the laboratory axes that are not the optic axis after a rotation.
-        # Note: If scope_perp1 if the y-axis, then ray_perp1 if the 2nd column of Rinv.
-        ray_perp1 = np.dot(Rinv, scope_perp1)
-        ray_perp2 = np.dot(Rinv, scope_perp2)
-        return [ray, ray_perp1, ray_perp2]
 
     @staticmethod
     def rotation_matrix_torch(axis, angle):
@@ -421,11 +421,6 @@ class RayTraceLFM(AnisotropicOpticalElement):
         c = torch.cos(angle)
         u = 1 - c
         R = torch.zeros([angle.shape[0],3,3], device=axis.device)
-        # R_tuple = ( ( ax*ax*u + c,    ax*ay*u - az*s, ax*az*u + ay*s ),
-        #     ( ay*ax*u + az*s, ay*ay*u + c,    ay*az*u - ax*s ),
-        #     ( az*ax*u - ay*s, az*ay*u + ax*s, az*az*u + c    ) )
-        # R = torch.asarray(R_tuple)
-        # todo: pvjosue dangerous, this might be transposed
         R[:,0,0] = ax*ax*u + c
         R[:,0,1] = ax*ay*u - az*s
         R[:,0,2] = ax*az*u + ay*s
@@ -462,6 +457,37 @@ class RayTraceLFM(AnisotropicOpticalElement):
         # Compute the valid normal_vectors
         normal_vec[valid_indices] = torch.cross(v1[valid_indices], v2.unsqueeze(0).repeat(v1.shape[0],1)[valid_indices]) / torch.linalg.norm(torch.linalg.cross(v1[valid_indices], v2.unsqueeze(0).repeat(v1.shape[0],1)[valid_indices]).unsqueeze(2),dim=1)
         return normal_vec
+
+
+    @staticmethod
+    def calc_rayDir(ray):
+        '''
+        Allows to the calculations to be done in ray-space coordinates
+        as oppossed to laboratory coordinates
+        Parameters:
+            ray (np.array): normalized 3D vector giving the direction 
+                            of the light ray
+        Returns:
+            ray (np.array): same as input
+            ray_perp1 (np.array): normalized 3D vector
+            ray_perp2 (np.array): normalized 3D vector
+        '''
+        # ray = ray / np.linalg.norm(ray)    # in case ray is not a unit vector <- does not need to be normalized
+        theta = np.arccos(np.dot(ray, np.array([1,0,0])))
+        # Unit vectors that give the laboratory axes, can be changed
+        scope_axis = np.array([1,0,0])
+        scope_perp1 = np.array([0,1,0])
+        scope_perp2 = np.array([0,0,1])
+        theta = np.arccos(np.dot(ray, scope_axis))
+        # print(f"Rotating by {np.around(np.rad2deg(theta), decimals=0)} degrees")
+        normal_vec = RayTraceLFM.find_orthogonal_vec(ray, scope_axis)
+        Rinv = RayTraceLFM.rotation_matrix(normal_vec, -theta)
+        # Extracting basis vectors that are orthogonal to the ray and will be parallel
+        # to the laboratory axes that are not the optic axis after a rotation.
+        # Note: If scope_perp1 if the y-axis, then ray_perp1 if the 2nd column of Rinv.
+        ray_perp1 = np.dot(Rinv, scope_perp1)
+        ray_perp2 = np.dot(Rinv, scope_perp2)
+        return [ray, ray_perp1, ray_perp2]
 
     @staticmethod
     def calc_rayDir_torch(ray_in):
@@ -512,7 +538,7 @@ class RayTraceLFM(AnisotropicOpticalElement):
     # Ray-tracing functions
 
     @staticmethod
-    def rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr):
+    def rays_through_vol(pixels_per_ml, naObj, nMedium, volume_ctr_um):
         '''Identifies the rays that pass through the volume and the central lenslet
         Parameters:
             pixels_per_ml (int): number of pixels per microlens in one direction,
@@ -520,7 +546,7 @@ class RayTraceLFM(AnisotropicOpticalElement):
                                     lenslet
             naObj (float): numerical aperture of the objective lens
             nMedium (float): refractive index of the volume
-            volCtr (np.array): 3D vector containing the coordinates of the center of the
+            volume_ctr_um (np.array): 3D vector containing the coordinates of the center of the
                                 volume in volume space units (um)
         Returns:
             ray_enter (np.array): (3, X, X) array where (3, i, j) gives the coordinates 
@@ -551,11 +577,11 @@ class RayTraceLFM(AnisotropicOpticalElement):
         # Positions of the ray in volume coordinates
         # assuming rays pass through the center voxel
         ray_enter_x = np.zeros([pixels_per_ml, pixels_per_ml])
-        ray_enter_y = volCtr[0] * np.tan(cam_pixels_tilt) * np.sin(cam_pixels_azim) + volCtr[1]
-        ray_enter_z = volCtr[0] * np.tan(cam_pixels_tilt) * np.cos(cam_pixels_azim) + volCtr[2]
+        ray_enter_y = volume_ctr_um[0] * np.tan(cam_pixels_tilt) * np.sin(cam_pixels_azim) + volume_ctr_um[1]
+        ray_enter_z = volume_ctr_um[0] * np.tan(cam_pixels_tilt) * np.cos(cam_pixels_azim) + volume_ctr_um[2]
         ray_enter_x[np.isnan(ray_enter_y)] = np.NaN
         ray_enter = np.array([ray_enter_x, ray_enter_y, ray_enter_z])
-        vol_ctr_grid_tmp = np.array([np.full((pixels_per_ml, pixels_per_ml), volCtr[i]) for i in range(3)])
+        vol_ctr_grid_tmp = np.array([np.full((pixels_per_ml, pixels_per_ml), volume_ctr_um[i]) for i in range(3)])
         ray_exit = ray_enter + 2 * (vol_ctr_grid_tmp - ray_enter)
 
         # Direction of the rays at the exit plane
@@ -566,11 +592,35 @@ class RayTraceLFM(AnisotropicOpticalElement):
 
 
     def compute_rays_geometry(self, filename=None):
+        '''Computes the ray-voxel collision based on the Siddon algorithm. 
+        Requires: 
+            calling self.rays_through_volumes to compute ray entry, exit and directions.
+        Parameters:
+            filename (str) optional: Saves the geometry to a pickle file, and loads the geometry
+                                    from a file if the file exists.
+        Returns:
+            None
+        Computes:
+            self.vox_ctr_idx ([3]):     3D index of the central voxel.
+            self.volume_ctr_um ([3]):   3D coordinate in um of the central voxel
+            self.ray_valid_indices (list of tuples n_rays*[(i,j),]):
+                                        Store the 2D ray index of a valid ray (without nan in entry/exit)
+            self.ray_vol_colli_indices (list of list of tuples n_valid_rays*[(z,y,x),(z,y,x)]):
+                                        Stores the coordinates of the voxels that the ray n collides with.
+            self.ray_vol_colli_lengths (list of list of floats n_valid_rays*[ell1,ell2]):
+                                        Stores the length of traversal of ray n through the voxels inside ray_vol_colli_indices.
+            self.ray_valid_direction  (list [n_valid_rays, 3]):
+                                        Stores the direction of ray n.        
+        '''
+
+        # If a filename is provided, check if it exists and load the whole ray tracer class from it.
         if filename is not None and exists(filename):
             data = self.unpickle(filename)
             print(f'Loaded RayTraceLFM object from {filename}')
             return data
 
+        # todo: We treat differently numpy and torch rays, as some rays go outside the volume of interest.
+        # We need to revisit this when we start computing images with more than one micro-lens in numpy
         if self.back_end == BackEnds.NUMPY:
             # The valid workspace is defined by the number of micro-lenses
             valid_vol_shape = self.system_info['volume_shape'][1]
@@ -585,17 +635,14 @@ class RayTraceLFM(AnisotropicOpticalElement):
         nMedium = self.system_info['n_medium']
         vol_shape = [self.system_info['volume_shape'][0],] + 2*[valid_vol_shape]
         voxel_size_um = self.system_info['voxel_size_um']
-        axial_pitch,xy_pitch,xy_pitch = voxel_size_um
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
         self.vox_ctr_idx = vox_ctr_idx.astype(int)
-        self.voxCtr = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
-        self.volCtr = [self.voxCtr[0] * axial_pitch, self.voxCtr[1] * xy_pitch, self.voxCtr[2] * xy_pitch]   # in vol units (um)
+        self.volume_ctr_um = vox_ctr_idx * voxel_size_um # in vol units (um)
         
-        # Call Geneva's function
-        ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(pixels_per_ml, naObj, nMedium, self.volCtr)
+        # Calculate the ray geometry 
+        ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(pixels_per_ml, naObj, nMedium, self.volume_ctr_um)
 
         # Store locally
-        # 2D to 1D index
         self.ray_entry = torch.from_numpy(ray_enter).float()        if self.back_end == BackEnds.PYTORCH else ray_enter
         self.ray_exit = torch.from_numpy(ray_exit).float()          if self.back_end == BackEnds.PYTORCH else ray_exit
         self.ray_direction = torch.from_numpy(ray_diff).float()     if self.back_end == BackEnds.PYTORCH else ray_diff
@@ -604,15 +651,20 @@ class RayTraceLFM(AnisotropicOpticalElement):
 
         # Pre-comute things for torch and store in tensors
         i_range,j_range = self.ray_entry.shape[1:]
+
         # Compute Siddon's algorithm for each ray
-        ray_valid_indexes = []
+        ray_valid_indices = []
         ray_valid_direction = []
-        ray_vol_colli_indexes = []
+        ray_vol_colli_indices = []
         ray_vol_colli_lengths = []
+
+        # Iterate rays
         for ii in range(i_range):
             for jj in range(j_range):
+                # Fetch ray information
                 start = ray_enter[:,ii,jj]
                 stop = ray_exit[:,ii,jj]
+
                 # We only store the valid rays
                 if np.any(np.isnan(start)) or np.any(np.isnan(stop)):
                     if self.back_end == BackEnds.PYTORCH:
@@ -629,23 +681,23 @@ class RayTraceLFM(AnisotropicOpticalElement):
                     voxel_intersection_lengths = siddon_lengths(start, stop, siddon_list)
 
                 # Store in a temporary list
-                ray_valid_indexes.append((ii,jj))
-                ray_vol_colli_indexes.append(voxels_of_segs)
+                ray_valid_indices.append((ii,jj))
+                ray_vol_colli_indices.append(voxels_of_segs)
                 ray_vol_colli_lengths.append(voxel_intersection_lengths)
                 ray_valid_direction.append(self.ray_direction[:,ii,jj])
 
                 # What is the maximum span of the rays of a micro lens?
-                self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in ray_vol_colli_indexes[0]])
+                self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in ray_vol_colli_indices[0]])
 
             
-        # Maximum number of interactions, to define 
-        max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indexes])
-        n_valid_rays = len(ray_valid_indexes)
+        # Maximum number of ray-voxel interactions, to define 
+        max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
+        n_valid_rays = len(ray_valid_indices)
 
         # Create the information to store
-        self.ray_valid_indexes = ray_valid_indexes
+        self.ray_valid_indices = ray_valid_indices
         # Store as tuples for now
-        self.ray_vol_colli_indexes = ray_vol_colli_indexes
+        self.ray_vol_colli_indices = ray_vol_colli_indices
         if self.back_end == BackEnds.NUMPY:
             self.ray_vol_colli_lengths = np.zeros([n_valid_rays, max_ray_voxels_collision])
             self.ray_valid_direction = np.zeros([n_valid_rays, 3])
@@ -657,8 +709,8 @@ class RayTraceLFM(AnisotropicOpticalElement):
             self.ray_valid_direction.requires_grad = False
 
 
-        # Fill these tensors
-        # todo: indexes is indices 
+        # Filter out rays that aren't valid (contain nan)
+        # todo: indices is indices 
         for valid_ray in range(n_valid_rays):
             # Fetch the ray-voxel intersection length for this ray
             val_lengths = ray_vol_colli_lengths[valid_ray]
@@ -666,11 +718,11 @@ class RayTraceLFM(AnisotropicOpticalElement):
             self.ray_valid_direction[valid_ray, :] = ray_valid_direction[valid_ray]
         
         # Update volume shape information, to account for the whole workspace
+        # todo: mainly for pytorch multi-lenslet computation
         vol_shape = self.system_info['volume_shape']
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
         self.vox_ctr_idx = vox_ctr_idx.astype(int)
-        self.voxCtr = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2]) # in index units
-        self.volCtr = [self.voxCtr[0] * axial_pitch, self.voxCtr[1] * xy_pitch, self.voxCtr[2] * xy_pitch]   # in vol units (um)
+        self.volume_ctr_um = vox_ctr_idx * voxel_size_um
 
         if filename is not None:
             self.pickle(filename)
@@ -687,6 +739,8 @@ class RayTraceLFM(AnisotropicOpticalElement):
 
         return self
 
+
+    # Helper functions to load/save the whole class to disk
     def pickle(self, filename):
         f = open(filename, 'wb')
         pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
@@ -700,12 +754,12 @@ class RayTraceLFM(AnisotropicOpticalElement):
 
     ######## Not implemented: These functions need an implementation in derived objects
     def ray_trace_through_volume(self, volume_in : AnisotropicVoxel=None):
-        """ We have a separate function as we have some basic functionality that is shared"""
+        ''' We have a separate function as we have some basic functionality that is shared'''
         raise NotImplementedError
     
     def init_volume(self, volume_in : AnisotropicVoxel=None):
-        """ This function assigns a volume the correct internal structure for a given simul_type
-        For example: a single value per voxel for fluorescence, or two values for birefringence"""
+        ''' This function assigns a volume the correct internal structure for a given simul_type
+        For example: a single value per voxel for fluorescence, or two values for birefringence'''
         raise NotImplementedError
 
 
