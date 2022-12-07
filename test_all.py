@@ -261,9 +261,9 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
                                     Delta_n=delta_n, optic_axis=optic_axis)
     
     # Compute retardance and azimuth images with both methods
-    ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ret_and_azim_images_numpy(voxel_numpy)
+    ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ret_and_azim_images(voxel_numpy)
     with torch.no_grad():
-        ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images_torch(voxel_torch)
+        ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images(voxel_torch)
     # Use this in debug console to visualize errors
     # plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
