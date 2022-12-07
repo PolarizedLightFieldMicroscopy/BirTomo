@@ -121,17 +121,18 @@ class BirefringentRaytraceLFM(RayTraceLFM):
             return self.calc_cummulative_JM_of_ray_torch(volume_in, micro_lens_offset)
 
 
-    def ret_and_azim_images_numpy(self, ray_enter, pixels_per_ml, Delta_n_vol, opticAxis_vol):
+    def ret_and_azim_images_numpy(self, volume_in : AnisotropicVoxel):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
+        pixels_per_ml = self.system_info['pixels_per_ml']
         ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
         azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
         for i in range(pixels_per_ml):
             for j in range(pixels_per_ml):
-                if np.isnan(ray_enter[0, i, j]):
+                if np.isnan(self.ray_entry[0, i, j]):
                     ret_image[i, j] = 0
                     azim_image[i, j] = 0
                 else:
-                    effective_JM = self.calc_cummulative_JM_of_ray_numpy(i, j, Delta_n_vol, opticAxis_vol)
+                    effective_JM = self.calc_cummulative_JM_of_ray_numpy(i, j, volume_in)
                     ret_image[i, j] = self.retardance(effective_JM)
                     azim_image[i, j] = self.azimuth(effective_JM)
         return ret_image, azim_image
@@ -219,7 +220,6 @@ class BirefringentRaytraceLFM(RayTraceLFM):
         '''This function computes the retardance and azimuth images of the precomputed rays going through a volume'''
         # Include offset to move to the center of the volume, as the ray collisions are computed only for a single micro-lens
         n_micro_lenses = self.optic_config.mla_config.n_micro_lenses
-        n_voxels_per_ml = self.optic_config.mla_config.n_voxels_per_ml
         n_ml_half = floor(n_micro_lenses / 2.0)
         micro_lens_offset = np.array(micro_lens_offset) + np.array(self.vox_ctr_idx[1:]) - n_ml_half
         # Fetch needed variables

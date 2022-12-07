@@ -121,10 +121,9 @@ def test_voxel_array_creation(global_data, iteration):
     assert np.all(np.isclose(voxel_numpy_single_value.optic_axis.flatten(), voxel_torch_single_value.optic_axis.detach().numpy().flatten()))
     assert np.all(np.isclose(voxel_numpy_single_value.Delta_n.flatten(), voxel_torch_single_value.Delta_n.detach().numpy().flatten()))
 
-
 # todo: failing with pixels_per_ml = 5
 @pytest.mark.parametrize('iteration', range(0, 4))
-def test_compute_JonesMatrices_retardance_and_azimuth(global_data, iteration):
+def test_compute_JonesMatrices(global_data, iteration):
     volume_shapes_to_test = [
         3*[1],
         3*[7],
@@ -195,6 +194,7 @@ def test_compute_JonesMatrices_retardance_and_azimuth(global_data, iteration):
 
     # Fill in retardance and azimuth of torch into an image,
     # And compare with their corresponding numpy JM
+    any_fail = False
     for ray_ix, (i,j) in enumerate(BF_raytrace_torch.ray_valid_indices):
         ret_img_torch[i, j] = ret_torch[ray_ix].item()
         azi_img_torch[i, j] = azi_torch[ray_ix].item()
@@ -202,25 +202,85 @@ def test_compute_JonesMatrices_retardance_and_azimuth(global_data, iteration):
 
         # Important, set the tolerance to 1e-5, as numpy computes in float64 and torch in float32
         assert np.isclose(JM_numpy.astype(np.complex64), JM_torch[ray_ix].detach().numpy(), atol=1e-5).all(), f'JM mismatch on coord: (i,j)= ({i},{j}):'
-        # Check retardance for this ray
-        assert np.isclose(ret_img_numpy[i, j], ret_img_torch[i, j], atol=1e-5).all(), f'Retardance mismatch on coord: (i,j)= ({i},{j}):'
-        # Check azimuth for this ray
-        assert np.isclose(azi_img_numpy[i, j], azi_img_torch[i, j], atol=1e-5).all(), f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
+        # As we are testing for JM, use try_catch on azimuth and retardance, such that they don't brake the test
+        # And report if there was mismatch at the end
+        try:
+            # Check retardance for this ray
+            assert np.isclose(ret_img_numpy[i, j], ret_img_torch[i, j], atol=1e-5).all(), f'Retardance mismatch on coord: (i,j)= ({i},{j}):'
+        except:
+            print(f'Retardance mismatch on coord: (i,j)= ({i},{j}):')
+            any_fail = True
+        try:
+            # Check azimuth for this ray
+            assert np.isclose(azi_img_numpy[i, j], azi_img_torch[i, j], atol=1e-5).all(), f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
+        except:
+            f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
+            any_fail = True
+    
+    assert any_fail==False, 'No errors in Jones Matrices, but there were mismatches between Retardance and Azimuth in numpy vs torch'
 
+@pytest.mark.parametrize('iteration', range(0, 4))
+def test_compute_retardance_and_azimuth_images(global_data, iteration):
+    volume_shapes_to_test = [
+        3*[1],
+        3*[7],
+        3*[8],
+        3*[11],
+        3*[21],
+        3*[50],
+    ]
+    # Define the voxel parameters
+    delta_n = 0.1
+    optic_axis = [1.0,0.0,0]
+
+    # Gather global data
+    system_info = global_data['system_info']
+    optic_config = global_data['optic_config']
+    volume_shape = system_info['volume_shape']
+    pixels_per_ml = system_info['pixels_per_ml']
+
+    volume_shape = volume_shapes_to_test[iteration]#[1, 6, 6]
+    # pixels_per_ml = 17
+    optic_config.volume_config.volume_shape = volume_shape
+    optic_config.mla_config.n_micro_lenses = volume_shape[1]
+    
+    system_info['volume_shape'] = volume_shape
+    # system_info['pixels_per_ml'] = pixels_per_ml
+
+    # Create numpy and pytorch raytracer
+    BF_raytrace_numpy = BirefringentRaytraceLFM(system_info=system_info)
+    BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config})
+    
+    # Compute ray-volume geometry and Siddon algorithm
+    BF_raytrace_numpy.compute_rays_geometry()
+    BF_raytrace_torch.compute_rays_geometry()
+
+    # Create voxel array in numpy
+    voxel_numpy = AnisotropicVoxel(back_end=BackEnds.NUMPY, 
+                                    Delta_n=delta_n, optic_axis=optic_axis)
+
+    # Create a voxel array in torch                          
+    voxel_torch = AnisotropicVoxel(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config},
+                                    Delta_n=delta_n, optic_axis=optic_axis)
+    
+    # Compute retardance and azimuth images with both methods
+    ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ret_and_azim_images_numpy(voxel_numpy)
+    with torch.no_grad():
+        ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images_torch(voxel_torch)
     # Use this in debug console to visualize errors
     # plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
     assert np.all(np.isnan(ret_img_numpy)==False), "Error in numpy retardance computations nan found"
     assert np.all(np.isnan(azi_img_numpy)==False), "Error in numpy azimuth computations nan found"
-    assert np.all(np.isnan(ret_img_torch)==False), "Error in torch retardance computations nan found"
-    assert np.all(np.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
+    assert torch.all(torch.isnan(ret_img_torch)==False), "Error in torch retardance computations nan found"
+    assert torch.all(torch.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
 
-    assert np.all(np.isclose(ret_img_numpy, ret_img_torch, atol=1e-5)), "Error when comparing retardance computations"
-    assert np.all(np.isclose(azi_img_numpy, azi_img_torch, atol=1e-5)), "Error when comparing azimuth computations"
+    assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
+    assert np.all(np.isclose(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-5)), "Error when comparing azimuth computations"
 
 
 def main():
-    test_compute_JonesMatrices_retardance_and_azimuth(global_data(),0)
+    # test_compute_retardance_and_azimuth_images(global_data(),0)
     # test_voxel_array_creation(global_data(),1)
     # torch.set_default_tensor_type(torch.DoubleTensor)
     # Objective configuration
@@ -289,36 +349,9 @@ def main():
                                     Delta_n=delta_n*torch.ones(volume_shape), optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2]))
        
 
-    all_JM_numpy = []
-    ret_img_numpy = np.zeros([pixels_per_ml,pixels_per_ml])
-    azi_img_numpy = np.zeros([pixels_per_ml,pixels_per_ml])
-
-    nn = 0
-    for ii in range(pixels_per_ml):
-        for jj in range(pixels_per_ml):
-            JM_numpy = BF_raytrace_numpy.calc_cummulative_JM_of_ray_numpy(ii, jj, voxel_numpy)
-            all_JM_numpy.append(np.array(JM_numpy))
-            ret_numpy,azi_numpy = BF_raytrace_numpy.retardance(JM_numpy), BF_raytrace_numpy.azimuth(JM_numpy)
-            ret_img_numpy[ii,jj] = ret_numpy
-            azi_img_numpy[ii,jj] = azi_numpy
-
-    JM_torch = BF_raytrace_torch.calc_cummulative_JM_of_ray_torch(voxel_torch)
-
-    ret_torch,azi_torch = BF_raytrace_torch.retardance(JM_torch), BF_raytrace_torch.azimuth(JM_torch)
-
-    ret_img_torch = np.zeros([pixels_per_ml,pixels_per_ml])
-    azi_img_torch = np.zeros([pixels_per_ml,pixels_per_ml])
-
-    for ray_ix, (i,j) in enumerate(BF_raytrace_torch.ray_valid_indices):
-        ret_img_torch[i, j] = ret_torch[ray_ix].item()
-        azi_img_torch[i, j] = azi_torch[ray_ix].item()
-        JM_numpy = BF_raytrace_numpy.calc_cummulative_JM_of_ray_numpy(i, j, voxel_numpy)
-        # Important, set the tolerance to 1e-5, as numpy computes in float64 and torch in float32
-        assert torch.isclose( torch.from_numpy(JM_numpy.astype(np.complex64)), JM_torch[ray_ix], atol=1e-5).all()
-        # Check retardance for this ray
-        assert np.isclose(ret_img_numpy[i, j], ret_img_torch[i, j], atol=1e-5).all(), f'Retardance mismatch on coord: (i,j)= ({i},{j}):'
-        # Check azimuth for this ray
-        # assert np.isclose(azi_img_numpy[i, j], azi_img_torch[i, j], atol=1e-5).all(), f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
+    ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ret_and_azim_images_numpy(voxel_numpy)
+    with torch.no_grad():
+        ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images_torch(voxel_torch)
     
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
