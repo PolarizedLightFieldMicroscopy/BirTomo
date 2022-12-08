@@ -577,13 +577,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return np.concatenate((np.expand_dims(Delta_n, axis=0), np.expand_dims(a_0/norm_A, axis=0), np.expand_dims(a_1/norm_A, axis=0), np.expand_dims(a_2/norm_A, axis=0)),0)
     
     @staticmethod
-    def generate_planes_volume(volume_shape, n_planes=1):
+    def generate_planes_volume(volume_shape, n_planes=1, z_offset=0):
         vol = np.zeros([4,] + volume_shape)
         z_size = volume_shape[0]
         z_ranges = np.linspace(0, z_size-1, n_planes*2).astype(int)
 
         if n_planes==1:
-            z_offset = 4
             # Birefringence
             vol[0, z_size//2+z_offset, :, :] = 0.1
             # Axis
@@ -592,7 +591,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             return vol
         random_data = BirefringentRaytraceLFM.generate_random_volume([n_planes])
         for z_ix in range(0,n_planes):
-            vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = random_data[:,z_ix].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1,1,volume_shape[1],volume_shape[2])
+            vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = np.expand_dims(random_data[:,z_ix],[1,2,3]).repeat(1,1).repeat(volume_shape[1],2).repeat(volume_shape[2],3)
         
         return vol
     
