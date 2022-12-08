@@ -38,11 +38,25 @@ class BackEnds(Enum):
 
 class OpticalElement(OpticBlock):
     ''' Abstract class defining a elements, with a back-end ans some optical information'''
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
-                optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
-                'n_medium' : 1.52, 'wavelength' : 0.550}):
+    default_optical_info = {'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
+                'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}
+    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
+                optical_info={}):
+        # Optical info is needed
+        assert len(optical_info) > 0, f'Optical info (optical_info) dictionary needed: use OpticalElement.default_optical_info as reference {OpticalElement.default_optical_info}'
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
+            # If no optic_config is provided, create one
+            if 'optic_config' not in torch_args.keys():
+                torch_args['optic_config'] = OpticConfig()
+                torch_args['optic_config'].volume_config.volume_shape = optical_info['volume_shape']
+                torch_args['optic_config'].volume_config.voxel_size_um = optical_info['voxel_size_um']
+                torch_args['optic_config'].mla_config.n_pixels_per_mla = optical_info['pixels_per_ml']
+                torch_args['optic_config'].mla_config.n_micro_lenses = optical_info['n_micro_lenses']
+                torch_args['optic_config'].PSF_config.NA = optical_info['na_obj']
+                torch_args['optic_config'].PSF_config.ni = optical_info['n_medium']
+                torch_args['optic_config'].PSF_config.wvl = optical_info['wavelength']
+
             super(OpticalElement, self).__init__(optic_config=torch_args['optic_config'], 
                     members_to_learn=torch_args['members_to_learn'] if 'members_to_learn' in torch_args.keys() else [])
 
@@ -52,15 +66,15 @@ class OpticalElement(OpticBlock):
         self.optical_info = optical_info
 
         # if we are using pytorch and waveblocks, grab system info from optic_config
-        if self.back_end == BackEnds.PYTORCH:
-            self.optical_info = \
-                    {'volume_shape' : self.optic_config.volume_config.volume_shape, 
-                    'voxel_size_um' : self.optic_config.volume_config.voxel_size_um, 
-                    'pixels_per_ml' : self.optic_config.mla_config.n_pixels_per_mla, 
-                    'na_obj' : self.optic_config.PSF_config.NA, 
-                    'n_medium' : self.optic_config.PSF_config.ni,
-                    'wavelength' : self.optic_config.PSF_config.wvl}
-
+        # if self.back_end == BackEnds.PYTORCH:
+        #     self.optical_info = \
+        #             {'volume_shape' : self.optic_config.volume_config.volume_shape, 
+        #             'voxel_size_um' : self.optic_config.volume_config.voxel_size_um, 
+        #             'pixels_per_ml' : self.optic_config.mla_config.n_pixels_per_mla, 
+        #             'n_micro_lenses' : self.optic_config.mla_config.n_micro_lenses, 
+        #             'na_obj' : self.optic_config.PSF_config.NA, 
+        #             'n_medium' : self.optic_config.PSF_config.ni,
+        #             'wavelength' : self.optic_config.PSF_config.wvl}
 
 
 ###########################################################################################
@@ -70,8 +84,8 @@ class RayTraceLFM(OpticalElement):
        The interaction between the voxels and the rays is defined by each specialization of this class.'''
 
     def __init__(
-        self, back_end : BackEnds = BackEnds.NUMPY, torch_args={'optic_config' : None, 'members_to_learn' : []},
-            optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
+        self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
+            optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1, 'n_voxels_per_ml' : 1}):
         super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
         
         
@@ -336,11 +350,11 @@ class RayTraceLFM(OpticalElement):
 
         # todo: We treat differently numpy and torch rays, as some rays go outside the volume of interest.
         # We need to revisit this when we start computing images with more than one micro-lens in numpy
-        if self.back_end == BackEnds.NUMPY:
-            # The valid workspace is defined by the number of micro-lenses
-            valid_vol_shape = self.optical_info['volume_shape'][1]
-        elif self.back_end == BackEnds.PYTORCH:
-            valid_vol_shape = self.optic_config.mla_config.n_micro_lenses
+        # if False:#self.back_end == BackEnds.NUMPY:
+        #     # The valid workspace is defined by the number of micro-lenses
+        #     valid_vol_shape = self.optical_info['volume_shape'][1]
+        # elif self.back_end == BackEnds.PYTORCH:
+        valid_vol_shape = self.optical_info['n_micro_lenses']
         
 
 
