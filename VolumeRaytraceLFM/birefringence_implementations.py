@@ -257,43 +257,26 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             raise NotImplementedError
         return retardance
 
-    def azimuth(self, JM): #todo: looks weird with delta_n=0.1 and axis =[1,0,0] mainly on the diagonals
+    def azimuth(self, JM):
         '''Rotation angle of the fast axis (neg phase)'''
         if self.back_end == BackEnds.NUMPY:
-            values, vectors = np.linalg.eig(JM)
-            real_vecs = np.array(np.real(vectors))
-            if np.imag(values[0]) < 0:
-                fast_vector = real_vecs[0]
-                # Adjust for the case when 135 deg and is calculated as 45 deg
-                if np.isclose(fast_vector[0],fast_vector[1],atol=1e-5).all() and real_vecs[1][0] > 0:
-                    azim = 3 * np.pi / 4
-                else:
-                    azim = np.arctan(fast_vector[0] / fast_vector[1])
-            else:
-                fast_vector = real_vecs[1]
-                azim = np.arctan(fast_vector[0] / fast_vector[1])
-            if azim < 0:
-                azim = azim + np.pi
-
+            diag_sum = JM[0, 0] + JM[1, 1]
+            diag_diff = JM[1, 1] - JM[0, 0]
+            off_diag_sum = JM[0, 1] + JM[1, 0]
+            a = np.imag(diag_diff / diag_sum)
+            b = np.imag(off_diag_sum / diag_sum)
+            azimuth = np.arctan2(-b, -a) / 2 + np.pi / 2
         elif self.back_end == BackEnds.PYTORCH: 
-            values, vectors = torch.linalg.eig(JM)
-            real_vecs = vectors.real
-
-            fast_vector = real_vecs[:,1]
-            azim = torch.arctan(fast_vector[:,0] / fast_vector[:,1])
-            
-            # Treat case where fast vector is the first one
-            fast_vector = real_vecs[:,0]
-            values_smaller_zero = values[:,0].imag < 0
-            values_135_45_case = (torch.isclose(fast_vector[:,0], fast_vector[:,1], atol=1e-5)).bitwise_and(real_vecs[:,1,1] < 0)
-            azim[values_smaller_zero] = torch.arctan(fast_vector[values_smaller_zero,0] / fast_vector[values_smaller_zero,1])
-            azim[values_135_45_case] = 3 * torch.pi / 4
-
-            azim[azim < 0] += torch.pi
+            diag_sum = JM[:, 0, 0] + JM[:, 1, 1]
+            diag_diff = JM[:, 1, 1] - JM[: ,0, 0]
+            off_diag_sum = JM[:, 0, 1] + JM[:, 1, 0]
+            a = (diag_diff / diag_sum).imag.to(torch.float64)
+            b = (off_diag_sum / diag_sum).imag.to(torch.float64)
+            # todo: if output azimuth is pi, make it 0 and vice-versa (arctan2 bug)
+            azimuth = torch.arctan2(-b, -a) / 2 + torch.pi / 2
         else:
             raise NotImplementedError
-        
-        return azim
+        return azimuth
     
     def calc_cummulative_JM_of_ray(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         if self.back_end==BackEnds.NUMPY:

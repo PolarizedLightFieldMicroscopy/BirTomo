@@ -295,7 +295,7 @@ def main():
     axialPitch = voxPitch
     voxel_size_um = [axialPitch, voxPitch, voxPitch]
     # Volume shape
-    volume_shape = [11, 11, 11]
+    volume_shape = [1, 11, 11] # [11, 11, 11]
 
 
     optic_config = OpticConfig()
@@ -350,10 +350,47 @@ def main():
     with torch.no_grad():
         ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images_torch(voxel_torch)
     
+    # plot_azimuth(azi_img_numpy)
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
     
+def plot_azimuth(img):
+    ctr = [(img.shape[0] - 1)/ 2, (img.shape[1] - 1)/ 2]
+    i = np.linspace(0, img.shape[0] - 1, img.shape[0])
+    j = np.linspace(0, img.shape[0] - 1, img.shape[0])
+    jv, iv = np.meshgrid(i, j)
+    dist_from_ctr = np.sqrt((iv - ctr[0]) ** 2 + (jv - ctr[1]) ** 2)
 
+
+    fig = plt.figure(figsize=(13, 4))
+    fig.subplots_adjust(bottom=0.025, left=0.025, top = 0.975, right=0.975)
+
+    plt.rcParams['image.origin'] = 'lower'
+    plt.clf()
+    sub1 = plt.subplot(1, 3, 1)
+    sub1.imshow(dist_from_ctr)
+    plt.title("Distance from center")
+
+    sub2 = plt.subplot(1, 3, 2)
+    cax = sub2.imshow(img * 180 / np.pi)
+    # plt.colorbar()
+    plt.title('Azimuth (degrees)')
+    # Add colorbar, make sure to specify tick locations to match desired ticklabels
+    # cbar.ax.set_yticklabels(['-pi', '-pi/2', '-pi/4', '-pi/8', '0', 'pi/8', 'pi/4', 'pi/2', 'pi'])  # vertically oriented colorbar
+    cbar = fig.colorbar(cax, ticks=np.rad2deg([-np.pi, -np.pi/2, -np.pi/3, -np.pi/4, -np.pi/6, 0, np.pi/6, np.pi/4, np.pi/3, np.pi/2, np.pi]))
+    cbar.ax.set_yticklabels(['-180', '-90', '-60', '-45', '-30', '0', '30', '45', '60', '90', '180'])
+
+    # plt.subplot(1, 3, 3)
+    # plt.polar(dist_from_ctr, img / np.pi)
+    sub3 = plt.subplot(1, 3, 3)
+    sub3.scatter(dist_from_ctr, img * 180 / np.pi)
+    # plt.colorbar()
+    plt.title('Azimuth in polar coordinates')
+    plt.xlabel('Distance from center pixel')
+    plt.ylabel('Azimuth')
+
+    plt.pause(0.05)
+    plt.show()
 
 
 
@@ -365,7 +402,7 @@ def plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, a
     plt.imshow(ret_img_numpy)
     plt.title('Ret. numpy')
     plt.subplot(3,2,2)
-    plt.imshow(azi_img_numpy)
+    plt.imshow(azi_img_numpy / np.pi)
     plt.title('Azi. numpy')
 
     plt.subplot(3,2,3)
