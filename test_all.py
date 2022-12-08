@@ -149,7 +149,6 @@ def test_voxel_array_creation(global_data, iteration):
     assert np.all(np.isclose(voxel_numpy_single_value.optic_axis.flatten(), voxel_torch_single_value.optic_axis.detach().numpy().flatten())), f"Optic axis mismatch between numpy/pytorch delta_n: {delta_n}, optic_axis: {optic_axis}"
     assert np.all(np.isclose(voxel_numpy_single_value.Delta_n.flatten(), voxel_torch_single_value.Delta_n.detach().numpy().flatten())), f"Delta_n mismatch between numpy/pytorch delta_n: {delta_n}, optic_axis: {optic_axis}"
 
-# todo: failing with pixels_per_ml = 5
 @pytest.mark.parametrize('volume_shape_in', [
         3*[1],
         3*[7],
@@ -175,8 +174,6 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
     # Create numpy and pytorch raytracer
     BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, optical_info=optical_info)
-    # todo, this line doesn't initiallize correctly
-    # BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, torch_args={'optic_config':optic_config})
     
     # Compute ray-volume geometry and Siddon algorithm
     BF_raytrace_numpy.compute_rays_geometry()
@@ -256,8 +253,8 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
         3*[50],
     ]
     # Define the voxel parameters
-    delta_n = 0.1
-    optic_axis = [1.0,0.0,0]
+    # delta_n = 0.1
+    # optic_axis = [1.0,0.0,0]
     
     delta_n = np.random.uniform(0.01,0.25,1)[0]
     optic_axis = np.random.uniform(0.01,0.25,3)
@@ -308,7 +305,7 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
         3*[7],
         3*[8],
         3*[11],
-        # 3*[21],
+        # 3*[21], # todo, debug this two examples
         # 3*[51],
     ])
 def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shape_in):
@@ -364,7 +361,6 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
-# todo: test different shape creation
 @pytest.mark.parametrize('volume_init_mode', [
         'random',
         'ellipsoid',
@@ -429,6 +425,7 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
 def main():
     # Multi lenslet example
     # test_forward_projection_different_volumes(global_data(), 'ellipsoid')
+    test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[51])
     test_rays_computation(global_data(), 17)
     # test_compute_JonesMatrices(global_data(), 3*[11])
     import sys
