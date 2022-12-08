@@ -17,7 +17,7 @@ class BirefringentElement(OpticalElement):
 class BirefringentVolume(BirefringentElement):
     '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
     def __init__(self, back_end=BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []}, 
-        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1},
+        optical_info={},#{'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1},
         Delta_n=0, optic_axis=[1, 0, 0]):
         '''BirefringentVolume
         Args:
@@ -204,7 +204,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     """This class extends RayTraceLFM, and implements the forward function, where voxels contribute to ray's Jones-matrices with a retardance and axis in a non-commutative matter"""
     def __init__(
             self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
-            optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}):
+            optical_info={}):#{'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}):
         # optic_config contains mla_config and volume_config
         super(BirefringentRaytraceLFM, self).__init__(
             back_end=back_end, torch_args=torch_args, optical_info=optical_info

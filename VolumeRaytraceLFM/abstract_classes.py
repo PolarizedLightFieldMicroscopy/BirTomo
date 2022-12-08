@@ -42,6 +42,8 @@ class OpticalElement(OpticBlock):
                 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}
     def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
                 optical_info={}):
+        # Optical info is needed
+        assert len(optical_info) > 0, f'Optical info (optical_info) dictionary needed: use OpticalElement.default_optical_info as reference {OpticalElement.default_optical_info}'
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
             # If no optic_config is provided, create one
