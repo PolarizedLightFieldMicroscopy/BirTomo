@@ -5,7 +5,7 @@ class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
     def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
                 optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
-                'n_medium' : 1.52, 'wavelength' : 0.550}):
+                'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1, 'n_voxels_per_ml' : 1}):
         super(BirefringentElement, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
 
         self.simul_type = SimulType.BIREFRINGENT
@@ -17,7 +17,7 @@ class BirefringentElement(OpticalElement):
 class BirefringentVolume(BirefringentElement):
     '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
     def __init__(self, back_end=BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []}, 
-        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550},
+        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1},
         Delta_n=0, optic_axis=[1, 0, 0]):
         '''BirefringentVolume
         Args:
@@ -51,9 +51,12 @@ class BirefringentVolume(BirefringentElement):
                 # flatten all the voxels in order to normalize them
                 optic_axis = optic_axis.reshape(3, self.volume_shape[0]* self.volume_shape[1]* self.volume_shape[2])
                 for n_voxel in range(len(optic_axis[0,...])):
-                    optic_axis[:,n_voxel] /= np.linalg.norm(optic_axis[:,n_voxel]) 
+                    oa_norm = np.linalg.norm(optic_axis[:,n_voxel]) 
+                    if oa_norm > 0:
+                        optic_axis[:,n_voxel] /= oa_norm
                 # Set 4D shape again 
                 self.optic_axis = optic_axis.reshape(3, *self.volume_shape)
+                
 
                 self.Delta_n = Delta_n
                 assert len(self.Delta_n.shape) == 3, '3D Delta_n expected, as the optic_axis was provided as a 3D array'
@@ -70,16 +73,24 @@ class BirefringentVolume(BirefringentElement):
                 # Create Delta_n 3D volume
                 self.Delta_n = Delta_n * np.ones(self.volume_shape)
 
+            self.Delta_n[np.isnan(self.Delta_n)] = 0
+            self.optic_axis[np.isnan(self.optic_axis)] = 0
                 
         elif self.back_end == BackEnds.PYTORCH:
             # Update volume shape from optic config 
             self.volume_shape = torch_args['optic_config'].volume_config.volume_shape
             # Normalization of optical axis, depending on input
-            if torch.is_tensor(optic_axis) and len(optic_axis.shape) == 4:
+            if not isinstance(optic_axis, list) and optic_axis.ndim==4:
+                if isinstance(optic_axis, np.ndarray):
+                    optic_axis = torch.from_numpy(optic_axis).float()
+                    
                 norm_A = (optic_axis[0,...]**2+optic_axis[1,...]**2+optic_axis[2,...]**2).sqrt()
-                self.optic_axis = nn.Parameter(optic_axis / norm_A.repeat(3,1,1,1))
+                self.optic_axis = optic_axis / norm_A.repeat(3,1,1,1)
                 assert len(Delta_n.shape) == 3, '3D Delta_n expected, as the optic_axis was provided as a 3D torch tensor'
                 self.Delta_n = Delta_n
+                if not torch.is_tensor(Delta_n):
+                    self.Delta_n = torch.from_numpy(Delta_n).float()
+                
             else:
                 # Same optic axis for all voxels
                 optic_axis = np.array(optic_axis).astype(np.float32)
@@ -88,10 +99,15 @@ class BirefringentVolume(BirefringentElement):
                     optic_axis /= norm
                 self.optic_axis = torch.from_numpy(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1) \
                                     .repeat(1, self.volume_shape[0], self.volume_shape[1], self.volume_shape[2])
-                
-                # Store the data as pytorch parameters
-                self.optic_axis = nn.Parameter(self.optic_axis)
-                self.Delta_n = nn.Parameter(Delta_n * torch.ones(self.volume_shape))
+
+                self.Delta_n = Delta_n * torch.ones(self.volume_shape)
+
+            # Check for not a number, for when the voxel optic_axis is all zeros
+            self.Delta_n[torch.isnan(self.Delta_n)] = 0
+            self.optic_axis[torch.isnan(self.optic_axis)] = 0
+            # Store the data as pytorch parameters
+            self.optic_axis = nn.Parameter(self.optic_axis).float()
+            self.Delta_n = nn.Parameter(self.Delta_n ).float()
 
 
     ###########################################################################################
@@ -188,7 +204,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     """This class extends RayTraceLFM, and implements the forward function, where voxels contribute to ray's Jones-matrices with a retardance and axis in a non-commutative matter"""
     def __init__(
             self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
-            optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550}):
+            optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}):
         # optic_config contains mla_config and volume_config
         super(BirefringentRaytraceLFM, self).__init__(
             back_end=back_end, torch_args=torch_args, optical_info=optical_info
@@ -203,16 +219,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # volume_shape defines the size of the workspace
         # the number of micro lenses defines the valid volume inside the workspace
         volume_shape = volume_in.optical_info['volume_shape']
-        n_micro_lenses = self.optic_config.mla_config.n_micro_lenses
-        n_voxels_per_ml = self.optic_config.mla_config.n_voxels_per_ml
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
         n_ml_half = floor(n_micro_lenses / 2.0)
 
         # Check if the volume_size can fit these micro_lenses.
         # considering that some rays go beyond the volume in front of the micro-lens
-        voxel_span_per_ml = self.voxel_span_per_ml * n_micro_lenses
-        assert voxel_span_per_ml < volume_shape[0], f"No full micro-lenses fit inside this volume. \
-            Decrease the number of micro-lenses defining the active volume area, or increase workspace \
-            ({voxel_span_per_ml} > {self.optic_config.volume_config.volume_shape[1]})"
+        voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 2 # add two 
+        assert voxel_span_per_ml <= volume_shape[1] and voxel_span_per_ml <= volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large. \
+            for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"
         
 
         # Traverse volume for every ray, and generate retardance and azimuth images
@@ -232,14 +247,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     full_img_row_r = ret_image_torch
                     full_img_row_a = azim_image_torch
                 else: # Concatenate to existing image otherwise
-                    full_img_row_r = torch.cat((full_img_row_r, ret_image_torch), 0)
-                    full_img_row_a = torch.cat((full_img_row_a, azim_image_torch), 0)
+                    if self.back_end == BackEnds.NUMPY:
+                        full_img_row_r = np.concatenate((full_img_row_r, ret_image_torch), 0)
+                        full_img_row_a = np.concatenate((full_img_row_a, azim_image_torch), 0)
+                    elif self.back_end == BackEnds.PYTORCH:
+                        full_img_row_r = torch.cat((full_img_row_r, ret_image_torch), 0)
+                        full_img_row_a = torch.cat((full_img_row_a, azim_image_torch), 0)
             if full_img_r is None:
                 full_img_r = full_img_row_r
                 full_img_a = full_img_row_a
             else:
-                full_img_r = torch.cat((full_img_r, full_img_row_r), 1)
-                full_img_a = torch.cat((full_img_a, full_img_row_a), 1)
+                if self.back_end == BackEnds.NUMPY:
+                    full_img_r = np.concatenate((full_img_r, full_img_row_r), 1)
+                    full_img_a = np.concatenate((full_img_a, full_img_row_a), 1)
+                elif self.back_end == BackEnds.PYTORCH:
+                    full_img_r = torch.cat((full_img_r, full_img_row_r), 1)
+                    full_img_a = torch.cat((full_img_a, full_img_row_a), 1)
         return full_img_r, full_img_a
     
     def retardance(self, JM):
@@ -265,7 +288,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             if np.imag(values[0]) < 0:
                 fast_vector = real_vecs[0]
                 # Adjust for the case when 135 deg and is calculated as 45 deg
-                if np.isclose(fast_vector[0],fast_vector[1],atol=1e-5).all() and real_vecs[1][0] > 0:
+                if np.isclose(fast_vector[0],fast_vector[1],atol=1e-5).all() and real_vecs[1][0] > 0:# or np.isclose(fast_vector[1],0.0): Try to avoid division by zero
                     azim = 3 * np.pi / 4
                 else:
                     azim = np.arctan(fast_vector[0] / fast_vector[1])
@@ -301,7 +324,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         elif self.back_end==BackEnds.PYTORCH:
             return self.calc_cummulative_JM_of_ray_torch(volume_in, micro_lens_offset)
 
-    def calc_cummulative_JM_of_ray_numpy(self, i, j, volume_in : BirefringentVolume):
+    def calc_cummulative_JM_of_ray_numpy(self, i, j, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''For the (i,j) pixel behind a single microlens'''
         # Fetch precomputed Siddon parameters
         voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
@@ -314,10 +337,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             ell = ell_in_voxels[n_ray][m]
             vox = voxels_of_segs[n_ray][m]
             # try:
-            Delta_n = volume_in.Delta_n[vox[0], vox[1], vox[2]]
-            opticAxis = volume_in.optic_axis[:, vox[0], vox[1], vox[2]]
+            Delta_n = volume_in.Delta_n[vox[0], vox[1]+micro_lens_offset[0], vox[2]+micro_lens_offset[1]]
+            opticAxis = volume_in.optic_axis[:, vox[0], vox[1]+micro_lens_offset[0], vox[2]+micro_lens_offset[1]]
             # except:
-            #     print('hola')
+            #     print(f'Numpy: Volume out of bound for ray {i}{j}, step: {m}')
             # get_ellipsoid(vox)
             JM = self.voxRayJM(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
             JM_list.append(JM)
@@ -391,6 +414,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def ret_and_azim_images_numpy(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_ml_half = floor(n_micro_lenses / 2.0)
+        micro_lens_offset = np.array(micro_lens_offset) + np.array(self.vox_ctr_idx[1:]) - n_ml_half
+
         pixels_per_ml = self.optical_info['pixels_per_ml']
         ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
         azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
@@ -400,7 +427,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     ret_image[i, j] = 0
                     azim_image[i, j] = 0
                 else:
-                    effective_JM = self.calc_cummulative_JM_of_ray_numpy(i, j, volume_in)
+                    effective_JM = self.calc_cummulative_JM_of_ray_numpy(i, j, volume_in, micro_lens_offset)
                     ret_image[i, j] = self.retardance(effective_JM)
                     azim_image[i, j] = self.azimuth(effective_JM)
         return ret_image, azim_image
@@ -409,7 +436,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def ret_and_azim_images_torch(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''This function computes the retardance and azimuth images of the precomputed rays going through a volume'''
         # Include offset to move to the center of the volume, as the ray collisions are computed only for a single micro-lens
-        n_micro_lenses = self.optic_config.mla_config.n_micro_lenses
+        # todo: n_micro_lenses and n_micro_lenses missmatch
+        # n_micro_lenses = self.optic_config.mla_config.n_micro_lenses
+        n_micro_lenses = self.optical_info['n_micro_lenses']
         n_ml_half = floor(n_micro_lenses / 2.0)
         micro_lens_offset = np.array(micro_lens_offset) + np.array(self.vox_ctr_idx[1:]) - n_ml_half
         # Fetch needed variables
@@ -520,16 +549,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             n_planes = int(init_mode[0])
             voxel_parameters = self.generate_planes_volume(volume_shape, n_planes) # Perpendicular optic axes each with constant birefringence and orientation 
         elif init_mode=='ellipsoid':
-            voxel_parameters = self.generate_ellipsoid_volume(volume_shape, radius=[5,7.5,7.5], delta_n=0.1)
+            voxel_parameters = self.generate_ellipsoid_volume(volume_shape, radius=[3,2.5,1.5], delta_n=0.1)
         
-        volume_ref = BirefringentVolume(back_end=self.back_end, torch_args={'optic_config' : self.optic_config},
+        volume_ref = BirefringentVolume(back_end=self.back_end, optical_info=self.optical_info,
                                         Delta_n=voxel_parameters[0,...], optic_axis=voxel_parameters[1:,...])
         # Enable gradients for auto-differentiation 
         if self.back_end == BackEnds.PYTORCH:
-            volume_ref.Delta_n = volume_ref.Delta_n.to(self.get_device())
-            volume_ref.optic_axis = volume_ref.optic_axis.detach()
+            volume_ref.Delta_n.requires_grad = False
+            volume_ref.optic_axis.requires_grad = False
+            volume_ref.Delta_n = nn.Parameter(volume_ref.Delta_n.to(self.get_device()))
+            volume_ref.optic_axis = nn.Parameter(volume_ref.optic_axis.detach())
             volume_ref.Delta_n.requires_grad = True
             volume_ref.optic_axis.requires_grad = True
+
         return volume_ref
 
     
@@ -540,13 +572,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         a_0 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
         a_1 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
         a_2 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
-        norm_A = (a_0**2+a_1**2+a_2**2).sqrt()
-        return np.cat((np.expand_dims(Delta_n, axis=0), np.expand_dims(a_0/norm_A, axis=0), np.expand_dims(a_1/norm_A, axis=0), np.expand_dims(a_2/norm_A, axis=0)),0)
+        norm_A = np.sqrt(a_0**2+a_1**2+a_2**2)
+        return np.concatenate((np.expand_dims(Delta_n, axis=0), np.expand_dims(a_0/norm_A, axis=0), np.expand_dims(a_1/norm_A, axis=0), np.expand_dims(a_2/norm_A, axis=0)),0)
     
     @staticmethod
     def generate_planes_volume(volume_shape, n_planes=1):
-        vol = torch.zeros([4,] + volume_shape)
-        vol.requires_grad = False
+        vol = np.zeros([4,] + volume_shape)
         z_size = volume_shape[0]
         z_ranges = np.linspace(0, z_size-1, n_planes*2).astype(int)
 
@@ -562,13 +593,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         for z_ix in range(0,n_planes):
             vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = random_data[:,z_ix].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1,1,volume_shape[1],volume_shape[2])
         
-        vol.requires_grad = True
         return vol
     
     @staticmethod
     def generate_ellipsoid_volume(volume_shape, center=[0.5,0.5,0.5], radius=[10,10,10], alpha=0.1, delta_n=0.1):
         vol = np.zeros([4,] + volume_shape)
-        vol.requires_grad = False
         
         kk,jj,ii = np.meshgrid(np.arange(volume_shape[0]), np.arange(volume_shape[1]), np.arange(volume_shape[2]), indexing='ij')
         # shift to center
