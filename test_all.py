@@ -12,6 +12,10 @@ def global_data():
         def test_something(global_data):
             optical_info = global_data['optical_info]
     '''
+    
+    # Set torch precision to Double to match numpy 
+    torch.set_default_tensor_type(torch.DoubleTensor)
+    
     # Objective configuration
     magnObj = 60
     wavelength = 0.550
@@ -64,13 +68,14 @@ def global_data():
 
     return {'optic_config': optic_config, 'optical_info' : optical_info}
 
-# todo: run with different volume sizes
-# @pytest.mark.parametrize('iteration', range(1, 10))
-def test_rays_computation(global_data):
+# Test systems with different number of rays per micro-lens
+@pytest.mark.parametrize('pixels_per_ml_init', [3,5,10,17,33])
+def test_rays_computation(global_data, pixels_per_ml_init):
     
     # Gather global data
     optical_info = copy.deepcopy(global_data['optical_info'])
-    # optic_config = global_data['optic_config']
+
+    optical_info['pixels_per_ml'] = pixels_per_ml_init
 
     # Create numpy and pytorch raytracer
     BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
@@ -89,11 +94,15 @@ def test_rays_computation(global_data):
         for n_ray in range(len(BF_raytrace_numpy.ray_direction_basis)):
             assert(np.all(np.isclose(BF_raytrace_numpy.ray_direction_basis[n_ray][n_basis], BF_raytrace_torch.ray_direction_basis[n_basis][n_ray]))), f"ray_direction_basis mismatch for ray: {n_ray}, basis: {n_basis}"
 
-@pytest.mark.parametrize('iteration', range(1, 10))
+# Test Volume creation with random parameters and an experiment with an microscope align optic 
+@pytest.mark.parametrize('iteration', range(10))
 def test_voxel_array_creation(global_data, iteration):
     
     delta_n = np.random.rand()# 0.1
     optic_axis = np.random.rand(3) #[1.0,3.0,1.0]
+    if iteration==0:
+        delta_n = 0.1
+        optic_axis = [1.0,0.0,0.0]
 
     # Gather global data
     optical_info = copy.deepcopy(global_data['optical_info'])
@@ -123,10 +132,10 @@ def test_voxel_array_creation(global_data, iteration):
                                     Delta_n=delta_n*torch.ones(volume_shape), optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2]))
     
     # Check that the initialization and normalization of optical axes are correct
-    assert np.all(np.isclose(voxel_numpy.optic_axis.flatten(), voxel_torch.optic_axis.detach().numpy().flatten()))
-    assert np.all(np.isclose(voxel_numpy.optic_axis.flatten(), voxel_numpy_single_value.optic_axis.flatten()))
-    assert np.all(np.isclose(voxel_numpy_single_value.optic_axis.flatten(), voxel_torch_single_value.optic_axis.detach().numpy().flatten()))
-    assert np.all(np.isclose(voxel_numpy_single_value.Delta_n.flatten(), voxel_torch_single_value.Delta_n.detach().numpy().flatten()))
+    assert np.all(np.isclose(voxel_numpy.optic_axis.flatten(), voxel_torch.optic_axis.detach().numpy().flatten())), f"Optic axis mismatch between numpy/pytorch delta_n: {delta_n}, optic_axis: {optic_axis}"
+    assert np.all(np.isclose(voxel_numpy.optic_axis.flatten(), voxel_numpy_single_value.optic_axis.flatten())), f"Optic axis mismatch between numpy/pytorch delta_n: {delta_n}, optic_axis: {optic_axis}"                                  
+    assert np.all(np.isclose(voxel_numpy_single_value.optic_axis.flatten(), voxel_torch_single_value.optic_axis.detach().numpy().flatten())), f"Optic axis mismatch between numpy/pytorch delta_n: {delta_n}, optic_axis: {optic_axis}"
+    assert np.all(np.isclose(voxel_numpy_single_value.Delta_n.flatten(), voxel_torch_single_value.Delta_n.detach().numpy().flatten())), f"Delta_n mismatch between numpy/pytorch delta_n: {delta_n}, optic_axis: {optic_axis}"
 
 # todo: failing with pixels_per_ml = 5
 @pytest.mark.parametrize('volume_shape_in', [
@@ -145,11 +154,11 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
     # Gather global data
     local_data = copy.deepcopy(global_data)
     optical_info = local_data['optical_info']
+    optical_info['pixels_per_ml'] = 17
 
     pixels_per_ml = optical_info['pixels_per_ml']
     volume_shape = volume_shape_in
     optical_info['volume_shape'] = volume_shape
-    # optical_info['pixels_per_ml'] = pixels_per_ml
 
     # Create numpy and pytorch raytracer
     BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
@@ -162,8 +171,8 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
     BF_raytrace_torch.compute_rays_geometry()
 
     # Create voxel array in numpy
-    voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY, 
-                                    Delta_n=delta_n, optic_axis=optic_axis, optical_info=optical_info)
+    voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY, optical_info=optical_info,
+                                    Delta_n=delta_n, optic_axis=optic_axis)
 
     # Create a voxel array in torch                          
     voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, optical_info=optical_info,
@@ -215,9 +224,9 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
             any_fail = True
         try:
             # Check azimuth for this ray
-            assert np.isclose(azi_img_numpy[i, j], azi_img_torch[i, j], atol=1e-5).all(), f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
+            check_azimuth_images(np.array([azi_img_numpy[i, j]]), np.array(azi_img_torch[i, j]), message=f'Azimuth mismatch on coord: (i,j)=({i},{j}):')
         except:
-            f'Azimuth mismatch on coord: (i,j)=({i},{j}):'
+            print(f'Azimuth mismatch on coord: (i,j)=({i},{j}):')
             any_fail = True
     
     # Use this in debug console to visualize errors
@@ -243,14 +252,10 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
 
     # Gather global data
     optical_info = copy.deepcopy(global_data['optical_info'])
-    optic_config = global_data['optic_config']
     volume_shape = optical_info['volume_shape']
-    pixels_per_ml = optical_info['pixels_per_ml']
 
-    volume_shape = volume_shapes_to_test[iteration]#[1, 6, 6]
+    volume_shape = volume_shapes_to_test[iteration]
     # pixels_per_ml = 17
-    # optic_config.volume_config.volume_shape = volume_shape
-    # optic_config.mla_config.n_micro_lenses = volume_shape[1]
     
     optical_info['volume_shape'] = volume_shape
     # optical_info['pixels_per_ml'] = pixels_per_ml
@@ -284,7 +289,7 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     assert torch.all(torch.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
-    assert np.all(np.isclose(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-5)), "Error when comparing azimuth computations"
+    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
 @pytest.mark.parametrize('volume_shape_in', [
         # 3*[1],
@@ -344,7 +349,8 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     assert torch.all(torch.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
-    assert np.all(np.isclose(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-5)), "Error when comparing azimuth computations"
+    
+    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
 # todo: test different shape creation
 @pytest.mark.parametrize('volume_init_mode', [
@@ -404,72 +410,27 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     assert torch.all(torch.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
-    assert np.all(np.isclose(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-5)), "Error when comparing azimuth computations"
+    
+    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
+
 
 def main():
     # Multi lenslet example
-    test_forward_projection_different_volumes(global_data(), '3planes')
-
+    test_forward_projection_different_volumes(global_data(), 'ellipsoid')
+    # test_compute_JonesMatrices(global_data(), 3*[11])
     import sys
     sys.exit()
     # test_compute_JonesMatrices(global_data(), 3*[1])
     # test_voxel_array_creation(global_data(),1)
-    # torch.set_default_tensor_type(torch.DoubleTensor)
     # Objective configuration
-    magnObj = 60
-    wavelength = 0.550
-    naObj = 1.2
-    nMedium = 1.52
-    # Camera and volume configuration
-    camPixPitch = 6.5
-    # MLA configuration
-    pixels_per_ml = 17 # num pixels behind lenslet
-    microLensPitch = pixels_per_ml * camPixPitch / magnObj
-    # voxPitch is the width of each voxel in um (dividing by 5 to supersample)
-    voxPitch = microLensPitch / 1
-    axialPitch = voxPitch
-    voxel_size_um = [axialPitch, voxPitch, voxPitch]
-    # Volume shape
-    volume_shape = [15, 15, 15]
-
-
-    # Prepate settings for numpy
-    optical_info={'volume_shape' : volume_shape, 
-    'voxel_size_um' : voxel_size_um, 
-    'pixels_per_ml' : pixels_per_ml, 
-    'na_obj' : naObj, 
-    'n_medium' : nMedium, 
-    'wavelength' : wavelength,
-    'n_micro_lenses' : 3,
-    'n_voxels_per_ml': 1}
-
-        
-    BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
-    BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, optical_info=optical_info)
     
-    BF_raytrace_numpy.compute_rays_geometry()
-    BF_raytrace_torch.compute_rays_geometry()
-
-    delta_n = 0.1
-    optic_axis = [1.0,0,0]
-    
-    # Create voxels in different ways
-
-    # Passing a single value for delta n and optic axis
-    voxel_numpy = BirefringentVolume(back_end=BackEnds.NUMPY, 
-                                    Delta_n=delta_n, optic_axis=optic_axis, optical_info=optical_info)
-
-    # Passing an already build 3D array                            
-    voxel_torch = BirefringentVolume(back_end=BackEnds.PYTORCH, optical_info=optical_info, 
-                                    Delta_n=delta_n*torch.ones(volume_shape), optic_axis=torch.tensor(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1, volume_shape[0], volume_shape[1], volume_shape[2]))
-    
-    ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy)
-    with torch.no_grad():
-        ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch)
-    
-    # plot_azimuth(azi_img_numpy)
-    plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
-
+ # Check azimuth images
+def check_azimuth_images(img1, img2, message="Error when comparing azimuth computations"):
+    ''' Compares two azimuth images, taking into account that atan2 output of 0 and pi is equivalent'''
+    if not np.all(np.isclose(img1, img2, atol=1e-5)):
+        # Check if the difference is a multiple of pi
+        diff = np.abs(img1 - img2)
+        assert np.all(np.isclose( diff[~np.isclose(diff,0.0, atol=1e-5)], np.pi, atol=1e-5)), message
     
 def plot_azimuth(img):
     ctr = [(img.shape[0] - 1)/ 2, (img.shape[1] - 1)/ 2]
@@ -510,8 +471,6 @@ def plot_azimuth(img):
     plt.show()
 
 
-
-
 def plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch):
     # Check if we are running in pytest
     import os
@@ -523,7 +482,7 @@ def plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, a
     plt.imshow(ret_img_numpy)
     plt.title('Ret. numpy')
     plt.subplot(3,2,2)
-    plt.imshow(azi_img_numpy / np.pi)
+    plt.imshow(azi_img_numpy)
     plt.title('Azi. numpy')
 
     plt.subplot(3,2,3)

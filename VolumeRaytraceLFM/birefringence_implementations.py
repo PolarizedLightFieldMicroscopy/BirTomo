@@ -82,14 +82,14 @@ class BirefringentVolume(BirefringentElement):
             # Normalization of optical axis, depending on input
             if not isinstance(optic_axis, list) and optic_axis.ndim==4:
                 if isinstance(optic_axis, np.ndarray):
-                    optic_axis = torch.from_numpy(optic_axis).float()
+                    optic_axis = torch.from_numpy(optic_axis).type(torch.get_default_dtype())
                     
                 norm_A = (optic_axis[0,...]**2+optic_axis[1,...]**2+optic_axis[2,...]**2).sqrt()
                 self.optic_axis = optic_axis / norm_A.repeat(3,1,1,1)
                 assert len(Delta_n.shape) == 3, '3D Delta_n expected, as the optic_axis was provided as a 3D torch tensor'
                 self.Delta_n = Delta_n
                 if not torch.is_tensor(Delta_n):
-                    self.Delta_n = torch.from_numpy(Delta_n).float()
+                    self.Delta_n = torch.from_numpy(Delta_n).type(torch.get_default_dtype())
                 
             else:
                 # Same optic axis for all voxels
@@ -106,8 +106,8 @@ class BirefringentVolume(BirefringentElement):
             self.Delta_n[torch.isnan(self.Delta_n)] = 0
             self.optic_axis[torch.isnan(self.optic_axis)] = 0
             # Store the data as pytorch parameters
-            self.optic_axis = nn.Parameter(self.optic_axis).float()
-            self.Delta_n = nn.Parameter(self.Delta_n ).float()
+            self.optic_axis = nn.Parameter(self.optic_axis).type(torch.get_default_dtype())
+            self.Delta_n = nn.Parameter(self.Delta_n ).type(torch.get_default_dtype())
 
 
     ###########################################################################################
@@ -288,15 +288,26 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             off_diag_sum = JM[0, 1] + JM[1, 0]
             a = np.imag(diag_diff / diag_sum)
             b = np.imag(off_diag_sum / diag_sum)
+            # if np.isclose(np.abs(a), 0.0):
+            #     a = 0.0
+            # if np.isclose(np.abs(b), 0.0):
+            #     b = 0.0
             azimuth = np.arctan2(-b, -a) / 2 + np.pi / 2
+            # if np.isclose(azimuth,np.pi):
+            #     azimuth = 0.0
         elif self.back_end == BackEnds.PYTORCH: 
-            diag_sum = JM[:, 0, 0] + JM[:, 1, 1]
-            diag_diff = JM[:, 1, 1] - JM[: ,0, 0]
+            diag_sum = (JM[:, 0, 0] + JM[:, 1, 1])
+            diag_diff = (JM[:, 1, 1] - JM[: ,0, 0])
             off_diag_sum = JM[:, 0, 1] + JM[:, 1, 0]
-            a = (diag_diff / diag_sum).imag.to(torch.float64)
-            b = (off_diag_sum / diag_sum).imag.to(torch.float64)
+            a = (diag_diff / diag_sum).imag
+            b = (off_diag_sum / diag_sum).imag
+            azimuth = torch.arctan2(-b, -a) / 2.0 + torch.pi / 2.0
+
             # todo: if output azimuth is pi, make it 0 and vice-versa (arctan2 bug)
-            azimuth = torch.arctan2(-b, -a) / 2 + torch.pi / 2
+            # zero_index = torch.isclose(azimuth, torch.zeros([1]), atol=1e-5)
+            # pi_index = torch.isclose(azimuth, torch.tensor(torch.pi), atol=1e-5)
+            # azimuth[zero_index] = torch.pi
+            # azimuth[pi_index] = 0
         else:
             raise NotImplementedError
         return azimuth
