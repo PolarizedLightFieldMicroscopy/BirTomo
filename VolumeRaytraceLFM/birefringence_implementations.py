@@ -78,7 +78,7 @@ class BirefringentVolume(BirefringentElement):
                 
         elif self.back_end == BackEnds.PYTORCH:
             # Update volume shape from optic config 
-            self.volume_shape = torch_args['optic_config'].volume_config.volume_shape
+            self.volume_shape = self.optical_info['volume_shape']
             # Normalization of optical axis, depending on input
             if not isinstance(optic_axis, list) and optic_axis.ndim==4:
                 if isinstance(optic_axis, np.ndarray):
@@ -225,9 +225,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Check if the volume_size can fit these micro_lenses.
         # considering that some rays go beyond the volume in front of the micro-lens
-        voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 2 # add two 
-        assert voxel_span_per_ml <= volume_shape[1] and voxel_span_per_ml <= volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large. \
-            for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"
+        voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 1
+        assert voxel_span_per_ml < volume_shape[1] and voxel_span_per_ml < volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"
+        # assert volume_shape[1] - 2*self.voxel_span_per_ml > 0 and volume_shape[2] - 2*self.voxel_span_per_ml > 0, f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large. \
         
 
         # Traverse volume for every ray, and generate retardance and azimuth images
@@ -340,6 +340,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Init an array to store the Jones matrices.
         JM_list = []
 
+        assert self.optical_info == volume_in.optical_info, 'Optical info between ray-tracer and volume mismatch. This might cause issues on the border micro-lenses.'
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels, so we mask the rays valid
         # for this step with rays_with_voxels
@@ -352,7 +353,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             ell = ell_in_voxels[rays_with_voxels,m]
             # The voxel coordinates each ray collides with
             vox = [vx[m] for ix,vx in enumerate(voxels_of_segs) if rays_with_voxels[ix]]
-
+            
             # Extract the information from the volume
             # Birefringence 
             Delta_n = volume_in.Delta_n[[v[0] for v in vox], [v[1]+micro_lens_offset[0] for v in vox], [v[2]+micro_lens_offset[1] for v in vox]]
@@ -559,13 +560,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return np.concatenate((np.expand_dims(Delta_n, axis=0), np.expand_dims(a_0/norm_A, axis=0), np.expand_dims(a_1/norm_A, axis=0), np.expand_dims(a_2/norm_A, axis=0)),0)
     
     @staticmethod
-    def generate_planes_volume(volume_shape, n_planes=1):
+    def generate_planes_volume(volume_shape, n_planes=1, z_offset=0):
         vol = np.zeros([4,] + volume_shape)
         z_size = volume_shape[0]
         z_ranges = np.linspace(0, z_size-1, n_planes*2).astype(int)
 
         if n_planes==1:
-            z_offset = 4
             # Birefringence
             vol[0, z_size//2+z_offset, :, :] = 0.1
             # Axis
@@ -574,7 +574,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             return vol
         random_data = BirefringentRaytraceLFM.generate_random_volume([n_planes])
         for z_ix in range(0,n_planes):
-            vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = random_data[:,z_ix].unsqueeze(1).unsqueeze(1).unsqueeze(1).repeat(1,1,volume_shape[1],volume_shape[2])
+            vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = np.expand_dims(random_data[:,z_ix],[1,2,3]).repeat(1,1).repeat(volume_shape[1],2).repeat(volume_shape[2],3)
         
         return vol
     

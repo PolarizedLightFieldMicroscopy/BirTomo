@@ -3,7 +3,7 @@ from enum import Enum
 import pickle
 from os.path import exists
 from my_siddon import *
-
+import copy
 
 # Optional imports: as the classes here depend on Waveblocks Opticblock.
 # We create a dummy class for the case where either Waveblocks is not installed
@@ -44,21 +44,24 @@ class OpticalElement(OpticBlock):
                 optical_info={}):
         # Optical info is needed
         assert len(optical_info) > 0, f'Optical info (optical_info) dictionary needed: use OpticalElement.default_optical_info as reference {OpticalElement.default_optical_info}'
+        
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
+            # We need to make a copy if we don't want to modify the torch_args default argument, very weird.
+            new_torch_args = copy.deepcopy(torch_args)
             # If no optic_config is provided, create one
-            if 'optic_config' not in torch_args.keys():
-                torch_args['optic_config'] = OpticConfig()
-                torch_args['optic_config'].volume_config.volume_shape = optical_info['volume_shape']
-                torch_args['optic_config'].volume_config.voxel_size_um = optical_info['voxel_size_um']
-                torch_args['optic_config'].mla_config.n_pixels_per_mla = optical_info['pixels_per_ml']
-                torch_args['optic_config'].mla_config.n_micro_lenses = optical_info['n_micro_lenses']
-                torch_args['optic_config'].PSF_config.NA = optical_info['na_obj']
-                torch_args['optic_config'].PSF_config.ni = optical_info['n_medium']
-                torch_args['optic_config'].PSF_config.wvl = optical_info['wavelength']
+            if 'optic_config' not in torch_args.keys() or ('optic_config' not in torch_args.keys() and not isinstance(torch_args['optic_config'], OpticConfig)):
+                new_torch_args['optic_config'] = OpticConfig()
+                new_torch_args['optic_config'].volume_config.volume_shape = optical_info['volume_shape']
+                new_torch_args['optic_config'].volume_config.voxel_size_um = optical_info['voxel_size_um']
+                new_torch_args['optic_config'].mla_config.n_pixels_per_mla = optical_info['pixels_per_ml']
+                new_torch_args['optic_config'].mla_config.n_micro_lenses = optical_info['n_micro_lenses']
+                new_torch_args['optic_config'].PSF_config.NA = optical_info['na_obj']
+                new_torch_args['optic_config'].PSF_config.ni = optical_info['n_medium']
+                new_torch_args['optic_config'].PSF_config.wvl = optical_info['wavelength']
 
-            super(OpticalElement, self).__init__(optic_config=torch_args['optic_config'], 
-                    members_to_learn=torch_args['members_to_learn'] if 'members_to_learn' in torch_args.keys() else [])
+            super(OpticalElement, self).__init__(optic_config=new_torch_args['optic_config'], 
+                    members_to_learn=new_torch_args['members_to_learn'] if 'members_to_learn' in new_torch_args.keys() else [])
 
         # Store variables
         self.back_end = back_end
@@ -354,7 +357,7 @@ class RayTraceLFM(OpticalElement):
         #     # The valid workspace is defined by the number of micro-lenses
         #     valid_vol_shape = self.optical_info['volume_shape'][1]
         # elif self.back_end == BackEnds.PYTORCH:
-        valid_vol_shape = self.optical_info['n_micro_lenses']
+        valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
         
 
 
@@ -409,6 +412,8 @@ class RayTraceLFM(OpticalElement):
                     voxels_of_segs = vox_indices(seg_mids, voxel_size_um)
                     voxel_intersection_lengths = siddon_lengths(start, stop, siddon_list)
 
+                # Remove voxels that go outside the volume
+
                 # Store in a temporary list
                 ray_valid_indices.append((ii,jj))
                 ray_vol_colli_indices.append(voxels_of_segs)
@@ -418,7 +423,9 @@ class RayTraceLFM(OpticalElement):
                 # What is the maximum span of the rays of a micro lens?
                 self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in ray_vol_colli_indices[0]])
 
-            
+        
+        # The maximum voxel-span is with respect to the middle voxel, let's shift that to the origin
+        self.voxel_span_per_ml -= self.vox_ctr_idx[1]
         # Maximum number of ray-voxel interactions, to define 
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
         n_valid_rays = len(ray_valid_indices)
