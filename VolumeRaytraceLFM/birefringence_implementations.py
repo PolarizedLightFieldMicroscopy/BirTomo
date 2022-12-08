@@ -78,7 +78,7 @@ class BirefringentVolume(BirefringentElement):
                 
         elif self.back_end == BackEnds.PYTORCH:
             # Update volume shape from optic config 
-            self.volume_shape = torch_args['optic_config'].volume_config.volume_shape
+            self.volume_shape = self.optical_info['volume_shape']
             # Normalization of optical axis, depending on input
             if not isinstance(optic_axis, list) and optic_axis.ndim==4:
                 if isinstance(optic_axis, np.ndarray):
@@ -357,6 +357,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Init an array to store the Jones matrices.
         JM_list = []
 
+        assert self.optical_info == volume_in.optical_info, 'Optical info between ray-tracer and volume mismatch. This might cause issues on the border micro-lenses.'
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels, so we mask the rays valid
         # for this step with rays_with_voxels
@@ -369,7 +370,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             ell = ell_in_voxels[rays_with_voxels,m]
             # The voxel coordinates each ray collides with
             vox = [vx[m] for ix,vx in enumerate(voxels_of_segs) if rays_with_voxels[ix]]
-
+            
             # Extract the information from the volume
             # Birefringence 
             Delta_n = volume_in.Delta_n[[v[0] for v in vox], [v[1]+micro_lens_offset[0] for v in vox], [v[2]+micro_lens_offset[1] for v in vox]]
