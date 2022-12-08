@@ -549,20 +549,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         volume_ref = BirefringentVolume(back_end=self.back_end, optical_info=self.optical_info,
                                         Delta_n=voxel_parameters[0,...], optic_axis=voxel_parameters[1:,...])
         # Enable gradients for auto-differentiation 
-        if self.back_end == BackEnds.PYTORCH:
-            volume_ref.Delta_n.requires_grad = False
-            volume_ref.optic_axis.requires_grad = False
-            volume_ref.Delta_n = nn.Parameter(volume_ref.Delta_n.to(self.get_device()))
-            volume_ref.optic_axis = nn.Parameter(volume_ref.optic_axis.detach())
-            volume_ref.Delta_n.requires_grad = True
-            volume_ref.optic_axis.requires_grad = True
+        # if self.back_end == BackEnds.PYTORCH:
+        #     volume_ref.Delta_n.requires_grad = False
+        #     volume_ref.optic_axis.requires_grad = False
+        #     volume_ref.Delta_n = nn.Parameter(volume_ref.Delta_n.to(self.get_device()))
+        #     volume_ref.optic_axis = nn.Parameter(volume_ref.optic_axis.detach())
+        #     volume_ref.Delta_n.requires_grad = True
+        #     volume_ref.optic_axis.requires_grad = True
 
         return volume_ref
 
     
     @staticmethod
-    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [0,0.1], 'axes_range' : [-1,1]}):
-        Delta_n = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
+    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [0,0.05], 'axes_range' : [-1,1]}):
+        Delta_n = np.random.uniform(init_args['Delta_n_range'][0], init_args['Delta_n_range'][1], volume_shape)
         # Random axis
         a_0 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
         a_1 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
@@ -591,6 +591,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     
     @staticmethod
     def generate_ellipsoid_volume(volume_shape, center=[0.5,0.5,0.5], radius=[10,10,10], alpha=0.1, delta_n=0.1):
+        # Grabbed from https://math.stackexchange.com/questions/2931909/normal-of-a-point-on-the-surface-of-an-ellipsoid
         vol = np.zeros([4,] + volume_shape)
         
         kk,jj,ii = np.meshgrid(np.arange(volume_shape[0]), np.arange(volume_shape[1]), np.arange(volume_shape[2]), indexing='ij')
