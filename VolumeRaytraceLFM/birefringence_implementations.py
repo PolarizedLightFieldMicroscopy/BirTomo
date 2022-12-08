@@ -225,9 +225,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Check if the volume_size can fit these micro_lenses.
         # considering that some rays go beyond the volume in front of the micro-lens
-        voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 2 # add two 
-        assert voxel_span_per_ml <= volume_shape[1] and voxel_span_per_ml <= volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large. \
-            for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"
+        voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 1
+        assert voxel_span_per_ml < volume_shape[1] and voxel_span_per_ml < volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"
+        # assert volume_shape[1] - 2*self.voxel_span_per_ml > 0 and volume_shape[2] - 2*self.voxel_span_per_ml > 0, f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large. \
         
 
         # Traverse volume for every ray, and generate retardance and azimuth images
@@ -288,7 +288,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             if np.imag(values[0]) < 0:
                 fast_vector = real_vecs[0]
                 # Adjust for the case when 135 deg and is calculated as 45 deg
-                if np.isclose(fast_vector[0],fast_vector[1],atol=1e-5).all() and real_vecs[1][0] > 0:# or np.isclose(fast_vector[1],0.0): Try to avoid division by zero
+                if np.isclose(fast_vector[0],fast_vector[1],atol=1e-5).all() and real_vecs[1][0] > 0 or np.isclose(fast_vector[1],0.0): #Try to avoid division by zero
                     azim = 3 * np.pi / 4
                 else:
                     azim = np.arctan(fast_vector[0] / fast_vector[1])

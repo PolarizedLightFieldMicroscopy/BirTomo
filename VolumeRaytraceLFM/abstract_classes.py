@@ -423,7 +423,9 @@ class RayTraceLFM(OpticalElement):
                 # What is the maximum span of the rays of a micro lens?
                 self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in ray_vol_colli_indices[0]])
 
-            
+        
+        # The maximum voxel-span is with respect to the middle voxel, let's shift that to the origin
+        self.voxel_span_per_ml -= self.vox_ctr_idx[1]
         # Maximum number of ray-voxel interactions, to define 
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
         n_valid_rays = len(ray_valid_indices)
