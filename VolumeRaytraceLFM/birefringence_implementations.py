@@ -109,43 +109,6 @@ class BirefringentVolume(BirefringentElement):
             self.optic_axis = nn.Parameter(self.optic_axis).type(torch.get_default_dtype())
             self.Delta_n = nn.Parameter(self.Delta_n ).type(torch.get_default_dtype())
 
-
-    ###########################################################################################
-    # Methods necessary for determining the Jones matrix of a birefringent material
-    # maybe this section should be a subclass of JonesMatrix
-    # def calc_retardance(self, ray_dir, thickness):
-    #     if self.back_end==BackEnds.NUMPY:
-    #         ret = abs(self.Delta_n) * (1 - np.dot(self.optic_axis, ray_dir) ** 2) * 2 * np.pi * thickness / self.optical_info['wavelength']
-    #     elif self.back_end==BackEnds.PYTORCH:
-    #         ret = abs(self.Delta_n) * (1 - torch.linalg.vecdot(self.optic_axis, ray_dir) ** 2) * 2 * torch.pi * thickness / self.optical_info['wavelength']
-    #     else:
-    #         raise NotImplementedError
-    #     # print(f"Accumulated retardance from index ellipsoid is {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
-    #     return ret
-
-
-    # def calc_azimuth(self, ray_dir_basis=[]):
-    #     if self.back_end==BackEnds.NUMPY:
-    #         azim = np.arctan2(np.dot(self.optic_axis, ray_dir_basis[1]), np.dot(self.optic_axis, ray_dir_basis[2]))
-    #         if self.Delta_n == 0:
-    #             azim = 0
-    #         elif self.Delta_n < 0:
-    #             azim = azim + np.pi / 2
-    #     elif self.back_end==BackEnds.PYTORCH:
-    #         azim = torch.arctan2(torch.linalg.vecdot(self.optic_axis , ray_dir_basis[1]), torch.linalg.vecdot(self.optic_axis , ray_dir_basis[2])) 
-    #         azim[self.Delta_n==0] = 0
-    #         azim[self.Delta_n<0] += torch.pi / 2
-    #     else:
-    #         raise NotImplementedError
-        
-    #     # print(f"Azimuth angle of index ellipsoid is {np.around(np.rad2deg(azim), decimals=0)} degrees.")
-    #     return azim
-    
-    # def LR_material(self):
-    #     ret = self.calc_retardance()
-    #     azim = self.calc_azimuth()
-    #     return self.LR(ret, azim)
-
     @staticmethod
     def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
         
@@ -280,21 +243,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def retardance(self, JM):
         '''Phase delay introduced between the fast and slow axis in a Jones Matrix'''
         if self.back_end == BackEnds.NUMPY:
-            values, vectors = np.linalg.eig(JM)
-            e1 = values[0]
-            e2 = values[1]
-            angle1 = np.angle(e1)
-            angle2 = np.angle(e2)
-            if np.isclose(np.abs(angle1), 2 * np.pi):
-                angle1 = 0
-            if np.isclose(np.abs(angle2), 2 * np.pi):
-                angle2 = 0
-            phase_diff = angle1 - angle2
-            if np.isclose(np.abs(phase_diff), np.pi, rtol=1e-3):
-                phase_diff = 0
+            e1, e2 = np.linalg.eigvals(JM)
+            phase_diff = np.angle(e1) - np.angle(e2)
             retardance = np.abs(phase_diff)
         elif self.back_end == BackEnds.PYTORCH:
-            # todo: account for when angles are multiples of pi
             x = torch.linalg.eigvals(JM)
             retardance = (torch.angle(x[:,1]) - torch.angle(x[:,0])).abs()
         else:
@@ -419,7 +371,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # JM_list contains m steps of rays interacting with voxels
         # Each JM_list[m] is shaped [n_rays, 2, 2]
         # We pass voxels_of_segs to compute which rays have a voxel in each step
-        effective_JM = BirefringentRaytraceLFM.rayJM_torch(JM_list, voxels_of_segs)
+        material_JM = BirefringentRaytraceLFM.rayJM_torch(JM_list, voxels_of_segs)
+        polarizer = torch.from_numpy(self.optical_info['polarizer']).type(torch.complex64).to(Delta_n.device)
+        analyzer = torch.from_numpy(self.optical_info['analyzer']).type(torch.complex64).to(Delta_n.device)
+        effective_JM = analyzer @ material_JM @ polarizer
         return effective_JM
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
@@ -474,6 +429,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         azimuth = self.azimuth(effective_JM)
         ret_image.requires_grad = False
         azim_image.requires_grad = False
+        zero_ret_idx = torch.isclose(retardance, torch.tensor([0.0], dtype=retardance.dtype))
+        azimuth[zero_ret_idx] = 0
         # Assign the computed ray values to the image pixels
         for ray_ix, (i,j) in enumerate(self.ray_valid_indices):
             ret_image[i, j] = retardance[ray_ix]
@@ -688,10 +645,10 @@ class BirefringentJMgenerators(BirefringentElement):
             azim (float): azimuth angle of fast axis [radians]
         Return: Jones matrix    
         '''
-        retardor_azim0 = BirefringentJMgenerators.LR_azim0(ret, back_end=back_end)
+        retarder_azim0 = BirefringentJMgenerators.LR_azim0(ret, back_end=back_end)
         R = BirefringentJMgenerators.rotator(azim, back_end=back_end)
         Rinv = BirefringentJMgenerators.rotator(-azim, back_end=back_end)
-        return R @ retardor_azim0 @ Rinv
+        return R @ retarder_azim0 @ Rinv
 
     @staticmethod
     def LR_azim0(ret, back_end=BackEnds.NUMPY):

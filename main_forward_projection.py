@@ -113,8 +113,8 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 
 # Perform same calculation with torch
 startTime = time.time()
-# Create non-identity polarizers and analyzers (only effective with numpy backend)
-if True:
+# Create non-identity polarizers and analyzers
+if False:
     # LC-PolScope setup
     optical_info['polarizer'] = BirefringentJMgenerators.LCP()
     optical_info['analyzer'] = BirefringentJMgenerators.universal_compensator(np.pi / 4, np.pi / 2)
