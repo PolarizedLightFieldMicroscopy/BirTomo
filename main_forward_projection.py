@@ -11,8 +11,9 @@ from waveblocks.utils.misc_utils import *
     - Compute the retardance and azimuth for every ray.
     - Generate 2D images."""
 
-# Select back end
-back_end = BackEnds.PYTORCH
+# Select back ends
+# back_end = BackEnds.PYTORCH
+back_end = BackEnds.NUMPY
 torch.set_default_tensor_type(torch.DoubleTensor)
 
 camera_pix_pitch = 6.5
@@ -109,6 +110,11 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 
 # Perform same calculation with torch
 startTime = time.time()
+# Create non-identity polarizers and analyzers (only effective with numpy backend)
+if True:
+    # LC-PolScope setup
+    optical_info['polarizer'] = BirefringentJMgenerators.LCP()
+    optical_info['analyzer'] = BirefringentJMgenerators.universal_compensator(np.pi / 4, np.pi / 2)
 ret_image, azim_image = BF_raytrace.ray_trace_through_volume(my_volume) 
 executionTime = (time.time() - startTime)
 print(f'Execution time in seconds with backend {back_end}: ' + str(executionTime))

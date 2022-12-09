@@ -280,9 +280,18 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             values, vectors = np.linalg.eig(JM)
             e1 = values[0]
             e2 = values[1]
-            phase_diff = np.angle(e1) - np.angle(e2)
+            angle1 = np.angle(e1)
+            angle2 = np.angle(e2)
+            if np.isclose(np.abs(angle1), 2 * np.pi):
+                angle1 = 0
+            if np.isclose(np.abs(angle2), 2 * np.pi):
+                angle2 = 0
+            phase_diff = angle1 - angle2
+            if np.isclose(np.abs(phase_diff), np.pi, rtol=1e-3):
+                phase_diff = 0
             retardance = np.abs(phase_diff)
         elif self.back_end == BackEnds.PYTORCH:
+            # todo: account for when angles are multiples of pi
             x = torch.linalg.eigvals(JM)
             retardance = (torch.angle(x[:,1]) - torch.angle(x[:,0])).abs()
         else:
@@ -335,8 +344,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_ray = j + i *  self.optical_info['pixels_per_ml']
         rayDir = self.ray_direction_basis[n_ray][:]
 
+        polarizer = self.optical_info['polarizer']
+        analyzer = self.optical_info['analyzer']
+
         JM_list = []
-        # JM_list.append(BirefringentJMgenerators.LCP())
+        JM_list.append(polarizer)
         for m in range(len(voxels_of_segs[n_ray])):
             ell = ell_in_voxels[n_ray][m]
             vox = voxels_of_segs[n_ray][m]
@@ -344,7 +356,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             opticAxis = volume_in.optic_axis[:, vox[0], vox[1]+micro_lens_offset[0], vox[2]+micro_lens_offset[1]]
             JM = self.voxRayJM(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
             JM_list.append(JM)
-        # JM_list.append(BirefringentJMgenerators.LCP())
+        JM_list.append(analyzer)
         effective_JM = BirefringentRaytraceLFM.rayJM_numpy(JM_list)
         return effective_JM
 
@@ -749,5 +761,11 @@ class BirefringentJMgenerators(BirefringentElement):
     def LCR(ret):
         '''Left Circular Retarder'''
         return BirefringentJMgenerators.rotator(ret / 2)
+
+    @staticmethod
+    def universal_compensator(retA, retB):
+        '''Universal Polarizer
+        Used as the polarizer for the LC-PolScope'''
+        return BirefringentJMgenerators.LR_azim0(retB) @ BirefringentJMgenerators.LR_azim0(retA) @ BirefringentJMgenerators.LP(np.pi / 4)
 
 
