@@ -17,10 +17,11 @@ torch.set_default_tensor_type(torch.DoubleTensor)
 
 camera_pix_pitch = 6.5
 objective_M = 60
+pixels_per_ml = 17
 optical_info={
             'volume_shape' : [15,51,51], 
-            'voxel_size_um' : 3*[camera_pix_pitch / objective_M], 
-            'pixels_per_ml' : 17, 
+            'voxel_size_um' : 3*[camera_pix_pitch * pixels_per_ml / objective_M], 
+            'pixels_per_ml' : pixels_per_ml, 
             'na_obj' : 1.2, 
             'n_medium' : 1.52,
             'wavelength' : 0.55,
