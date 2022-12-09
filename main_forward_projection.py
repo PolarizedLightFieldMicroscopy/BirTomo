@@ -13,6 +13,7 @@ from waveblocks.utils.misc_utils import *
 
 # Select back end
 back_end = BackEnds.PYTORCH
+torch.set_default_tensor_type(torch.DoubleTensor)
 
 camera_pix_pitch = 6.5
 objective_M = 60
@@ -30,14 +31,21 @@ optical_info={
 
 # Volume type
 # number is the shift from the end of the volume, change it as you wish, do single_voxel{volume_shape[0]//2} for a voxel in the center
-volume_axial_offset = optical_info['volume_shape'][0]//2 #for center
+# for shift in range(-5,6):
+shift_from_center = 0
+volume_axial_offset = optical_info['volume_shape'][0]//2+shift_from_center #for center
 # volume_type = 'ellipsoid'
 volume_type = 'shell'
 # volume_type = 'single_voxel' 
 
+# Plot azimuth
+# azimuth_plot_type = 'lines'
+azimuth_plot_type = 'hsv'
+
 
 if volume_type == 'single_voxel':
-    optical_info['n_micro_lenses'] = 5
+    optical_info['n_micro_lenses'] = 1
+    azimuth_plot_type = 'lines'
 
 
 
@@ -84,8 +92,8 @@ if volume_type == 'single_voxel':
 
 elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
     ellipsoid_args = {  'radius' : [5.5, 9.5, 5.5],
-                        'center' : [volume_axial_offset/optical_info['volume_shape'][0], 0.5, 0.51],   # from 0 to 1
-                        'delta_n' : 0.1,
+                        'center' : [volume_axial_offset/optical_info['volume_shape'][0], 0.48, 0.51],   # from 0 to 1
+                        'delta_n' : -0.1,
                         'border_thickness' : 0.3}
 
     my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='ellipsoid', init_args=ellipsoid_args)
@@ -95,7 +103,7 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
     if volume_type == 'shell':
         my_volume.Delta_n[:optical_info['volume_shape'][0]//2+2,...] = 0
 
-my_volume.plot_volume_plotly(optical_info, voxels=my_volume.Delta_n, opacity=0.1)
+# my_volume.plot_volume_plotly(optical_info, voxels=my_volume.Delta_n, opacity=0.1)
 
 
 
@@ -116,6 +124,7 @@ my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], i
 
 # Plot
 colormap = 'viridis'
+plt.clf()
 plt.rcParams['image.origin'] = 'lower'
 plt.figure(figsize=(12,2.5))
 plt.subplot(1,3,1)
@@ -127,10 +136,16 @@ plt.imshow(np.rad2deg(azim_image), cmap=colormap)
 plt.colorbar(fraction=0.046, pad=0.04)
 plt.title('Azimuth')
 ax = plt.subplot(1,3,3)
-im = plot_birefringence_lines(ret_image, azim_image,cmap=colormap, line_color='white', ax=ax)
-# im = plot_birefringence_colorized(ret_image, azim_image, ax=ax)
+if azimuth_plot_type == 'lines':
+    im = plot_birefringence_lines(ret_image, azim_image,cmap=colormap, line_color='white', ax=ax)
+else:
+    im = plot_birefringence_colorized(ret_image, azim_image, ax=ax)
 plt.colorbar(im, fraction=0.046, pad=0.04)
 plt.title('Ret+Azim')
-plt.show(block=True)
 
-plt.show(block=True)
+plt.pause(0.2)
+plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
+plt.pause(0.2)
+
+# plt.show()
+

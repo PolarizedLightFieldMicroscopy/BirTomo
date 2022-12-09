@@ -290,10 +290,11 @@ def plot_birefringence_lines(retardance_img, azimuth_img, origin='lower', upscal
 
 def plot_birefringence_colorized(retardance_img, azimuth_img, ax=None):
     # Get pixel coords
-    colors = 0.5*np.ones([azimuth_img.shape[0], azimuth_img.shape[0], 3])
+    colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[0], 3])
     A = azimuth_img * 1
-    A = np.fmod(A,np.pi)
+    # A = np.fmod(A,np.pi)
     colors[:,:,0] = A / A.max()
+    colors[:,:,1] = retardance_img / retardance_img.max()
     colors[:,:,2] = retardance_img / retardance_img.max()
     colors[np.isnan(colors)] = 0
     # Back to original size
