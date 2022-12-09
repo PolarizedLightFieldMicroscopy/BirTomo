@@ -327,17 +327,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         rayDir = self.ray_direction_basis[n_ray][:]
 
         JM_list = []
+        JM_list.append(BirefringentJMgenerators.LCP())
         for m in range(len(voxels_of_segs[n_ray])):
             ell = ell_in_voxels[n_ray][m]
             vox = voxels_of_segs[n_ray][m]
-            # try:
             Delta_n = volume_in.Delta_n[vox[0], vox[1]+micro_lens_offset[0], vox[2]+micro_lens_offset[1]]
             opticAxis = volume_in.optic_axis[:, vox[0], vox[1]+micro_lens_offset[0], vox[2]+micro_lens_offset[1]]
-            # except:
-            #     print(f'Numpy: Volume out of bound for ray {i}{j}, step: {m}')
-            # get_ellipsoid(vox)
             JM = self.voxRayJM(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
             JM_list.append(JM)
+        JM_list.append(BirefringentJMgenerators.LCP())
         effective_JM = BirefringentRaytraceLFM.rayJM_numpy(JM_list)
         return effective_JM
 

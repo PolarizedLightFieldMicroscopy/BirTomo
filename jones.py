@@ -1,6 +1,5 @@
 import numpy as np
 from my_siddon import siddon
-from object import get_ellipsoid
 
 global wavelength
 wavelength = 0.550
@@ -127,7 +126,6 @@ def calc_cummulative_JM_of_ray(ray_enter, ray_exit, ray_diff, i, j, voxel_size_u
         my_params = voxel_parameters[:, vox[0], vox[1], vox[2]]
         Delta_n = my_params[0]
         opticAxis = my_params[1:]
-        # get_ellipsoid(vox)
         JM = voxRayJM(Delta_n, opticAxis, rayDir, ell)
         JM_list.append(JM)
     effective_JM = rayJM(JM_list)
