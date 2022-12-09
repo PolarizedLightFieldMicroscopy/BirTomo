@@ -92,7 +92,7 @@ if volume_type == 'single_voxel':
 
 elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
     ellipsoid_args = {  'radius' : [5.5, 9.5, 5.5],
-                        'center' : [volume_axial_offset/optical_info['volume_shape'][0], 0.48, 0.51],   # from 0 to 1
+                        'center' : [volume_axial_offset/optical_info['volume_shape'][0], 0.50, 0.5],   # from 0 to 1
                         'delta_n' : -0.1,
                         'border_thickness' : 0.3}
 
@@ -116,12 +116,6 @@ print(f'Execution time in seconds with backend {back_end}: ' + str(executionTime
 if back_end == BackEnds.PYTORCH:
     ret_image, azim_image = ret_image.numpy(), azim_image.numpy()
 
-
-############# Torch
-# Let's create an optimizer
-# Initial guess
-my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='random')
-
 # Plot
 colormap = 'viridis'
 plt.clf()
@@ -144,7 +138,7 @@ plt.colorbar(im, fraction=0.046, pad=0.04)
 plt.title('Ret+Azim')
 
 plt.pause(0.2)
-plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
+# plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
 plt.pause(0.2)
 
 # plt.show()

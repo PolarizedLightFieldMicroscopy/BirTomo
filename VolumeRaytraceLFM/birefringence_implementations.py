@@ -577,7 +577,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     
     @staticmethod
-    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [0,0.05], 'axes_range' : [-1,1]}):
+    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [0,0.01], 'axes_range' : [-1,1]}):
         Delta_n = np.random.uniform(init_args['Delta_n_range'][0], init_args['Delta_n_range'][1], volume_shape)
         # Random axis
         a_0 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
