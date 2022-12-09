@@ -544,7 +544,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def init_volume(self, volume_shape, init_mode='zeros', init_args={}):
         
         if init_mode=='zeros':
-            voxel_parameters = torch.zeros([4,] + volume_shape)
+            if self.back_end == BackEnds.NUMPY:
+                voxel_parameters = np.zeros([4,] + volume_shape)
+            if self.back_end == BackEnds.PYTORCH:
+                voxel_parameters = torch.zeros([4,] + volume_shape)
         elif init_mode=='random':
             voxel_parameters = self.generate_random_volume(volume_shape)
         elif 'planes' in init_mode:
