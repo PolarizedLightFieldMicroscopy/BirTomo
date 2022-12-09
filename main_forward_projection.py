@@ -28,7 +28,8 @@ optical_info={
             'n_micro_lenses' : 5,
             'n_voxels_per_ml' : 1,
             'polarizer' : np.array([[1, 0], [0, 1]]),
-            'analyzer' : np.array([[1, 0], [0, 1]])}
+            'analyzer' : np.array([[1, 0], [0, 1]])
+            }
 
 
 
@@ -146,6 +147,7 @@ plt.colorbar(im, fraction=0.046, pad=0.04)
 plt.title('Ret+Azim')
 
 plt.pause(0.2)
+plt.show()
 # plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
 plt.pause(0.2)
 
