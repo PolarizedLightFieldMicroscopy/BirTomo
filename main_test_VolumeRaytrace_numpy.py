@@ -1,7 +1,5 @@
 import time
 import matplotlib.pyplot as plt
-from jones import *
-from ray_optics import *
 from plotting_tools import *
 
 """ This script using numpy and main_test_VolumeRaytraceLFM using Pytorch
@@ -12,52 +10,86 @@ from plotting_tools import *
     - Compute the final ray retardance and azimuth for every ray.
     - Generate 2D images of a single lenslet. """
 
-# Objective configuration
-magnObj = 60
-wavelength = 0.550
-naObj = 1.2
-nMedium = 1.52
-# Camera and volume configuration
-camPixPitch = 6.5
-# MLA configuration
-pixels_per_ml = 17 # num pixels behind lenslet
-microLensPitch = pixels_per_ml * camPixPitch / magnObj
-# voxPitch is the width of each voxel in um (dividing by 5 to supersample)
-voxPitch = microLensPitch / 1
-axialPitch = voxPitch
-voxel_size_um = [axialPitch, voxPitch, voxPitch]
-# Volume shape
-volume_shape = [11, 11, 11]
+camera_pix_pitch = 6.5
+objective_M = 60
+voxel_size_um = 3*[camera_pix_pitch / objective_M]
+n_micro_lenses = 25
+n_pixels_per_ml = 17
 
-# Volume span in um
-voxCtr = np.array([volume_shape[0] / 2, volume_shape[1] / 2, volume_shape[2] / 2]) # okay if not integers
-vox_ctr_idx = voxCtr.astype(int)
-volCtr = [voxCtr[0] * axialPitch, voxCtr[1] * voxPitch, voxCtr[2] * voxPitch]   # in vol units (um)
+optical_info={
+            'volume_shape' : [9,51,51], 
+            'voxel_size_um' : n_pixels_per_ml, 
+            'pixels_per_ml' : 17, 
+            'na_obj' : 1.2, 
+            'n_medium' : 1.52,
+            'wavelength' : 0.55,
+            'n_micro_lenses' : n_micro_lenses,
+            'n_voxels_per_ml' : 1}
 
-############### Implementation
+back_end = BackEnds.PYTORCH
 
-# Computed ray geometry mapping through the volume until hitting the camera
-# based on LFM configuration
-ray_enter, ray_exit, ray_diff = rays_through_vol(pixels_per_ml, naObj, nMedium, volCtr)
+# Create a Birefringent Raytracer
+BF_raytrace = BirefringentRaytraceLFM(back_end=back_end, optical_info=optical_info)
 
-# Define volume with a birefringent voxel in the center
-voxel_parameters = np.zeros([4, volume_shape[0],volume_shape[1],volume_shape[2]])
-offset = 0
-voxel_parameters[
-    :, 
-    vox_ctr_idx[0], 
-    vox_ctr_idx[1]+offset, 
-    vox_ctr_idx[2]+offset] \
-    = np.array([.1, 1, 0.0, 0])
-
-# Traverse volume for every ray, and generate retardance and azimuth images
+# Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
+# If a filepath is passed as argument, the object with all its calculations get stored/loaded from a file
 startTime = time.time()
-ret_image, azim_image = ret_and_azim_images(ray_enter, ray_exit, ray_diff, 
-        pixels_per_ml, 
-        voxel_parameters, 
-        voxel_size_um)
+BF_raytrace.compute_rays_geometry() 
 executionTime = (time.time() - startTime)
-print('Execution time in seconds with Numpy: ' + str(executionTime))
+print('Ray-tracing time in seconds: ' + str(executionTime))
+
+# Move ray tracer to GPU
+device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+print(f'Using computing device: {device}')
+BF_raytrace = BF_raytrace.to(device)
+
+
+# Single voxel
+if False:
+    my_volume = BF_raytrace.init_volume(init_mode='zeros')
+    voxel_birefringence = 0.1
+    voxel_birefringence_axis = torch.tensor([-0.5,0.5,0])
+    voxel_birefringence_axis /= voxel_birefringence_axis.norm()
+    offset = 0
+    # Disable gradients in volume, as in-place assignment on tensors with gradients is not allowed in Pytorch
+    my_volume.voxel_parameters.requires_grad = False
+    my_volume.voxel_parameters[:,   BF_raytrace.vox_ctr_idx[0]-2, 
+                                    BF_raytrace.vox_ctr_idx[1]+offset, 
+                                    BF_raytrace.vox_ctr_idx[2]+offset] = torch.tensor([
+                                                                                        voxel_birefringence, 
+                                                                                        voxel_birefringence_axis[0], 
+                                                                                        voxel_birefringence_axis[1], 
+                                                                                        voxel_birefringence_axis[2]])
+    # Re-enable gradients                                                                                           
+    my_volume.voxel_parameters.requires_grad = True
+
+else: # whole plane
+    my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='ellipsoid')
+
+# my_volume.plot_volume_plotly(opacity=0.1)
+
+
+
+with torch.no_grad():
+    # Perform same calculation with torch
+    startTime = time.time()
+    ret_image_measured, azim_image_measured = BF_raytrace.ray_trace_through_volume(my_volume) 
+    executionTime = (time.time() - startTime)
+    print('Execution time in seconds with Torch: ' + str(executionTime))
+
+    # Store GT images
+    Delta_n_GT = my_volume.Delta_n.detach().clone()
+    optic_axis_GT = my_volume.optic_axis.detach().clone()
+    ret_image_measured = ret_image_measured.detach()
+    azim_image_measured = azim_image_measured.detach()
+
+
+############# Torch
+# Let's create an optimizer
+# Initial guess
+my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='random')
 
 # Plot
 colormap = 'viridis'

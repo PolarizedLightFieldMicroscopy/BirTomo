@@ -1,5 +1,5 @@
 from VolumeRaytraceLFM.abstract_classes import *
-
+from tqdm import tqdm
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
@@ -147,12 +147,12 @@ class BirefringentVolume(BirefringentElement):
     #     return self.LR(ret, azim)
 
     @staticmethod
-    def plot_volume_plotly(optical_info, voxels=None, opacity=0.5):
+    def plot_volume_plotly(optical_info, voxels=None, opacity=0.5, colormap='gray'):
         
         import plotly.graph_objects as go
         import numpy as np
         volume_shape = optical_info['volume_shape']
-        volume_size_um = optical_info['volume_size_um']
+        volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
         # Define grid 
         z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
@@ -167,29 +167,38 @@ class BirefringentVolume(BirefringentElement):
             x=z_coords[:-1,:-1,:-1].flatten(),
             y=y_coords[:-1,:-1,:-1].flatten(),
             z=x_coords[:-1,:-1,:-1].flatten(),
-            value=voxels.flatten(),
-            # isomin=-0.1,
-            # isomax=0.1,
+            value=voxels.flatten() / voxels.max(),
+            isomin=0,
+            isomax=0.1,
             opacity=opacity, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
-            colorscale='inferno'
+            # colorscale=colormap
             ))
-        fig.data = fig.data[::-1]
+        # fig.data = fig.data[::-1]
         # Draw the whole volume span
-        fig.add_mesh3d(
-                # 8 vertices of a cube
-                x=[0, 0, volume_size_um[0], volume_size_um[0], 0, 0, volume_size_um[0], volume_size_um[0]],
-                y=[0, volume_size_um[1], volume_size_um[1], 0, 0, volume_size_um[1], volume_size_um[1], 0],
-                z=[0, 0, 0, 0, volume_size_um[2], volume_size_um[2], volume_size_um[2], volume_size_um[2]],
-                colorbar_title='z',
-                colorscale='inferno',
-                opacity=0.1,
-                # Intensity of each vertex, which will be interpolated and color-coded
-                intensity = np.linspace(0, 1, 8, endpoint=True),
-                # i, j and k give the vertices of triangles
-                i = [7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-                j = [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-                k = [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+        # fig.add_mesh3d(
+        #         # 8 vertices of a cube
+        #         x=[0, 0, volume_size_um[0], volume_size_um[0], 0, 0, volume_size_um[0], volume_size_um[0]],
+        #         y=[0, volume_size_um[1], volume_size_um[1], 0, 0, volume_size_um[1], volume_size_um[1], 0],
+        #         z=[0, 0, 0, 0, volume_size_um[2], volume_size_um[2], volume_size_um[2], volume_size_um[2]],
+        #         colorbar_title='z',
+        #         colorscale='inferno',
+        #         opacity=0.001,
+        #         # Intensity of each vertex, which will be interpolated and color-coded
+        #         intensity = np.linspace(0, 1, 8, endpoint=True),
+        #         # i, j and k give the vertices of triangles
+        #         i = [7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+        #         j = [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+        #         k = [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+        #     )
+        fig.update_layout(
+            scene = dict(
+                        xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
+                        yaxis = dict(nticks=volume_shape[1], range=[0, volume_size_um[1]]),
+                        zaxis = dict(nticks=volume_shape[2], range=[0, volume_size_um[2]]),
+                        xaxis_title='Axial dimension',),
+            # width=700,
+            margin=dict(r=0, l=0, b=0, t=0)
             )
         fig.show()
         return
@@ -234,7 +243,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         full_img_r = None
         full_img_a = None
         # Iterate micro-lenses in y direction
-        for ml_ii in range(-n_ml_half, n_ml_half+1):
+        for ml_ii in tqdm(range(-n_ml_half, n_ml_half+1), f'Computing rows of micro-lens ret+azim {self.back_end}'):
             full_img_row_r = None
             full_img_row_a = None
             # Iterate micro-lenses in x direction
@@ -327,7 +336,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         rayDir = self.ray_direction_basis[n_ray][:]
 
         JM_list = []
-        JM_list.append(BirefringentJMgenerators.LCP())
+        # JM_list.append(BirefringentJMgenerators.LCP())
         for m in range(len(voxels_of_segs[n_ray])):
             ell = ell_in_voxels[n_ray][m]
             vox = voxels_of_segs[n_ray][m]
@@ -335,7 +344,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             opticAxis = volume_in.optic_axis[:, vox[0], vox[1]+micro_lens_offset[0], vox[2]+micro_lens_offset[1]]
             JM = self.voxRayJM(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
             JM_list.append(JM)
-        JM_list.append(BirefringentJMgenerators.LCP())
+        # JM_list.append(BirefringentJMgenerators.LCP())
         effective_JM = BirefringentRaytraceLFM.rayJM_numpy(JM_list)
         return effective_JM
 
@@ -542,7 +551,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             n_planes = int(init_mode[0])
             voxel_parameters = self.generate_planes_volume(volume_shape, n_planes) # Perpendicular optic axes each with constant birefringence and orientation 
         elif init_mode=='ellipsoid':
-            voxel_parameters = self.generate_ellipsoid_volume(volume_shape, radius=[3,2.5,1.5], delta_n=0.1)
+            # Look for variables in init_args, else init with something
+            radius = init_args['radius'] if 'radius' in init_args.keys() else [5.5,5.5,3.5]
+            center = init_args['center'] if 'center' in init_args.keys() else [0,0,0]
+            delta_n = init_args['delta_n'] if 'delta_n' in init_args.keys() else 0.1
+            alpha = init_args['border_thickness'] if 'border_thickness' in init_args.keys() else 0.1
+            
+            voxel_parameters = self.generate_ellipsoid_volume(volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n)
         
         volume_ref = BirefringentVolume(back_end=self.back_end, optical_info=self.optical_info,
                                         Delta_n=voxel_parameters[0,...], optic_axis=voxel_parameters[1:,...])

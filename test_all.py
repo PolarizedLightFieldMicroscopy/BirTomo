@@ -17,15 +17,15 @@ def global_data():
     torch.set_default_tensor_type(torch.DoubleTensor)
     
     # Objective configuration
-    magnObj = 60
+    objective_M = 60
     wavelength = 0.550
     naObj = 1.2
     nMedium = 1.52
     # Camera and volume configuration
-    camPixPitch = 6.5
+    camera_pix_pitch = 6.5
     # MLA configuration
     pixels_per_ml = 5 # num pixels behind lenslet
-    microLensPitch = pixels_per_ml * camPixPitch / magnObj
+    microLensPitch = pixels_per_ml * camera_pix_pitch / objective_M
     n_micro_lenses = 1
 
     # voxPitch is the width of each voxel in um (dividing by 5 to supersample)
@@ -39,14 +39,14 @@ def global_data():
 
     optic_config = OpticConfig()
     # Set objective info
-    optic_config.PSF_config.M = magnObj      # Objective magnification
+    optic_config.PSF_config.M = objective_M      # Objective magnification
     optic_config.PSF_config.NA = naObj    # Objective NA
     optic_config.PSF_config.ni = nMedium   # Refractive index of sample (experimental)
     optic_config.PSF_config.ni0 = nMedium  # Refractive index of sample (design value)
     optic_config.PSF_config.wvl = wavelength
     optic_config.mla_config.n_pixels_per_mla = pixels_per_ml
     optic_config.mla_config.n_micro_lenses = n_micro_lenses
-    optic_config.camera_config.sensor_pitch = camPixPitch
+    optic_config.camera_config.sensor_pitch = camera_pix_pitch
     optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
 
     optic_config.volume_config.volume_shape = volume_shape
