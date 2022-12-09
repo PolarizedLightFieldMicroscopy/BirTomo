@@ -25,8 +25,10 @@ optical_info={
             'na_obj' : 1.2, 
             'n_medium' : 1.52,
             'wavelength' : 0.55,
-            'n_micro_lenses' : 25,
-            'n_voxels_per_ml' : 1}
+            'n_micro_lenses' : 5,
+            'n_voxels_per_ml' : 1,
+            'polarizer' : np.array([[1, 0], [0, 1]]),
+            'analyzer' : np.array([[1, 0], [0, 1]])}
 
 
 

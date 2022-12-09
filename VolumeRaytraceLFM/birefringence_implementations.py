@@ -443,7 +443,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 else:
                     effective_JM = self.calc_cummulative_JM_of_ray_numpy(i, j, volume_in, micro_lens_offset)
                     ret_image[i, j] = self.retardance(effective_JM)
-                    azim_image[i, j] = self.azimuth(effective_JM)
+                    if np.isclose(ret_image[i, j], 0.0):
+                        azim_image[i, j] = 0
+                    else:
+                        azim_image[i, j] = self.azimuth(effective_JM)
         return ret_image, azim_image
 
 
@@ -766,6 +769,6 @@ class BirefringentJMgenerators(BirefringentElement):
     def universal_compensator(retA, retB):
         '''Universal Polarizer
         Used as the polarizer for the LC-PolScope'''
-        return BirefringentJMgenerators.LR_azim0(retB) @ BirefringentJMgenerators.LR_azim0(retA) @ BirefringentJMgenerators.LP(np.pi / 4)
+        return BirefringentJMgenerators.LR_azim0(retB) @ BirefringentJMgenerators.LR(retA, np.pi / 4) @ BirefringentJMgenerators.LP(0)
 
 
