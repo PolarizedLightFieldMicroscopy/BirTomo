@@ -59,6 +59,8 @@ class OpticalElement(OpticBlock):
                 new_torch_args['optic_config'].PSF_config.NA = optical_info['na_obj']
                 new_torch_args['optic_config'].PSF_config.ni = optical_info['n_medium']
                 new_torch_args['optic_config'].PSF_config.wvl = optical_info['wavelength']
+                new_torch_args['optic_config'].pol_config.polarizer = optical_info['polarizer']
+                new_torch_args['optic_config'].pol_config.analyzer = optical_info['analyzer']
 
             super(OpticalElement, self).__init__(optic_config=new_torch_args['optic_config'], 
                     members_to_learn=new_torch_args['members_to_learn'] if 'members_to_learn' in new_torch_args.keys() else [])

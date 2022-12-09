@@ -63,7 +63,10 @@ def global_data():
                 'n_medium' : nMedium,
                 'wavelength' : wavelength,
                 'n_micro_lenses' : n_micro_lenses,
-                'n_voxels_per_ml' : 1}
+                'n_voxels_per_ml' : 1,
+                'polarizer' : np.array([[1, 0], [0, 1]]),
+                'analyzer' : np.array([[1, 0], [0, 1]])
+                }
 
 
     return {'optic_config': optic_config, 'optical_info' : optical_info}
