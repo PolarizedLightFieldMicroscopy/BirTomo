@@ -13,13 +13,13 @@ torch.set_default_tensor_type(torch.DoubleTensor)
 camera_pix_pitch = 6.5
 objective_M = 60
 optical_info={
-            'volume_shape' : [15,51,51], 
+            'volume_shape' : [11,51,51], 
             'voxel_size_um' : 3*[camera_pix_pitch / objective_M], 
             'pixels_per_ml' : 17, 
             'na_obj' : 1.2, 
             'n_medium' : 1.52,
             'wavelength' : 0.55,
-            'n_micro_lenses' : 25,
+            'n_micro_lenses' : 15,
             'n_voxels_per_ml' : 1}
 
 
@@ -27,7 +27,7 @@ training_params = {
     'n_epochs' : 5000,
     'azimuth_weight' : 0.1,
     'lr' : 1e-2,
-    'output_posfix' : '1ml'
+    'output_posfix' : '11ml_atan2loss'
 }
 
 
@@ -35,11 +35,11 @@ training_params = {
 # Volume type
 # number is the shift from the end of the volume, change it as you wish, do single_voxel{volume_shape[0]//2} for a voxel in the center
 # for shift in range(-5,6):
-shift_from_center = -1
+shift_from_center = 0
 volume_axial_offset = optical_info['volume_shape'][0]//2+shift_from_center #for center
 # volume_type = 'ellipsoid'
-# volume_type = 'shell'
-volume_type = 'single_voxel' 
+volume_type = 'shell'
+# volume_type = 'single_voxel' 
 
 # Plot azimuth
 # azimuth_plot_type = 'lines'
@@ -73,6 +73,7 @@ if back_end == BackEnds.PYTORCH:
     device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
+    device = "cpu"
     print(f'Using computing device: {device}')
     BF_raytrace = BF_raytrace.to(device)
 
@@ -102,19 +103,25 @@ if volume_type == 'single_voxel':
     my_volume.optic_axis.requires_grad = True
 
 elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
-    ellipsoid_args = {  'radius' : [5.5, 9.5, 5.5],
-                        'center' : [volume_axial_offset/optical_info['volume_shape'][0], 0.50, 0.5],   # from 0 to 1
+    ellipsoid_args = {  'radius' : [3.5, 4.5, 3.5],
+                        'center' : [volume_axial_offset/optical_info['volume_shape'][0], 0.48, 0.51],   # from 0 to 1
                         'delta_n' : -0.1,
                         'border_thickness' : 0.3}
 
     my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='ellipsoid', init_args=ellipsoid_args)
 
+    my_volume.Delta_n.requires_grad = False
+    my_volume.optic_axis.requires_grad = False
 
     # Do we want a shell? let's remove some of the volume
     if volume_type == 'shell':
-        my_volume.Delta_n[:optical_info['volume_shape'][0]//2+2,...] = 0
+        my_volume.Delta_n[:optical_info['volume_shape'][0]//2+1,...] = 0
+        
+    my_volume.Delta_n.requires_grad = True
+    my_volume.optic_axis.requires_grad = True
 
-# my_volume.plot_volume_plotly(optical_info, voxels=my_volume.Delta_n, opacity=0.1)
+with torch.no_grad():
+    my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
 
 
 
@@ -130,10 +137,6 @@ BF_raytrace.compute_rays_geometry()
 executionTime = (time.time() - startTime)
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
-# Move ray tracer to GPU
-device = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
 print(f'Using computing device: {device}')
 BF_raytrace = BF_raytrace.to(device)
 
@@ -150,6 +153,7 @@ with torch.no_grad():
     optic_axis_GT = my_volume.optic_axis.detach().clone()
     ret_image_measured = ret_image_measured.detach()
     azim_image_measured = azim_image_measured.detach()
+    azim_comp_measured = torch.arctan2(torch.sin(azim_image_measured), torch.cos(azim_image_measured)).detach()
 
 
 ############# Torch
@@ -165,7 +169,7 @@ loss_function = torch.nn.L1Loss()
 # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
 losses = []
 plt.ion()
-figure = plt.figure(figsize=(15,5))
+figure = plt.figure(figsize=(18,6))
 plt.rcParams['image.origin'] = 'lower'
 
 co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
@@ -175,8 +179,9 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     # Vector difference
     # co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
     # L = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).sqrt().mean()
+    azim_diff = azim_comp_measured - torch.arctan2(torch.sin(azim_image_current), torch.cos(azim_image_current))
     L = loss_function(ret_image_measured, ret_image_current) + \
-        training_params['azimuth_weight']*(torch.cos(azim_image_measured) - torch.cos(azim_image_current)).abs().mean() #+ 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
+        training_params['azimuth_weight']*(azim_diff).abs().mean() #+ 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
     #     (torch.cos(azim_image_measured-azim_image_current)**2 + torch.sin(azim_image_measured-azim_image_current)**2).abs().mean()
         # cos + sine
         # 0.1*(torch.cos(azim_image_measured) - torch.cos(azim_image_current)).abs().mean() + 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
@@ -193,7 +198,7 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     losses.append(L.item())
 
 
-    if ep%50==0:
+    if ep%10==0:
         plt.clf()
         plt.subplot(2,4,1)
         plt.imshow(ret_image_measured.detach().cpu().numpy())
@@ -213,7 +218,7 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         plt.colorbar()
         plt.title('Final Retardance')
         plt.subplot(2,4,6)
-        plt.imshow(azim_image_current.detach().cpu().numpy())
+        plt.imshow(np.rad2deg(azim_image_current.detach().cpu().numpy()))
         plt.colorbar()
         plt.title('Final Azimuth')
         plt.subplot(2,4,7)
@@ -222,6 +227,9 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         plt.title('Final Volume MIP')
         plt.subplot(2,4,8)
         plt.plot(list(range(len(losses))),losses)
+        
+        plt.gca().yaxis.set_label_position("right")
+        plt.gca().yaxis.tick_right()
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
 
