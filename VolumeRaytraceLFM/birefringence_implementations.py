@@ -147,8 +147,9 @@ class BirefringentVolume(BirefringentElement):
     #     return self.LR(ret, azim)
 
     @staticmethod
-    def plot_volume_plotly(optical_info, voxels=None, opacity=0.5, colormap='gray'):
+    def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
         
+        voxels = voxels_in - voxels_in.min()
         import plotly.graph_objects as go
         import numpy as np
         volume_shape = optical_info['volume_shape']
@@ -196,9 +197,11 @@ class BirefringentVolume(BirefringentElement):
                         xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
                         yaxis = dict(nticks=volume_shape[1], range=[0, volume_size_um[1]]),
                         zaxis = dict(nticks=volume_shape[2], range=[0, volume_size_um[2]]),
-                        xaxis_title='Axial dimension',),
+                        xaxis_title='Axial dimension',
+                        aspectratio = dict( x=volume_size_um[0], y=volume_size_um[1], z=volume_size_um[2] ), aspectmode = 'manual'),
             # width=700,
-            margin=dict(r=0, l=0, b=0, t=0)
+            margin=dict(r=0, l=0, b=0, t=0),
+            autosize=True
             )
         fig.show()
         return
