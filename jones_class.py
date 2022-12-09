@@ -209,6 +209,7 @@ class JonesMatrixProperties():
 
     def azimuth(self):
         '''Rotation angle of the fast axis (neg phase)'''
+        # This azimuth calculation does not account for all quadrants appropriately.
         values, vectors = self.eig()
         real_vecs = np.real(vectors)
         if np.imag(values[0]) < 0:

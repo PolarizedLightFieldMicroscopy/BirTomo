@@ -146,11 +146,6 @@ def calc_retardance(JM):
     value[value.abs()==1] = 0
     arctan = torch.arctan(1j * torch.sqrt((off_diag_sum / diag_sum) ** 2 + (diag_diff / diag_sum) ** 2))
     retardance = 2 * torch.real(arctan)
-    
-    # Alternative way of computing this, according to:
-    # "Three-dimensional polarization ray-tracing calculus II: retardance"
-    # x = np.linalg.eigvals(JM)
-    # retardance = np.angle(x[1], deg=False)-np.angle([x[0]], deg=False)
     return retardance.abs()
 
 def calc_azimuth(JM):
@@ -168,17 +163,15 @@ def calc_azimuth(JM):
     b = (off_diag_sum / diag_sum).imag
     faulty_index_a = a==0
     faulty_index_b = b==0
-    azimuth = torch.real(torch.arctan2(a, b)) / 2 + torch.pi / 2
+    azimuth = torch.pi / 2 - torch.arctan2(b, -a) / 2
     azimuth[faulty_index_a.bitwise_and(faulty_index_b)] = 0
     return azimuth
 
 
 
 def main():
-    JM = torch.tensor([[3, 0], [0, 0]])
-    ret = calc_retardance(JM)
-    azim = calc_azimuth(JM)
-    print(ret / np.pi, azim / np.pi)
+    pass
+
 
 if __name__ == '__main__':
     main()
