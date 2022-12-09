@@ -1,6 +1,5 @@
 import numpy as np
 from my_siddon import *
-from object import *
 from ray_optics import *
 from jones import *
 from plotting_tools import *

@@ -1,34 +1,33 @@
 import torch
 from VolumeRaytraceLFM.birefringence_implementations import *
 from waveblocks.utils.misc_utils import *
-from ray import *
-from jones import *
 import time
 from tqdm import tqdm
 
-# Set objective info
-optic_config = OpticConfig()
-optic_config.PSF_config.M = 60      # Objective magnification
-optic_config.PSF_config.NA = 1.2    # Objective NA
-optic_config.PSF_config.ni = 1.52   # Refractive index of sample (experimental)
-optic_config.PSF_config.ni0 = 1.52  # Refractive index of sample (design value)
-optic_config.PSF_config.wvl = 0.550
-optic_config.mla_config.n_pixels_per_mla = 17
-optic_config.camera_config.sensor_pitch = 6.5
-optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
-optic_config.mla_config.n_micro_lenses = 3
+camPixPitch = 6.5
+magnObj = 60
+voxel_size_um = 3*[camPixPitch / magnObj]
+n_micro_lenses = 5
 
-optic_config.volume_config.volume_shape = [21, 111, 111]
-optic_config.volume_config.voxel_size_um = [1,] + 2*[optic_config.mla_config.pitch / optic_config.PSF_config.M]
-optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
+optical_info={
+            'volume_shape' : 3*[11], 
+            'voxel_size_um' : voxel_size_um, 
+            'pixels_per_ml' : 17, 
+            'na_obj' : 1.2, 
+            'n_medium' : 1.52,
+            'wavelength' : 0.55,
+            'n_micro_lenses' : n_micro_lenses,
+            'n_voxels_per_ml' : 1}
+
+back_end = BackEnds.PYTORCH
 
 # Create a Birefringent Raytracer
-BF_raytrace = BirefringentRaytraceLFM(optic_config=optic_config, members_to_learn=[])
+BF_raytrace = BirefringentRaytraceLFM(back_end=back_end, optical_info=optical_info)
 
 # Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
 # If a filepath is passed as argument, the object with all its calculations get stored/loaded from a file
 startTime = time.time()
-BF_raytrace = BF_raytrace.compute_rays_geometry() #'test_ray_geometry'
+BF_raytrace.compute_rays_geometry() 
 executionTime = (time.time() - startTime)
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
@@ -60,9 +59,8 @@ if False:
     my_volume.voxel_parameters.requires_grad = True
 
 else: # whole plane
-    my_volume = BF_raytrace.init_volume(init_mode='1planes')
-    volume = BF_raytrace.generate_ellipsoid_volume(volume_shape=optic_config.volume_config.volume_shape, radius=[5,5.5,5.5], delta_n=0.1)
-    my_volume.voxel_parameters = volume
+    my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='ellipsoid')
+
 # my_volume.plot_volume_plotly(opacity=0.1)
 
 
@@ -70,12 +68,13 @@ else: # whole plane
 with torch.no_grad():
     # Perform same calculation with torch
     startTime = time.time()
-    ret_image_measured, azim_image_measured = BF_raytrace.ray_trace_through_volume(my_volume) #BF_raytrace.ret_and_azim_images(my_volume)
+    ret_image_measured, azim_image_measured = BF_raytrace.ray_trace_through_volume(my_volume) 
     executionTime = (time.time() - startTime)
     print('Execution time in seconds with Torch: ' + str(executionTime))
 
     # Store GT images
-    volume_GT = my_volume.voxel_parameters[0].detach().clone()
+    Delta_n_GT = my_volume.Delta_n.detach().clone()
+    optic_axis_GT = my_volume.optic_axis.detach().clone()
     ret_image_measured = ret_image_measured.detach()
     azim_image_measured = azim_image_measured.detach()
 
@@ -83,8 +82,11 @@ with torch.no_grad():
 ############# Torch
 # Let's create an optimizer
 # Initial guess
-my_volume = BF_raytrace.init_volume(init_mode='random')
-optimizer = torch.optim.Adam([my_volume.voxel_parameters], lr=0.0001)
+my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='random')
+my_volume.members_to_learn.append('Delta_n')
+my_volume.members_to_learn.append('optic_axis')
+
+optimizer = torch.optim.Adam(my_volume.get_trainable_variables(), lr=0.01)
 n_epochs = 500
 sparse_lambda = 0.1
 loss_function = torch.nn.L1Loss()
@@ -129,7 +131,7 @@ for ep in tqdm(range(n_epochs), "Minimizing"):
         plt.colorbar()
         plt.title('Initial Azimuth')
         plt.subplot(2,4,3)
-        plt.imshow(volume_2_projections(volume_GT.unsqueeze(0))[0,0].detach().cpu().numpy())
+        plt.imshow(volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0].detach().cpu().numpy())
         plt.colorbar()
         plt.title('Initial volume MIP')
 
@@ -142,7 +144,7 @@ for ep in tqdm(range(n_epochs), "Minimizing"):
         plt.colorbar()
         plt.title('Final Azimuth')
         plt.subplot(2,4,7)
-        plt.imshow(volume_2_projections(my_volume.voxel_parameters[0].unsqueeze(0))[0,0].detach().cpu().numpy())
+        plt.imshow(volume_2_projections(my_volume.Delta_n.unsqueeze(0))[0,0].detach().cpu().numpy())
         plt.colorbar()
         plt.title('Final Volume MIP')
         plt.subplot(2,4,8)
@@ -154,5 +156,5 @@ for ep in tqdm(range(n_epochs), "Minimizing"):
 
 
 # Display
-plt.savefig("Optimization_ellipse_cosine_diff.pdf")
+plt.savefig("Optimization_ellipse_cosine_diff_new_implementation.pdf")
 plt.show()

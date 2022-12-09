@@ -1,6 +1,6 @@
 import numpy as np
 from my_siddon import *
-from object import *
+from old.object import *
 from jones import *
 from plotting_tools import *
 
