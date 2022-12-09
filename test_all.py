@@ -252,6 +252,7 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
         3*[21],
         3*[50],
     ]
+    torch.set_grad_enabled(False)
     # Define the voxel parameters
     # delta_n = 0.1
     # optic_axis = [1.0,0.0,0]
@@ -287,8 +288,7 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     
     # Compute retardance and azimuth images with both methods
     ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ret_and_azim_images(voxel_numpy)
-    with torch.no_grad():
-        ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images(voxel_torch)
+    ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images(voxel_torch)
     # Use this in debug console to visualize errors
     # plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
@@ -421,12 +421,73 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
+@pytest.mark.parametrize('volume_init_mode', [
+        'random',
+        'ellipsoid',
+        '1planes',
+        '3planes'
+    ])
+def test_torch_auto_differentiation(global_data, volume_init_mode):
+    # Enable torch gradients
+    torch.set_grad_enabled(True)
+    # Gather global data
+    local_data = copy.deepcopy(global_data)
+    optical_info = local_data['optical_info']
+
+    # Simplify the settings, so it's fast to compute
+    volume_shape = [3,3,3]
+    optical_info['volume_shape'] = volume_shape
+    optical_info['pixels_per_ml'] = 17
+
+    BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, optical_info=optical_info)
+    BF_raytrace_torch.compute_rays_geometry()
+
+    volume_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode=volume_init_mode)
+    # make volume trainable, by telling waveblocks which variables to optimize
+    volume_torch_random.members_to_learn.append('Delta_n')
+    volume_torch_random.members_to_learn.append('optic_axis')
+
+    # Create optimizer, which will take care of applying the gradients to the volume once computed
+    optimizer = torch.optim.Adam(volume_torch_random.get_trainable_variables(), lr=1e-1)
+    # Set all gradients to zero
+    optimizer.zero_grad()
+
+
+    # Compute a forward projection
+    ret_image, azim_image = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
+    # Calculate a loss, for example minimizing the mean of both images
+    L = ret_image.mean() + azim_image.mean()
+
+    # Compute and propagate the gradients
+    L.backward()
+
+    # Check if the gradients where properly propagated
+    assert volume_torch_random.Delta_n.grad.sum() != 0, 'Gradients were not propagated to the volumes Delta_n correctly'
+    assert volume_torch_random.optic_axis.grad.sum() != 0, 'Gradients were not propagated to the volumes optic_axis correctly'
+
+    # Calculate the volume values before updating the values with the gradients
+    Delta_n_sum_initial = volume_torch_random.Delta_n.sum()
+    optic_axis_sum_initial = volume_torch_random.optic_axis.sum()
+
+    # Update the volume
+    optimizer.step()
+
+    # Calculate the volume values before updating the values with the gradients
+    Delta_n_sum_final = volume_torch_random.Delta_n.sum()
+    optic_axis_sum_final = volume_torch_random.optic_axis.sum()
+
+    # These should be different
+    assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
+    assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
+
+
 
 def main():
+    test_torch_auto_differentiation(global_data())
     # Multi lenslet example
     # test_forward_projection_different_volumes(global_data(), 'ellipsoid')
-    test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[51])
-    test_rays_computation(global_data(), 17)
+    # test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[51])
+    # test_rays_computation(global_data(), 17)
     # test_compute_JonesMatrices(global_data(), 3*[11])
     import sys
     sys.exit()
