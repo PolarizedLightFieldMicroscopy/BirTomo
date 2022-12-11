@@ -15,3 +15,7 @@ For the iterative reconstruction, the main script is main_3D_bire_recon_pytorch.
 virtual environment should include the waveblocks requirements
 
 See environment.txt and environment.yml files.
+
+## Testing
+- Run pytest in terminal to check that all the tests pass.
+- Run ```pytest -v test_jones.py::test_polscope``` to run a particular test.

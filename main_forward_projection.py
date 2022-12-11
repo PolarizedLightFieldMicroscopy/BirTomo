@@ -117,8 +117,8 @@ startTime = time.time()
 # Create non-identity polarizers and analyzers
 if False:
     # LC-PolScope setup
-    optical_info['polarizer'] = BirefringentJMgenerators.LCP()
-    optical_info['analyzer'] = BirefringentJMgenerators.universal_compensator(np.pi / 4, np.pi / 2)
+    optical_info['polarizer'] = JonesMatrixGenerators.left_circular_polarizer()
+    optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator(np.pi / 4, np.pi / 2)
 ret_image, azim_image = BF_raytrace.ray_trace_through_volume(my_volume) 
 executionTime = (time.time() - startTime)
 print(f'Execution time in seconds with backend {back_end}: ' + str(executionTime))

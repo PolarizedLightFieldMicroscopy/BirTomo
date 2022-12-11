@@ -462,7 +462,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
                 JM = np.array([[diag1, offdiag], [offdiag, diag2]])
             else:
-                JM = BirefringentJMgenerators.LR(ret,azim)
+                JM = JonesMatrixGenerators.linear_retarder(ret,azim)
 
         elif self.back_end == BackEnds.PYTORCH:
             n_voxels = opticAxis.shape[0]
@@ -486,7 +486,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 JM[:,1,0] = offdiag
                 JM[:,1,1] = diag2
             else: # Much more operations in this method
-                JM = BirefringentJMgenerators.LR(ret, azim, self.back_end)
+                JM = JonesMatrixGenerators.linear_retarder(ret, azim, self.back_end)
         return JM
 
     @staticmethod
@@ -615,9 +615,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 ###########################################################################################
     # Constructors for different types of elements
     # This methods are constructors only, they don't support torch optimization of internal variables
-    # todo: rename such that it is clear that these are presets for different birefringent objects
 
-class BirefringentJMgenerators(BirefringentElement):
+class JonesMatrixGenerators(BirefringentElement):
     def __init__(self, back_end : BackEnds = BackEnds.NUMPY):
         super(BirefringentElement, self).__init__(back_end=back_end, torch_args={}, optical_info={})
 
@@ -638,23 +637,23 @@ class BirefringentJMgenerators(BirefringentElement):
         return R
 
     @staticmethod
-    def LR(ret, azim, back_end=BackEnds.NUMPY):
+    def linear_retarder(ret, azim, back_end=BackEnds.NUMPY):
         '''Linear retarder
         Args:
             ret (float): retardance [radians]
             azim (float): azimuth angle of fast axis [radians]
         Return: Jones matrix    
         '''
-        retarder_azim0 = BirefringentJMgenerators.LR_azim0(ret, back_end=back_end)
-        R = BirefringentJMgenerators.rotator(azim, back_end=back_end)
-        Rinv = BirefringentJMgenerators.rotator(-azim, back_end=back_end)
+        retarder_azim0 = JonesMatrixGenerators.linear_retarder_azim0(ret, back_end=back_end)
+        R = JonesMatrixGenerators.rotator(azim, back_end=back_end)
+        Rinv = JonesMatrixGenerators.rotator(-azim, back_end=back_end)
         return R @ retarder_azim0 @ Rinv
 
     @staticmethod
-    def LR_azim0(ret, back_end=BackEnds.NUMPY):
+    def linear_retarder_azim0(ret, back_end=BackEnds.NUMPY):
         '''todo'''
         if back_end == BackEnds.NUMPY:
-            return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
+            return np.array([[np.exp(-1j * ret / 2), 0], [0, np.exp(1j * ret / 2)]])
         else:
             return torch.cat(
                 (torch.cat((torch.exp(1j * ret / 2).unsqueeze(1), torch.zeros(len(ret),1)),1).unsqueeze(2),
@@ -664,23 +663,24 @@ class BirefringentJMgenerators(BirefringentElement):
             return torch.tensor([[torch.exp(1j * ret / 2), 0], [0, torch.exp(-1j * ret / 2)]])
 
     @staticmethod
-    def LR_azim90(ret, back_end=BackEnds.NUMPY):
-        '''todo'''
+    def linear_retarter_azim90(ret, back_end=BackEnds.NUMPY):
+        '''todo
+        using same convention as linear_retarder_azim90'''
         if back_end == BackEnds.NUMPY:
-            return np.array([[np.exp(-1j * ret / 2), 0], [0, np.exp(1j * ret / 2)]])
+            return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
             return torch.tensor([torch.exp(-1j * ret / 2), 0], [0, torch.exp(1j * ret / 2)])
 
     @staticmethod
-    def QWP(azim):
+    def quarter_waveplate(azim):
         '''Quarter Waveplate
         Linear retarder with lambda/4 or equiv pi/2 radians
         Commonly used to convert linear polarized light to circularly polarized light'''
         ret = np.pi / 2
-        return BirefringentJMgenerators.LR(ret, azim)
+        return JonesMatrixGenerators.linear_retarder(ret, azim)
 
     @staticmethod
-    def HWP(azim):
+    def half_waveplate(azim):
         '''Half Waveplate
         Linear retarder with lambda/2 or equiv pi radians
         Commonly used to rotate the plane of linear polarization'''
@@ -693,7 +693,7 @@ class BirefringentJMgenerators(BirefringentElement):
         return np.array([[c, s], [s, -c]])
 
     @staticmethod
-    def LP(theta):
+    def linear_polarizer(theta):
         '''Linear Polarizer
         Args:
             theta: angle that light can pass through
@@ -708,27 +708,87 @@ class BirefringentJMgenerators(BirefringentElement):
         return np.array([[J00, J01], [J10, J11]])
     
     @staticmethod
-    def RCP():
+    def right_circular_polarizer():
         '''Right Circular Polarizer'''
         return 1 / 2 * np.array([[1, -1j], [1j, 1]])
 
     @staticmethod
-    def LCP():
+    def left_circular_polarizer():
         '''Left Circular Polarizer'''
         return 1 / 2 * np.array([[1, 1j], [-1j, 1]])
     @staticmethod
-    def RCR(ret):
+    def right_circular_retarder(ret):
         '''Right Circular Retarder'''
-        return BirefringentJMgenerators.rotator(-ret / 2)
+        return JonesMatrixGenerators.rotator(-ret / 2)
     @staticmethod
-    def LCR(ret):
+    def left_circular_retarder(ret):
         '''Left Circular Retarder'''
-        return BirefringentJMgenerators.rotator(ret / 2)
+        return JonesMatrixGenerators.rotator(ret / 2)
+
+    @staticmethod
+    def polscope_analyzer():
+        '''Acts as a circular polarizer
+        Inhomogeneous elements because eigenvectors are linear (-45 deg) and (right) circular polarization states
+        Source: 2010 Polarized Light pg. 224'''
+        QWP_LP = JonesMatrixGenerators.quarter_waveplate(0) @ JonesMatrixGenerators.linear_polarizer(np.pi / 4)
+        LP_QWP = JonesMatrixGenerators.linear_polarizer(np.pi / 4) @ JonesMatrixGenerators.quarter_waveplate(0)
+        
+        return 1 / (2 * np.sqrt(2)) * np.array([[1 - 1j, 1 + 1j], [1 - 1j, 1 + 1j]])
 
     @staticmethod
     def universal_compensator(retA, retB):
         '''Universal Polarizer
         Used as the polarizer for the LC-PolScope'''
-        return BirefringentJMgenerators.LR_azim0(retB) @ BirefringentJMgenerators.LR(retA, np.pi / 4) @ BirefringentJMgenerators.LP(0)
+        return JonesMatrixGenerators.linear_retarder_azim0(retB) @ JonesMatrixGenerators.linear_retarder(retA, -np.pi / 4) @ JonesMatrixGenerators.linear_polarizer(0)
+
+    @staticmethod
+    def universal_compensator(retA, retB):
+        '''Universal Polarizer
+        Used as the polarizer for the LC-PolScope'''
+        LP = JonesMatrixGenerators.linear_polarizer(0)
+        LCA = JonesMatrixGenerators.linear_retarder(retA, -np.pi / 4)
+        LCB = JonesMatrixGenerators.linear_retarder_azim0(retB)
+        return LCB @ LCA @ LP
+
+    @staticmethod
+    def universal_compensator_modes(setting=0, swing=0):
+        '''Settings for the LC-PolScope polarizer
+        Parameters:
+            setting (int): LC-PolScope setting number between 0 and 4
+            swing (float): proportion of wavelength, for ex 0.03
+        Returns:
+            Jones matrix'''
+        swing_rad = swing * 2 * np.pi
+        if setting == 0:
+            retA = np.pi / 2
+            retB = np.pi
+        elif setting == 1:
+            retA = np.pi / 2 + swing_rad
+            retB = np.pi
+        elif setting == 2:
+            retA = np.pi / 2
+            retB = np.pi + swing_rad
+        elif setting == 3:
+            retA = np.pi / 2
+            retB = np.pi - swing_rad
+        elif setting == 4:
+            retA = np.pi / 2 - swing_rad
+            retB = np.pi
+        return JonesMatrixGenerators.universal_compensator(retA, retB)
 
 
+class JonesVectorGenerators(BirefringentElement):
+    def __init__(self, back_end : BackEnds = BackEnds.NUMPY):
+        super(BirefringentElement, self).__init__(back_end=back_end, torch_args={}, optical_info={})
+
+    @staticmethod
+    def right_circular(back_end=BackEnds.NUMPY):
+        return np.array([1, -1j])
+
+    @staticmethod
+    def left_circular(back_end=BackEnds.NUMPY):
+        return np.array([1, 1j])
+
+    @staticmethod
+    def linear(angle):
+        return JonesMatrixGenerators.rotator(angle) @ np.array([1, 0])
