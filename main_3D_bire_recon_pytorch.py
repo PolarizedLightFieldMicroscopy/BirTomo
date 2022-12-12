@@ -12,10 +12,11 @@ torch.set_default_tensor_type(torch.DoubleTensor)
 
 camera_pix_pitch = 6.5
 objective_M = 60
+pixels_per_ml = 17
 optical_info={
-            'volume_shape' : [11,51,51], 
-            'voxel_size_um' : 3*[camera_pix_pitch / objective_M], 
-            'pixels_per_ml' : 17, 
+            'volume_shape' : [9,51,51], 
+            'voxel_size_um' : 3*[camera_pix_pitch * pixels_per_ml / objective_M], 
+            'pixels_per_ml' : pixels_per_ml, 
             'na_obj' : 1.2, 
             'n_medium' : 1.52,
             'wavelength' : 0.55,
@@ -28,7 +29,7 @@ optical_info={
 
 training_params = {
     'n_epochs' : 5000,
-    'azimuth_weight' : 0.1,
+    'azimuth_weight' : 1,
     'lr' : 1e-2,
     'output_posfix' : '11ml_atan2loss'
 }
@@ -38,7 +39,7 @@ training_params = {
 # Volume type
 # number is the shift from the end of the volume, change it as you wish, do single_voxel{volume_shape[0]//2} for a voxel in the center
 # for shift in range(-5,6):
-shift_from_center = 0
+shift_from_center = -1
 volume_axial_offset = optical_info['volume_shape'][0]//2+shift_from_center #for center
 # volume_type = 'ellipsoid'
 volume_type = 'shell'
@@ -92,11 +93,11 @@ if volume_type == 'single_voxel':
     # Set delta_n
     my_volume.Delta_n.requires_grad = False
     my_volume.optic_axis.requires_grad = False
-    my_volume.Delta_n[volume_axial_offset, 
+    my_volume.get_delta_n()[volume_axial_offset, 
                                     BF_raytrace.vox_ctr_idx[1], 
                                     BF_raytrace.vox_ctr_idx[2]] = voxel_delta_n
     # set optical_axis
-    my_volume.optic_axis[:, volume_axial_offset, 
+    my_volume.get_optic_axis()[:, volume_axial_offset, 
                             BF_raytrace.vox_ctr_idx[1], 
                             BF_raytrace.vox_ctr_idx[2]] = torch.tensor([voxel_birefringence_axis[0], 
                                                                             voxel_birefringence_axis[1], 
@@ -118,13 +119,13 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 
     # Do we want a shell? let's remove some of the volume
     if volume_type == 'shell':
-        my_volume.Delta_n[:optical_info['volume_shape'][0]//2+1,...] = 0
+        my_volume.get_delta_n()[:optical_info['volume_shape'][0]//2+1,...] = 0
         
     my_volume.Delta_n.requires_grad = True
     my_volume.optic_axis.requires_grad = True
 
-with torch.no_grad():
-    my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
+# with torch.no_grad():
+#     my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.1)
 
 
 
@@ -152,8 +153,8 @@ with torch.no_grad():
     print('Execution time in seconds with Torch: ' + str(executionTime))
 
     # Store GT images
-    Delta_n_GT = my_volume.Delta_n.detach().clone()
-    optic_axis_GT = my_volume.optic_axis.detach().clone()
+    Delta_n_GT = my_volume.get_delta_n().detach().clone()
+    optic_axis_GT = my_volume.get_optic_axis().detach().clone()
     ret_image_measured = ret_image_measured.detach()
     azim_image_measured = azim_image_measured.detach()
     azim_comp_measured = torch.arctan2(torch.sin(azim_image_measured), torch.cos(azim_image_measured)).detach()
@@ -184,7 +185,7 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     # L = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).sqrt().mean()
     azim_diff = azim_comp_measured - torch.arctan2(torch.sin(azim_image_current), torch.cos(azim_image_current))
     L = loss_function(ret_image_measured, ret_image_current) + \
-        training_params['azimuth_weight']*(azim_diff).abs().mean() #+ 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
+        training_params['azimuth_weight'] * (2 * (1 - torch.cos(azim_image_measured - azim_image_current))).mean() 
     #     (torch.cos(azim_image_measured-azim_image_current)**2 + torch.sin(azim_image_measured-azim_image_current)**2).abs().mean()
         # cos + sine
         # 0.1*(torch.cos(azim_image_measured) - torch.cos(azim_image_current)).abs().mean() + 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
@@ -225,7 +226,7 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         plt.colorbar()
         plt.title('Final Azimuth')
         plt.subplot(2,4,7)
-        plt.imshow(volume_2_projections(my_volume.Delta_n.unsqueeze(0))[0,0].detach().cpu().numpy())
+        plt.imshow(volume_2_projections(my_volume.get_delta_n().unsqueeze(0))[0,0].detach().cpu().numpy())
         plt.colorbar()
         plt.title('Final Volume MIP')
         plt.subplot(2,4,8)
@@ -244,5 +245,5 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
 
 
 # Display
-plt.savefig(f"{output_dir}/Optimization_final.pdf")
+plt.savefig(f"{output_dir}/g_Optimization_final.pdf")
 plt.show()

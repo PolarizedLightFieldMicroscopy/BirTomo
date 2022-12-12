@@ -86,11 +86,11 @@ if volume_type == 'single_voxel':
     # Create empty volume
     my_volume = BF_raytrace.init_volume(optical_info['volume_shape'], init_mode='zeros')
     # Set delta_n
-    my_volume.Delta_n[volume_axial_offset, 
+    my_volume.get_delta_n()[volume_axial_offset, 
                                     BF_raytrace.vox_ctr_idx[1], 
                                     BF_raytrace.vox_ctr_idx[2]] = voxel_delta_n
     # set optical_axis
-    my_volume.optic_axis[:, volume_axial_offset, 
+    my_volume.get_optic_axis()[:, volume_axial_offset, 
                             BF_raytrace.vox_ctr_idx[1], 
                             BF_raytrace.vox_ctr_idx[2]] = torch.tensor([voxel_birefringence_axis[0], 
                                                                             voxel_birefringence_axis[1], 
@@ -108,13 +108,16 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 
     # Do we want a shell? let's remove some of the volume
     if volume_type == 'shell':
-        my_volume.Delta_n[:optical_info['volume_shape'][0]//2+2,...] = 0
+        my_volume.get_delta_n()[:optical_info['volume_shape'][0]//2+2,...] = 0
 
-# my_volume.plot_volume_plotly(optical_info, voxels=my_volume.Delta_n, opacity=0.1)
+# my_volume.Delta_n = nn.Parameter(my_volume.Delta_n.flatten())
+# my_volume.optic_axis = nn.Parameter(my_volume.optic_axis.reshape(3,-1))
+# # my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
 
 
 
 # Perform same calculation with torch
+ret_image, azim_image = BF_raytrace.ray_trace_through_volume(my_volume) 
 startTime = time.time()
 # Create non-identity polarizers and analyzers
 if False:
@@ -152,7 +155,7 @@ plt.title('Ret+Azim')
 plt.pause(0.2)
 plt.show()
 # plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
-plt.pause(0.2)
+# plt.pause(0.2)
 
-# plt.show()
+# plt.show(block=True)
 

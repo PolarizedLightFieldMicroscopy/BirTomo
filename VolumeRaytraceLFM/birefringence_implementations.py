@@ -106,8 +106,17 @@ class BirefringentVolume(BirefringentElement):
             self.Delta_n[torch.isnan(self.Delta_n)] = 0
             self.optic_axis[torch.isnan(self.optic_axis)] = 0
             # Store the data as pytorch parameters
-            self.optic_axis = nn.Parameter(self.optic_axis).type(torch.get_default_dtype())
-            self.Delta_n = nn.Parameter(self.Delta_n ).type(torch.get_default_dtype())
+
+            self.optic_axis = nn.Parameter(self.optic_axis.reshape(3,-1)).type(torch.get_default_dtype())
+            self.Delta_n = nn.Parameter(self.Delta_n.flatten() ).type(torch.get_default_dtype())
+
+    def get_delta_n(self):
+        return self.Delta_n.view(self.optical_info['volume_shape'])
+        
+    def get_optic_axis(self):
+        return self.optic_axis.view(3, self.optical_info['volume_shape'][0],
+                                        self.optical_info['volume_shape'][1],
+                                        self.optical_info['volume_shape'][2])
 
     @staticmethod
     def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
@@ -184,6 +193,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         super(BirefringentRaytraceLFM, self).__init__(
             back_end=back_end, torch_args=torch_args, optical_info=optical_info
         )
+
+        # Ray-voxel colisions for different micro-lenses, this dictionary gets filled in: calc_cummulative_JM_of_ray_torch
+        self.vox_indices_ml_shifted = {}
         
         
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None):
@@ -320,7 +332,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             It uses pytorch's batch dimension to store each ray, and process them in parallel'''
 
         # Fetch the voxels traversed per ray and the lengths that each ray travels through every voxel
-        voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
+        _voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
+
+
+        # Compute the 1D index of each micro-lens.
+        # compute once and store for later.
+        # accessing 1D arrays increases training speed by 25%
+        key = str(micro_lens_offset)
+        if key not in self.vox_indices_ml_shifted.keys():
+            self.vox_indices_ml_shifted[key] = [[RayTraceLFM.ravel_index((vox[ix][0], vox[ix][1]+micro_lens_offset[0], vox[ix][2]+micro_lens_offset[1]), self.optical_info['volume_shape']) for ix in range(len(vox))] for vox in self.ray_vol_colli_indices]
+        voxels_of_segs = self.vox_indices_ml_shifted[key]
+        
             
         # Init an array to store the Jones matrices.
         JM_list = []
@@ -331,7 +353,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # for this step with rays_with_voxels
         for m in range(self.ray_vol_colli_lengths.shape[1]):
             # Check which rays still have voxels to traverse
-            rays_with_voxels = [len(vx)>m for vx in voxels_of_segs]
+            rays_with_voxels = [len(vx)>m for vx in _voxels_of_segs]
             # How many rays at this step
             n_rays_with_voxels = sum(rays_with_voxels)
             # The lengths these rays traveled through the current voxels
@@ -341,40 +363,28 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             
             # Extract the information from the volume
             # Birefringence 
-            Delta_n = volume_in.Delta_n[[v[0] for v in vox], [v[1]+micro_lens_offset[0] for v in vox], [v[2]+micro_lens_offset[1] for v in vox]]
+            Delta_n = volume_in.Delta_n[vox]
+            # And axis
+            opticAxis = volume_in.optic_axis[:,vox].permute(1,0)
+            # Grab the subset of precomputed ray directions that have voxels in this step
+            filtered_rayDir = self.ray_direction_basis[:,rays_with_voxels,:]
 
-            # Initiallize identity Jones Matrices, shape [n_rays_with_voxels, 2, 2]
-            JM = torch.tensor([[1.0,0],[0,1.0]], dtype=torch.complex64, device=self.get_device()).unsqueeze(0).repeat(n_rays_with_voxels,1,1)
+            # Compute the interaction from the rays with their corresponding voxels
+            JM = self.voxRayJM( Delta_n = Delta_n,
+                                opticAxis = opticAxis, 
+                                rayDir = filtered_rayDir,
+                                ell = ell,
+                                wavelength=self.optical_info['wavelength'])
 
-            if not torch.all(Delta_n==0):
-                # And axis
-                opticAxis = volume_in.optic_axis[:, [v[0] for v in vox], [v[1]+micro_lens_offset[0] for v in vox], [v[2]+micro_lens_offset[1] for v in vox]]
-                # If a single voxel, this would collapse
-                opticAxis = opticAxis.permute(1,0)
-                # Grab the subset of precomputed ray directions that have voxels in this step
-                filtered_rayDir = self.ray_direction_basis[:,rays_with_voxels,:]
-
-                # Only compute if there's an Delta_n
-                # Create a mask of the valid voxels
-                valid_voxel = Delta_n!=0
-                if valid_voxel.sum() > 0:
-                    # Compute the interaction from the rays with their corresponding voxels
-                    JM[valid_voxel, :, :] = self.voxRayJM(   Delta_n = Delta_n[valid_voxel], 
-                                                                                opticAxis = opticAxis[valid_voxel, :], 
-                                                                                rayDir = [filtered_rayDir[0][valid_voxel], filtered_rayDir[1][valid_voxel], filtered_rayDir[2][valid_voxel]], 
-                                                                                ell = ell[valid_voxel],
-                                                                                wavelength=self.optical_info['wavelength'])
+            if m==0:
+                material_JM = JM
             else:
-                pass
-            # Store current interaction step
-            JM_list.append(JM)
-        # JM_list contains m steps of rays interacting with voxels
-        # Each JM_list[m] is shaped [n_rays, 2, 2]
-        # We pass voxels_of_segs to compute which rays have a voxel in each step
-        material_JM = BirefringentRaytraceLFM.rayJM_torch(JM_list, voxels_of_segs)
+                material_JM[rays_with_voxels,...] = material_JM[rays_with_voxels,...] @ JM
+
         polarizer = torch.from_numpy(self.optical_info['polarizer']).type(torch.complex64).to(Delta_n.device)
         analyzer = torch.from_numpy(self.optical_info['analyzer']).type(torch.complex64).to(Delta_n.device)
         effective_JM = analyzer @ material_JM @ polarizer
+
         return effective_JM
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
@@ -411,30 +421,34 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def ret_and_azim_images_torch(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''This function computes the retardance and azimuth images of the precomputed rays going through a volume'''
         # Include offset to move to the center of the volume, as the ray collisions are computed only for a single micro-lens
-        # todo: n_micro_lenses and n_micro_lenses missmatch
+        # todo: n_micro_lenses and n_micro_lenses mismatch
         # n_micro_lenses = self.optic_config.mla_config.n_micro_lenses
         n_micro_lenses = self.optical_info['n_micro_lenses']
         n_ml_half = floor(n_micro_lenses / 2.0)
         micro_lens_offset = np.array(micro_lens_offset) + np.array(self.vox_ctr_idx[1:]) - n_ml_half
         # Fetch needed variables
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
-        # Create output images
-        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), requires_grad=True)
-        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), requires_grad=True)
+        
         
         # Calculate Jones Matrices for all rays
         effective_JM = self.calc_cummulative_JM_of_ray(volume_in, micro_lens_offset)
         # Calculate retardance and azimuth
         retardance = self.retardance(effective_JM)
         azimuth = self.azimuth(effective_JM)
+
+        # Create output images
+        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True)
+        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True)
         ret_image.requires_grad = False
         azim_image.requires_grad = False
-        zero_ret_idx = torch.isclose(retardance, torch.tensor([0.0], dtype=retardance.dtype))
-        azimuth[zero_ret_idx] = 0
-        # Assign the computed ray values to the image pixels
-        for ray_ix, (i,j) in enumerate(self.ray_valid_indices):
-            ret_image[i, j] = retardance[ray_ix]
-            azim_image[i, j] = azimuth[ray_ix]
+
+        # Fill the values in the images
+        ret_image[self.ray_valid_indices[0,:],self.ray_valid_indices[1,:]] = retardance
+        azim_image[self.ray_valid_indices[0,:],self.ray_valid_indices[1,:]] = azimuth
+        # Alternative version
+        # ret_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices, values = retardance, size=(pixels_per_ml, pixels_per_ml)).to_dense()
+        # azim_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices, values = azimuth, size=(pixels_per_ml, pixels_per_ml)).to_dense()
+
         return ret_image, azim_image
 
 
@@ -468,16 +482,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             n_voxels = opticAxis.shape[0]
             if not torch.is_tensor(opticAxis):
                 opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
+            
+            # Dot product of optical axis and 3 ray-direction vectors
+            OA_dot_rayDir = torch.linalg.vecdot(opticAxis, rayDir)
+
             # Azimuth is the angle of the sloq axis of retardance.
-            azim = torch.arctan2(torch.linalg.vecdot(opticAxis , rayDir[1]), torch.linalg.vecdot(opticAxis , rayDir[2])) # todo: pvjosue dangerous, vecdot similar to dot?
-            azim[Delta_n==0] = 0
-            azim[Delta_n<0] += torch.pi / 2
-            # print(f"Azimuth angle of index ellipsoid is {np.around(torch.rad2deg(azim).numpy(), decimals=0)} degrees.")
-            ret = abs(Delta_n) * (1 - torch.linalg.vecdot(opticAxis, rayDir[0]) ** 2) * 2 * torch.pi * ell[:n_voxels] / wavelength
-            # print(f"Accumulated retardance from index ellipsoid is {np.around(torch.rad2deg(ret).numpy(), decimals=0)} ~ {int(torch.rad2deg(ret).numpy()) % 360} degrees.")
+            azim = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
+            ret = abs(Delta_n) * (1 - OA_dot_rayDir[0,:] ** 2) * torch.pi * ell / wavelength
+
             if True: # old method
-                offdiag = 1j * torch.sin(2 * azim) * torch.sin(ret / 2)
-                diag1 = torch.cos(ret / 2) + 1j * torch.cos(2 * azim) * torch.sin(ret / 2)
+                offdiag = 1j * torch.sin(azim) * torch.sin(ret)
+                diag1 = torch.cos(ret) + 1j * torch.cos(azim) * torch.sin(ret)
                 diag2 = torch.conj(diag1)
                 # Construct Jones Matrix
                 JM = torch.zeros([Delta_n.shape[0], 2, 2], dtype=torch.complex64, device=Delta_n.device)

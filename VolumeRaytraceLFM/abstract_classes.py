@@ -113,6 +113,11 @@ class RayTraceLFM(OpticalElement):
     # Helper functions 
 
     @staticmethod
+    def ravel_index(x, dims):
+        c = np.cumprod([1] + dims[::-1])[:-1][::-1]
+        return np.dot(c,x)
+        
+    @staticmethod
     def rotation_matrix(axis, angle):
         '''Generates the rotation matrix that will rotate a 3D vector
         around "axis" by "angle" counterclockwise.'''
@@ -433,7 +438,12 @@ class RayTraceLFM(OpticalElement):
         n_valid_rays = len(ray_valid_indices)
 
         # Create the information to store
-        self.ray_valid_indices = ray_valid_indices
+
+        self.ray_valid_indices = torch.zeros(2, len(ray_valid_indices), dtype=int)
+        for ix in range(len(ray_valid_indices)):
+            self.ray_valid_indices[0,ix] = ray_valid_indices[ix][0]
+            self.ray_valid_indices[1,ix] = ray_valid_indices[ix][1]
+        
         # Store as tuples for now
         self.ray_vol_colli_indices = ray_vol_colli_indices
         if self.back_end == BackEnds.NUMPY:
