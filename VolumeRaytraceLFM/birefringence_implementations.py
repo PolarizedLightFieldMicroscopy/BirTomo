@@ -653,7 +653,7 @@ class JonesMatrixGenerators(BirefringentElement):
     def linear_retarder_azim0(ret, back_end=BackEnds.NUMPY):
         '''todo'''
         if back_end == BackEnds.NUMPY:
-            return np.array([[np.exp(-1j * ret / 2), 0], [0, np.exp(1j * ret / 2)]])
+            return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
             return torch.cat(
                 (torch.cat((torch.exp(1j * ret / 2).unsqueeze(1), torch.zeros(len(ret),1)),1).unsqueeze(2),
@@ -669,7 +669,7 @@ class JonesMatrixGenerators(BirefringentElement):
         if back_end == BackEnds.NUMPY:
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
-            return torch.tensor([torch.exp(-1j * ret / 2), 0], [0, torch.exp(1j * ret / 2)])
+            return torch.tensor([torch.exp(1j * ret / 2), 0], [0, torch.exp(-1j * ret / 2)])
 
     @staticmethod
     def quarter_waveplate(azim):
@@ -730,10 +730,7 @@ class JonesMatrixGenerators(BirefringentElement):
         '''Acts as a circular polarizer
         Inhomogeneous elements because eigenvectors are linear (-45 deg) and (right) circular polarization states
         Source: 2010 Polarized Light pg. 224'''
-        QWP_LP = JonesMatrixGenerators.quarter_waveplate(0) @ JonesMatrixGenerators.linear_polarizer(np.pi / 4)
-        LP_QWP = JonesMatrixGenerators.linear_polarizer(np.pi / 4) @ JonesMatrixGenerators.quarter_waveplate(0)
-        
-        return 1 / (2 * np.sqrt(2)) * np.array([[1 - 1j, 1 + 1j], [1 - 1j, 1 + 1j]])
+        return 1 / (2 * np.sqrt(2)) * np.array([[1 + 1j, 1 - 1j], [1 + 1j, 1 - 1j]])
 
     @staticmethod
     def universal_compensator(retA, retB):
