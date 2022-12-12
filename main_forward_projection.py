@@ -84,7 +84,7 @@ if volume_type == 'single_voxel':
                                     BF_raytrace.vox_ctr_idx[1], 
                                     BF_raytrace.vox_ctr_idx[2]] = voxel_delta_n
     # set optical_axis
-    my_volume.optic_axis[:, volume_axial_offset, 
+    my_volume.get_optic_axis()[:, volume_axial_offset, 
                             BF_raytrace.vox_ctr_idx[1], 
                             BF_raytrace.vox_ctr_idx[2]] = torch.tensor([voxel_birefringence_axis[0], 
                                                                             voxel_birefringence_axis[1], 

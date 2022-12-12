@@ -384,6 +384,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Each JM_list[m] is shaped [n_rays, 2, 2]
         # We pass voxels_of_segs to compute which rays have a voxel in each step
         # effective_JM = BirefringentRaytraceLFM.rayJM_torch(JM_list, voxels_of_segs)
+        
         return effective_JM
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):

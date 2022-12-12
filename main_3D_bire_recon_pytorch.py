@@ -25,7 +25,7 @@ optical_info={
 
 
 training_params = {
-    'n_epochs' : 21,
+    'n_epochs' : 5000,
     'azimuth_weight' : 1,
     'lr' : 1e-2,
     'output_posfix' : '11ml_atan2loss'
@@ -94,7 +94,7 @@ if volume_type == 'single_voxel':
                                     BF_raytrace.vox_ctr_idx[1], 
                                     BF_raytrace.vox_ctr_idx[2]] = voxel_delta_n
     # set optical_axis
-    my_volume.optic_axis[:, volume_axial_offset, 
+    my_volume.get_optic_axis()[:, volume_axial_offset, 
                             BF_raytrace.vox_ctr_idx[1], 
                             BF_raytrace.vox_ctr_idx[2]] = torch.tensor([voxel_birefringence_axis[0], 
                                                                             voxel_birefringence_axis[1], 
