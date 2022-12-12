@@ -810,3 +810,11 @@ class JonesVectorGenerators(BirefringentElement):
     @staticmethod
     def linear(angle):
         return JonesMatrixGenerators.rotator(angle) @ np.array([1, 0])
+
+    @staticmethod
+    def horizonal():
+        return np.array([1, 0])
+
+    @staticmethod
+    def vertical():
+        return np.array([0, 1])

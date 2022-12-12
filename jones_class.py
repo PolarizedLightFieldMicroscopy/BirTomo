@@ -1,3 +1,5 @@
+'''This jones_class.py script is now mostly incorporated into the birefringence_implementations.py script.
+'''
 import numpy as np
 
 class JonesMatrix():
