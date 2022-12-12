@@ -16,6 +16,11 @@ virtual environment should include the waveblocks requirements
 
 See environment.txt and environment.yml files.
 
+### Running forward projection using numpy method
+Necessary packages:
+- matplotlib (numpy is included)
+- tqdm
+
 ## Testing
 - Run pytest in terminal to check that all the tests pass.
 - Run ```pytest -v test_jones.py::test_polscope``` to run a particular test.
