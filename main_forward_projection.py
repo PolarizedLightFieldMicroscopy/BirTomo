@@ -2,7 +2,6 @@ import time
 import matplotlib.pyplot as plt
 from plotting_tools import *
 from VolumeRaytraceLFM.birefringence_implementations import *
-from waveblocks.utils.misc_utils import *
 
 """ This script using numpy/pytorch back-end to:
     - Create a volume with different birefringent shapes.
@@ -14,7 +13,10 @@ from waveblocks.utils.misc_utils import *
 # Select back ends
 # back_end = BackEnds.PYTORCH
 back_end = BackEnds.NUMPY
-torch.set_default_tensor_type(torch.DoubleTensor)
+
+if backend == BackEnds.PYTORCH:
+    from waveblocks.utils.misc_utils import *
+    torch.set_default_tensor_type(torch.DoubleTensor)
 
 camera_pix_pitch = 6.5
 objective_M = 60
