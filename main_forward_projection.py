@@ -14,9 +14,9 @@ from VolumeRaytraceLFM.birefringence_implementations import *
 # back_end = BackEnds.PYTORCH
 back_end = BackEnds.NUMPY
 
-if backend == BackEnds.PYTORCH:
+if back_end == BackEnds.PYTORCH:
     from waveblocks.utils.misc_utils import *
-    torch.set_default_tensor_type(torch.DoubleTensor)
+    # torch.set_default_tensor_type(torch.DoubleTensor)
 
 camera_pix_pitch = 6.5
 objective_M = 60

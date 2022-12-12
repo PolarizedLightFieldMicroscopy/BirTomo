@@ -111,12 +111,18 @@ class BirefringentVolume(BirefringentElement):
             self.Delta_n = nn.Parameter(self.Delta_n.flatten() ).type(torch.get_default_dtype())
 
     def get_delta_n(self):
-        return self.Delta_n.view(self.optical_info['volume_shape'])
+        if self.back_end == BackEnds.PYTORCH:
+            return self.Delta_n.view(self.optical_info['volume_shape'])
+        else:
+            return self.Delta_n
         
     def get_optic_axis(self):
-        return self.optic_axis.view(3, self.optical_info['volume_shape'][0],
-                                        self.optical_info['volume_shape'][1],
-                                        self.optical_info['volume_shape'][2])
+        if self.back_end == BackEnds.PYTORCH:
+            return self.optic_axis.view(3, self.optical_info['volume_shape'][0],
+                                            self.optical_info['volume_shape'][1],
+                                            self.optical_info['volume_shape'][2])
+        else:
+            return self.optic_axis
 
     @staticmethod
     def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
