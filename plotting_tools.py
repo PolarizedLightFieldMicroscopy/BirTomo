@@ -294,11 +294,16 @@ def plot_birefringence_colorized(retardance_img, azimuth_img, ax=None):
     A = azimuth_img * 1
     # A = np.fmod(A,np.pi)
     colors[:,:,0] = A / A.max()
-    colors[:,:,1] = retardance_img / retardance_img.max()
+    colors[:,:,1] = 0.5
     colors[:,:,2] = retardance_img / retardance_img.max()
+
     colors[np.isnan(colors)] = 0
+
+    from matplotlib.colors import hsv_to_rgb
+    rgb = hsv_to_rgb(colors)
+    
     # Back to original size
     if ax is None:
         fig,ax = plt.subplots()
-    im = ax.imshow(colors, cmap='hsv')
+    im = ax.imshow(rgb, cmap='hsv')
     return im
