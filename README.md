@@ -1,3 +1,5 @@
+![python version](https://img.shields.io/badge/python-3.10-blue)
+[![GitHub Actions Demo](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/github-actions-demo.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/github-actions-demo.yml)
 # forward-model
 forward model using mainly ray tracing
 
