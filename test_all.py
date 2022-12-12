@@ -339,7 +339,7 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     # voxel_numpy_random = BF_raytrace_numpy.init_volume(volume_shape, init_mode='random')
     # Copy the volume, to have exactly the same things
     voxel_numpy_random = BirefringentVolume(back_end=BackEnds.NUMPY,  optical_info=optical_info,
-                                    Delta_n=voxel_torch_random.Delta_n.numpy(), optic_axis=voxel_torch_random.optic_axis.numpy())
+                                    Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
 
 
     
@@ -399,7 +399,7 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     # voxel_numpy_random = BF_raytrace_numpy.init_volume(volume_shape, init_mode='random')
     # Copy the volume, to have exactly the same things
     voxel_numpy_random = BirefringentVolume(back_end=BackEnds.NUMPY,  optical_info=optical_info,
-                                    Delta_n=voxel_torch_random.Delta_n.numpy(), optic_axis=voxel_torch_random.optic_axis.numpy())
+                                    Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
 
 
     
@@ -408,6 +408,7 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     
     with np.errstate(divide='raise'):
         ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
+    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
     ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
     
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
@@ -421,13 +422,13 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
-@pytest.mark.parametrize('volume_init_mode', [
-        'random',
-        'ellipsoid',
-        '1planes',
-        '3planes'
-    ])
-def test_torch_auto_differentiation(global_data, volume_init_mode):
+# @pytest.mark.parametrize('volume_init_mode', [
+#         'random',
+#         'ellipsoid',
+#         '1planes',
+#         '3planes'
+#     ])
+def torch_auto_differentiation(global_data, volume_init_mode):
     # Enable torch gradients
     torch.set_grad_enabled(True)
     # Gather global data
@@ -435,9 +436,10 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     optical_info = local_data['optical_info']
 
     # Simplify the settings, so it's fast to compute
-    volume_shape = [3,3,3]
+    volume_shape = [3,13,13]
     optical_info['volume_shape'] = volume_shape
     optical_info['pixels_per_ml'] = 17
+    optical_info['n_micro_lenses'] = 5
 
     BF_raytrace_torch = BirefringentRaytraceLFM(back_end=BackEnds.PYTORCH, optical_info=optical_info)
     BF_raytrace_torch.compute_rays_geometry()
@@ -452,38 +454,42 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     # Set all gradients to zero
     optimizer.zero_grad()
 
-
-    # Compute a forward projection
     ret_image, azim_image = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
-    # Calculate a loss, for example minimizing the mean of both images
-    L = ret_image.mean() + azim_image.mean()
 
-    # Compute and propagate the gradients
-    L.backward()
+    import torch.autograd.profiler as profiler
+    with profiler.profile(with_stack=True, profile_memory=True) as prof:
+        # Compute a forward projection
+        ret_image, azim_image = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
+        # Calculate a loss, for example minimizing the mean of both images
+        # L = ret_image.mean() + azim_image.mean()
 
-    # Check if the gradients where properly propagated
-    assert volume_torch_random.Delta_n.grad.sum() != 0, 'Gradients were not propagated to the volumes Delta_n correctly'
-    assert volume_torch_random.optic_axis.grad.sum() != 0, 'Gradients were not propagated to the volumes optic_axis correctly'
+        # Compute and propagate the gradients
+        # L.backward()
 
-    # Calculate the volume values before updating the values with the gradients
-    Delta_n_sum_initial = volume_torch_random.Delta_n.sum()
-    optic_axis_sum_initial = volume_torch_random.optic_axis.sum()
+        # # Check if the gradients where properly propagated
+        # assert volume_torch_random.Delta_n.grad.sum() != 0, 'Gradients were not propagated to the volumes Delta_n correctly'
+        # assert volume_torch_random.optic_axis.grad.sum() != 0, 'Gradients were not propagated to the volumes optic_axis correctly'
 
-    # Update the volume
-    optimizer.step()
+        # # Calculate the volume values before updating the values with the gradients
+        # Delta_n_sum_initial = volume_torch_random.Delta_n.sum()
+        # optic_axis_sum_initial = volume_torch_random.optic_axis.sum()
 
-    # Calculate the volume values before updating the values with the gradients
-    Delta_n_sum_final = volume_torch_random.Delta_n.sum()
-    optic_axis_sum_final = volume_torch_random.optic_axis.sum()
+        # Update the volume
+        # optimizer.step()
+    print(prof.key_averages(group_by_stack_n=5).table(sort_by='self_cpu_time_total', row_limit=10))
+    prof.export_chrome_trace('forward_trace.trace')
+        # # Calculate the volume values before updating the values with the gradients
+        # Delta_n_sum_final = volume_torch_random.Delta_n.sum()
+        # optic_axis_sum_final = volume_torch_random.optic_axis.sum()
 
-    # These should be different
-    assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
-    assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
+        # # These should be different
+        # assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
+        # assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
 
 
 
 def main():
-    test_torch_auto_differentiation(global_data())
+    test_torch_auto_differentiation(global_data(), 'ellipsoid')
     # Multi lenslet example
     # test_forward_projection_different_volumes(global_data(), 'ellipsoid')
     # test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[51])

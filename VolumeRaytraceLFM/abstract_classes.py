@@ -111,6 +111,11 @@ class RayTraceLFM(OpticalElement):
     # Helper functions 
 
     @staticmethod
+    def ravel_index(x, dims):
+        c = np.cumprod([1] + dims[::-1])[:-1][::-1]
+        return np.dot(c,x)
+        
+    @staticmethod
     def rotation_matrix(axis, angle):
         '''Generates the rotation matrix that will rotate a 3D vector
         around "axis" by "angle" counterclockwise.'''
