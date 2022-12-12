@@ -474,12 +474,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             if not torch.is_tensor(opticAxis):
                 opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
             # Azimuth is the angle of the sloq axis of retardance.
-            azim = torch.arctan2(torch.linalg.vecdot(opticAxis , rayDir[1]), torch.linalg.vecdot(opticAxis , rayDir[2])) # todo: pvjosue dangerous, vecdot similar to dot?
-            azim[Delta_n==0] = 0
-            azim[Delta_n<0] += torch.pi / 2
-            # print(f"Azimuth angle of index ellipsoid is {np.around(torch.rad2deg(azim).numpy(), decimals=0)} degrees.")
+            azim = torch.arctan2(torch.linalg.vecdot(opticAxis , rayDir[1]), torch.linalg.vecdot(opticAxis , rayDir[2]))
             ret = abs(Delta_n) / 2 * (1 - torch.linalg.vecdot(opticAxis, rayDir[0]) ** 2) * 2 * torch.pi * ell[:n_voxels] / wavelength
-            # print(f"Accumulated retardance from index ellipsoid is {np.around(torch.rad2deg(ret).numpy(), decimals=0)} ~ {int(torch.rad2deg(ret).numpy()) % 360} degrees.")
             if True: # old method
                 offdiag = 1j * torch.sin(2 * azim) * torch.sin(ret)
                 diag1 = torch.cos(ret) + 1j * torch.cos(2 * azim) * torch.sin(ret)
