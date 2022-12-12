@@ -435,21 +435,26 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         micro_lens_offset = np.array(micro_lens_offset) + np.array(self.vox_ctr_idx[1:]) - n_ml_half
         # Fetch needed variables
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
-        # Create output images
-        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), requires_grad=True)
-        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), requires_grad=True)
+        
         
         # Calculate Jones Matrices for all rays
         effective_JM = self.calc_cummulative_JM_of_ray(volume_in, micro_lens_offset)
         # Calculate retardance and azimuth
         retardance = self.retardance(effective_JM)
         azimuth = self.azimuth(effective_JM)
+
+        # Create output images
+        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True)
+        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True)
         ret_image.requires_grad = False
         azim_image.requires_grad = False
-        # Assign the computed ray values to the image pixels
-        for ray_ix, (i,j) in enumerate(self.ray_valid_indices):
-            ret_image[i, j] = retardance[ray_ix]
-            azim_image[i, j] = azimuth[ray_ix]
+        # Fill the values in the images
+        ret_image[self.ray_valid_indices[0,:],self.ray_valid_indices[1,:]] = retardance
+        azim_image[self.ray_valid_indices[0,:],self.ray_valid_indices[1,:]] = azimuth
+        # Alternative version
+        # ret_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices, values = retardance, size=(pixels_per_ml, pixels_per_ml)).to_dense()
+        # azim_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices, values = azimuth, size=(pixels_per_ml, pixels_per_ml)).to_dense()
+    
         return ret_image, azim_image
 
 

@@ -216,7 +216,9 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
     # Fill in retardance and azimuth of torch into an image,
     # And compare with their corresponding numpy JM
     any_fail = False
-    for ray_ix, (i,j) in enumerate(BF_raytrace_torch.ray_valid_indices):
+    for ray_ix in range(BF_raytrace_torch.ray_valid_indices.shape[1]):
+        i = BF_raytrace_torch.ray_valid_indices[0,ray_ix]
+        j = BF_raytrace_torch.ray_valid_indices[1,ray_ix]
         ret_img_torch[i, j] = ret_torch[ray_ix].item()
         azi_img_torch[i, j] = azi_torch[ray_ix].item()
         JM_numpy = BF_raytrace_numpy.calc_cummulative_JM_of_ray_numpy(i, j, voxel_numpy)
