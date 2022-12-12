@@ -1,0 +1,88 @@
+absl-py==1.3.0
+asttokens @ file:///opt/conda/conda-bld/asttokens_1646925590279/work
+attrs==22.1.0
+backcall @ file:///home/ktietz/src/ci/backcall_1611930011877/work
+build==0.9.0
+cachetools==5.2.0
+caerus==0.1.8
+certifi @ file:///C:/b/abs_ac29jvt43w/croot/certifi_1665076682579/work/certifi
+charset-normalizer==2.1.1
+colorama==0.4.6
+contourpy==1.0.6
+cycler==0.11.0
+debugpy @ file:///C:/ci_310/debugpy_1642079916595/work
+decorator @ file:///opt/conda/conda-bld/decorator_1643638310831/work
+entrypoints @ file:///C:/ci/entrypoints_1649926676279/work
+exceptiongroup==1.0.4
+executing @ file:///opt/conda/conda-bld/executing_1646925071911/work
+findpeaks==2.4.4
+fonttools==4.38.0
+google-auth==2.14.1
+google-auth-oauthlib==0.4.6
+grpcio==1.50.0
+h5py==3.7.0
+idna==3.4
+iniconfig==1.1.1
+ipykernel @ file:///C:/b/abs_21ykzkm7y_/croots/recipe/ipykernel_1662361803478/work
+ipython @ file:///C:/b/abs_84shimxwmz/croot/ipython_1668088123494/work
+jedi @ file:///C:/ci/jedi_1644315428305/work
+jupyter_client @ file:///C:/b/abs_cbnezz4zg0/croot/jupyter_client_1669040266195/work
+jupyter_core @ file:///C:/b/abs_b8r5lb5eus/croot/jupyter_core_1668084445779/work
+kiwisolver==1.4.4
+Markdown==3.4.1
+MarkupSafe==2.1.1
+matplotlib==3.6.2
+matplotlib-inline @ file:///C:/ci/matplotlib-inline_1661934094726/work
+mpmath==1.2.1
+nest-asyncio @ file:///C:/ci/nest-asyncio_1649848132512/work
+numpy==1.23.5
+oauthlib==3.2.2
+packaging @ file:///tmp/build/80754af9/packaging_1637314298585/work
+pandas==1.5.1
+parso @ file:///opt/conda/conda-bld/parso_1641458642106/work
+peakdetect==1.1
+pep517==0.13.0
+pickleshare @ file:///tmp/build/80754af9/pickleshare_1606932040724/work
+Pillow==9.3.0
+plotly==5.11.0
+pluggy==1.0.0
+prompt-toolkit @ file:///tmp/build/80754af9/prompt-toolkit_1633440160888/work
+protobuf==3.20.3
+psutil @ file:///C:/Windows/Temp/abs_b2c2fd7f-9fd5-4756-95ea-8aed74d0039flsd9qufz/croots/recipe/psutil_1656431277748/work
+pure-eval @ file:///opt/conda/conda-bld/pure_eval_1646925070566/work
+pyasn1==0.4.8
+pyasn1-modules==0.2.8
+Pygments @ file:///opt/conda/conda-bld/pygments_1644249106324/work
+pyparsing @ file:///C:/Users/BUILDE~1/AppData/Local/Temp/abs_7f_7lba6rl/croots/recipe/pyparsing_1661452540662/work
+pypolar==0.8.2
+pytest==7.2.0
+python-dateutil @ file:///tmp/build/80754af9/python-dateutil_1626374649649/work
+pytz==2022.6
+pywin32==302
+pyzmq @ file:///C:/ci/pyzmq_1657616000714/work
+requests==2.28.1
+requests-oauthlib==1.3.1
+rsa==4.9
+scipy==1.9.3
+six @ file:///tmp/build/80754af9/six_1644875935023/work
+stack-data @ file:///opt/conda/conda-bld/stack_data_1646927590127/work
+sympy==1.11.1
+tenacity==8.1.0
+tensorboard==2.11.0
+tensorboard-data-server==0.6.1
+tensorboard-plugin-wit==1.8.1
+tifffile==2022.10.10
+tomli==2.0.1
+torch==1.13.0+cu117
+torch-tb-profiler==0.4.0
+torchvision==0.14.0+cu117
+tornado @ file:///C:/ci/tornado_1662476985533/work
+tqdm==4.64.1
+traitlets @ file:///tmp/build/80754af9/traitlets_1636710298902/work
+typing_extensions==4.4.0
+urllib3==1.26.12
+-e git+https://github.com/PolarizedLightFieldMicroscopy/WaveBlocks.git@c97a3d3c85b9bef8c9c5d85a8758af9015f8320c#egg=Waveblocks
+wcwidth @ file:///Users/ktietz/demo/mc3/conda-bld/wcwidth_1629357192024/work
+Werkzeug==2.2.2
+wget==3.2
+wincertstore==0.2

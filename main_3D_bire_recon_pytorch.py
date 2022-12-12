@@ -21,7 +21,10 @@ optical_info={
             'n_medium' : 1.52,
             'wavelength' : 0.55,
             'n_micro_lenses' : 15,
-            'n_voxels_per_ml' : 1}
+            'n_voxels_per_ml' : 1,
+            'polarizer' : np.array([[1, 0], [0, 1]]),
+            'analyzer' : np.array([[1, 0], [0, 1]])
+            }
 
 
 training_params = {

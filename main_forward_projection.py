@@ -2,7 +2,6 @@ import time
 import matplotlib.pyplot as plt
 from plotting_tools import *
 from VolumeRaytraceLFM.birefringence_implementations import *
-from waveblocks.utils.misc_utils import *
 
 """ This script using numpy/pytorch back-end to:
     - Create a volume with different birefringent shapes.
@@ -11,9 +10,13 @@ from waveblocks.utils.misc_utils import *
     - Compute the retardance and azimuth for every ray.
     - Generate 2D images."""
 
-# Select back end
-back_end = BackEnds.PYTORCH
-torch.set_default_tensor_type(torch.DoubleTensor)
+# Select back ends
+# back_end = BackEnds.PYTORCH
+back_end = BackEnds.NUMPY
+
+if backend == BackEnds.PYTORCH:
+    from waveblocks.utils.misc_utils import *
+    torch.set_default_tensor_type(torch.DoubleTensor)
 
 camera_pix_pitch = 6.5
 objective_M = 60
@@ -25,8 +28,11 @@ optical_info={
             'na_obj' : 1.2, 
             'n_medium' : 1.52,
             'wavelength' : 0.55,
-            'n_micro_lenses' : 25,
-            'n_voxels_per_ml' : 1}
+            'n_micro_lenses' : 5,
+            'n_voxels_per_ml' : 1,
+            'polarizer' : np.array([[1, 0], [0, 1]]),
+            'analyzer' : np.array([[1, 0], [0, 1]])
+            }
 
 
 
@@ -113,6 +119,11 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 # Perform same calculation with torch
 ret_image, azim_image = BF_raytrace.ray_trace_through_volume(my_volume) 
 startTime = time.time()
+# Create non-identity polarizers and analyzers
+if False:
+    # LC-PolScope setup
+    optical_info['polarizer'] = JonesMatrixGenerators.left_circular_polarizer()
+    optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator(np.pi / 4, np.pi / 2)
 ret_image, azim_image = BF_raytrace.ray_trace_through_volume(my_volume) 
 executionTime = (time.time() - startTime)
 print(f'Execution time in seconds with backend {back_end}: ' + str(executionTime))
@@ -142,6 +153,7 @@ plt.colorbar(im, fraction=0.046, pad=0.04)
 plt.title('Ret+Azim')
 
 plt.pause(0.2)
+plt.show()
 # plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
 # plt.pause(0.2)
 
