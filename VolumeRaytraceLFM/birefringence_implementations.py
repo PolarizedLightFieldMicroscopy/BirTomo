@@ -374,12 +374,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                 ell = ell,
                                 wavelength=self.optical_info['wavelength'])
 
+            if m==0:
+                effective_JM = JM
+            else:
+                effective_JM[rays_with_voxels,...] = effective_JM[rays_with_voxels,...] @ JM
             # Store current interaction step
-            JM_list.append(JM)
+            # JM_list.append(JM)
         # JM_list contains m steps of rays interacting with voxels
         # Each JM_list[m] is shaped [n_rays, 2, 2]
         # We pass voxels_of_segs to compute which rays have a voxel in each step
-        effective_JM = BirefringentRaytraceLFM.rayJM_torch(JM_list, voxels_of_segs)
+        # effective_JM = BirefringentRaytraceLFM.rayJM_torch(JM_list, voxels_of_segs)
         return effective_JM
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
@@ -473,12 +477,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             n_voxels = opticAxis.shape[0]
             if not torch.is_tensor(opticAxis):
                 opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
+            
+            # Dot product of optical axis and 3 ray-direction vectors
+            OA_dot_rayDir = torch.linalg.vecdot(opticAxis, rayDir)
+
             # Azimuth is the angle of the sloq axis of retardance.
-            azim = torch.arctan2(torch.linalg.vecdot(opticAxis , rayDir[1]), torch.linalg.vecdot(opticAxis , rayDir[2]))
-            ret = abs(Delta_n) / 2 * (1 - torch.linalg.vecdot(opticAxis, rayDir[0]) ** 2) * 2 * torch.pi * ell[:n_voxels] / wavelength
+            azim = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
+            ret = abs(Delta_n) * (1 - OA_dot_rayDir[0,:] ** 2) * torch.pi * ell / wavelength
+
             if True: # old method
-                offdiag = 1j * torch.sin(2 * azim) * torch.sin(ret)
-                diag1 = torch.cos(ret) + 1j * torch.cos(2 * azim) * torch.sin(ret)
+                offdiag = 1j * torch.sin(azim) * torch.sin(ret)
+                diag1 = torch.cos(ret) + 1j * torch.cos(azim) * torch.sin(ret)
                 diag2 = torch.conj(diag1)
                 # Construct Jones Matrix
                 JM = torch.zeros([Delta_n.shape[0], 2, 2], dtype=torch.complex64, device=Delta_n.device)
