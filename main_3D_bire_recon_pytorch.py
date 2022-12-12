@@ -8,24 +8,15 @@ import os
 
 # Select back end
 back_end = BackEnds.PYTORCH
-torch.set_default_tensor_type(torch.DoubleTensor)
 
-camera_pix_pitch = 6.5
-objective_M = 60
-pixels_per_ml = 17
-optical_info={
-            'volume_shape' : [9,51,51], 
-            'voxel_size_um' : 3*[camera_pix_pitch * pixels_per_ml / objective_M], 
-            'pixels_per_ml' : pixels_per_ml, 
-            'na_obj' : 1.2, 
-            'n_medium' : 1.52,
-            'wavelength' : 0.55,
-            'n_micro_lenses' : 15,
-            'n_voxels_per_ml' : 1,
-            'polarizer' : np.array([[1, 0], [0, 1]]),
-            'analyzer' : np.array([[1, 0], [0, 1]])
-            }
+# Get optical parameters template
+optical_info = OpticalElement.get_optical_info_template()
 
+optical_info['volume_shape'] = [9,51,51]
+optical_info['axial_voxel_size_um'] = 1.0
+optical_info['pixels_per_ml'] = 17 
+optical_info['n_micro_lenses'] = 15
+optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
     'n_epochs' : 5000,

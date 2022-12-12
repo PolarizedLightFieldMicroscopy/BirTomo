@@ -38,12 +38,32 @@ class BackEnds(Enum):
 
 class OpticalElement(OpticBlock):
     ''' Abstract class defining a elements, with a back-end ans some optical information'''
-    default_optical_info = {'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
-                'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}
+
+    default_optical_info = {
+                            # Volume information
+                            'volume_shape'      : 3*[1],
+                            'axial_voxel_size_um'     : 1.0,
+                            # Micro lens array information
+                            'pixels_per_ml'     : 17,
+                            'n_micro_lenses'    : 1,
+                            'n_voxels_per_ml'   : 1,
+                            # Objetive lens information
+                            'M_obj'             : 60,
+                            'na_obj'            : 1.2,
+                            'n_medium'          : 1.52,
+                            'wavelength'        : 0.550,
+                            'camera_pix_pitch'  : 6.5,
+                            # Polarization information
+                            'polarizer'         : np.array([[1, 0], [0, 1]]),
+                            'analyzer'          : np.array([[1, 0], [0, 1]])}
+
     def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
                 optical_info={}):
         # Optical info is needed
         assert len(optical_info) > 0, f'Optical info (optical_info) dictionary needed: use OpticalElement.default_optical_info as reference {OpticalElement.default_optical_info}'
+        
+        # Compute voxel size 
+        optical_info['voxel_size_um'] =  [optical_info['axial_voxel_size_um'],] + 2*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch'] / optical_info['M_obj']]
         
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if back_end==BackEnds.PYTORCH:
@@ -70,17 +90,9 @@ class OpticalElement(OpticBlock):
         self.simul_type = SimulType.NOT_SPECIFIED
         self.optical_info = optical_info
 
-        # if we are using pytorch and waveblocks, grab system info from optic_config
-        # if self.back_end == BackEnds.PYTORCH:
-        #     self.optical_info = \
-        #             {'volume_shape' : self.optic_config.volume_config.volume_shape, 
-        #             'voxel_size_um' : self.optic_config.volume_config.voxel_size_um, 
-        #             'pixels_per_ml' : self.optic_config.mla_config.n_pixels_per_mla, 
-        #             'n_micro_lenses' : self.optic_config.mla_config.n_micro_lenses, 
-        #             'na_obj' : self.optic_config.PSF_config.NA, 
-        #             'n_medium' : self.optic_config.PSF_config.ni,
-        #             'wavelength' : self.optic_config.PSF_config.wvl}
-
+    @staticmethod
+    def get_optical_info_template():
+        return copy.deepcopy(OpticalElement.default_optical_info)
 
 ###########################################################################################
 class RayTraceLFM(OpticalElement):

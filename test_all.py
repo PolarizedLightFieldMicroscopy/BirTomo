@@ -16,60 +16,21 @@ def global_data():
     # Set torch precision to Double to match numpy 
     torch.set_default_tensor_type(torch.DoubleTensor)
     
-    # Objective configuration
-    objective_M = 60
-    wavelength = 0.550
-    naObj = 1.2
-    nMedium = 1.52
-    # Camera and volume configuration
-    camera_pix_pitch = 6.5
-    # MLA configuration
-    pixels_per_ml = 5 # num pixels behind lenslet
-    microLensPitch = pixels_per_ml * camera_pix_pitch / objective_M
-    n_micro_lenses = 1
+    # Fetch default optical info
+    optical_info = OpticalElement.get_optical_info_template()
 
-    # voxPitch is the width of each voxel in um (dividing by 5 to supersample)
-    n_voxels_per_ml = 1
-    voxPitch = microLensPitch / n_voxels_per_ml
-    axialPitch = voxPitch
-    voxel_size_um = [axialPitch, voxPitch, voxPitch]
-    
-    # Volume shape
-    volume_shape = [11, 11, 11]
+    optical_info['volume_shape'] = [11, 11, 11]
+    optical_info['axial_voxel_size_um'] = 1.0
+    optical_info['pixels_per_ml'] = 5
+    optical_info['na_obj'] = 1.2
+    optical_info['n_medium'] = 1.52
+    optical_info['wavelength'] = 0.550
+    optical_info['n_micro_lenses'] = 1
+    optical_info['n_voxels_per_ml'] = 1
+    optical_info['polarizer'] = np.array([[1, 0], [0, 1]])
+    optical_info['analyzer'] = np.array([[1, 0], [0, 1]])
 
-    optic_config = OpticConfig()
-    # Set objective info
-    optic_config.PSF_config.M = objective_M      # Objective magnification
-    optic_config.PSF_config.NA = naObj    # Objective NA
-    optic_config.PSF_config.ni = nMedium   # Refractive index of sample (experimental)
-    optic_config.PSF_config.ni0 = nMedium  # Refractive index of sample (design value)
-    optic_config.PSF_config.wvl = wavelength
-    optic_config.mla_config.n_pixels_per_mla = pixels_per_ml
-    optic_config.mla_config.n_micro_lenses = n_micro_lenses
-    optic_config.camera_config.sensor_pitch = camera_pix_pitch
-    optic_config.mla_config.pitch = optic_config.mla_config.n_pixels_per_mla * optic_config.camera_config.sensor_pitch
-
-    optic_config.volume_config.volume_shape = volume_shape
-    optic_config.volume_config.voxel_size_um = voxel_size_um
-    optic_config.volume_config.volume_size_um = np.array(optic_config.volume_config.volume_shape) * np.array(optic_config.volume_config.voxel_size_um)
-
-
-    # Prepate settings for numpy
-    optical_info={
-                'volume_shape' : volume_shape, 
-                'voxel_size_um' : voxel_size_um, 
-                'pixels_per_ml' : pixels_per_ml, 
-                'na_obj' : naObj, 
-                'n_medium' : nMedium,
-                'wavelength' : wavelength,
-                'n_micro_lenses' : n_micro_lenses,
-                'n_voxels_per_ml' : 1,
-                'polarizer' : np.array([[1, 0], [0, 1]]),
-                'analyzer' : np.array([[1, 0], [0, 1]])
-                }
-
-
-    return {'optic_config': optic_config, 'optical_info' : optical_info}
+    return {'optical_info' : optical_info}
 
 # Test systems with different number of rays per micro-lens
 @pytest.mark.parametrize('pixels_per_ml_init', [3,5,10,17,33])
@@ -121,7 +82,6 @@ def test_voxel_array_creation(global_data, iteration):
 
     # Gather global data
     optical_info = copy.deepcopy(global_data['optical_info'])
-    # optic_config = global_data['optic_config']
     volume_shape = optical_info['volume_shape']
     
     # Create voxels in different ways

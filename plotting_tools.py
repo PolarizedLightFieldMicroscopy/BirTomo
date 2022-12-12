@@ -288,7 +288,7 @@ def plot_birefringence_lines(retardance_img, azimuth_img, origin='lower', upscal
     return im
 
 
-def plot_birefringence_colorized(retardance_img, azimuth_img, ax=None):
+def plot_birefringence_colorized(retardance_img, azimuth_img):
     # Get pixel coords
     colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[0], 3])
     A = azimuth_img * 1
@@ -302,8 +302,4 @@ def plot_birefringence_colorized(retardance_img, azimuth_img, ax=None):
     from matplotlib.colors import hsv_to_rgb
     rgb = hsv_to_rgb(colors)
     
-    # Back to original size
-    if ax is None:
-        fig,ax = plt.subplots()
-    im = ax.imshow(rgb, cmap='hsv')
-    return im
+    plt.imshow(rgb, cmap='hsv')

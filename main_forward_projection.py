@@ -16,25 +16,16 @@ back_end = BackEnds.NUMPY
 
 if back_end == BackEnds.PYTORCH:
     from waveblocks.utils.misc_utils import *
-    # torch.set_default_tensor_type(torch.DoubleTensor)
-
-camera_pix_pitch = 6.5
-objective_M = 60
-pixels_per_ml = 17
-optical_info={
-            'volume_shape' : [15,51,51], 
-            'voxel_size_um' : 3*[camera_pix_pitch * pixels_per_ml / objective_M], 
-            'pixels_per_ml' : pixels_per_ml, 
-            'na_obj' : 1.2, 
-            'n_medium' : 1.52,
-            'wavelength' : 0.55,
-            'n_micro_lenses' : 5,
-            'n_voxels_per_ml' : 1,
-            'polarizer' : np.array([[1, 0], [0, 1]]),
-            'analyzer' : np.array([[1, 0], [0, 1]])
-            }
 
 
+# Get optical parameters template
+optical_info = OpticalElement.get_optical_info_template()
+
+optical_info['volume_shape'] = [15,51,51]
+optical_info['axial_voxel_size_um'] = 1.0
+optical_info['pixels_per_ml'] = 17 
+optical_info['n_micro_lenses'] = 5
+optical_info['n_voxels_per_ml'] = 1
 
 # Volume type
 # number is the shift from the end of the volume, change it as you wish, do single_voxel{volume_shape[0]//2} for a voxel in the center
@@ -79,7 +70,7 @@ if back_end == BackEnds.PYTORCH:
 
 # Single voxel
 if volume_type == 'single_voxel':
-    voxel_delta_n = 0.1
+    voxel_delta_n = 0.01
     voxel_birefringence_axis = torch.tensor([1,0.0,0])
     voxel_birefringence_axis /= voxel_birefringence_axis.norm()
 
@@ -115,9 +106,6 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 # # my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
 
 
-
-# Perform same calculation with torch
-ret_image, azim_image = BF_raytrace.ray_trace_through_volume(my_volume) 
 startTime = time.time()
 # Create non-identity polarizers and analyzers
 if False:
@@ -133,7 +121,6 @@ if back_end == BackEnds.PYTORCH:
 
 # Plot
 colormap = 'viridis'
-plt.clf()
 plt.rcParams['image.origin'] = 'lower'
 plt.figure(figsize=(12,2.5))
 plt.subplot(1,3,1)
@@ -148,14 +135,11 @@ ax = plt.subplot(1,3,3)
 if azimuth_plot_type == 'lines':
     im = plot_birefringence_lines(ret_image, azim_image,cmap=colormap, line_color='white', ax=ax)
 else:
-    im = plot_birefringence_colorized(ret_image, azim_image, ax=ax)
-plt.colorbar(im, fraction=0.046, pad=0.04)
+    plot_birefringence_colorized(ret_image, azim_image)
+plt.colorbar(fraction=0.046, pad=0.04)
 plt.title('Ret+Azim')
 
-plt.pause(0.2)
 plt.show()
 # plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
 # plt.pause(0.2)
-
-# plt.show(block=True)
 
