@@ -440,7 +440,7 @@ class RayTraceLFM(OpticalElement):
                 ray_valid_direction.append(self.ray_direction[:,ii,jj])
 
                 # What is the maximum span of the rays of a micro lens?
-                self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in ray_vol_colli_indices[0]])
+                self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in voxels_of_segs])
 
         
         # The maximum voxel-span is with respect to the middle voxel, let's shift that to the origin

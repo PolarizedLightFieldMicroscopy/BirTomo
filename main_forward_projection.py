@@ -32,6 +32,7 @@ optical_info['axial_voxel_size_um'] = 1.0
 optical_info['pixels_per_ml'] = 17
 optical_info['n_micro_lenses'] = 5
 optical_info['n_voxels_per_ml'] = 1
+
 # Create non-identity polarizers and analyzers
 # LC-PolScope setup
 # optical_info['polarizer'] = JonesMatrixGenerators.polscope_analyzer()

@@ -3,9 +3,8 @@ from tqdm import tqdm
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
-    def __init__(self, backend : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
-                optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
-                'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1, 'n_voxels_per_ml' : 1}):
+    def __init__(self, backend : BackEnds = BackEnds.NUMPY, torch_args={},
+                optical_info=None):
         super(BirefringentElement, self).__init__(backend=backend, torch_args=torch_args, optical_info=optical_info)
 
         self.simul_type = SimulType.BIREFRINGENT
@@ -213,12 +212,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
         n_ml_half = floor(n_micro_lenses / 2.0)
 
+        n_voxels_per_ml_half = floor(self.optical_info['n_voxels_per_ml'] * n_micro_lenses / 2.0)
+
         # Check if the volume_size can fit these micro_lenses.
         # considering that some rays go beyond the volume in front of the micro-lens
         voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 1
-        assert voxel_span_per_ml < volume_shape[1] and voxel_span_per_ml < volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"
-        # assert volume_shape[1] - 2*self.voxel_span_per_ml > 0 and volume_shape[2] - 2*self.voxel_span_per_ml > 0, f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large. \
-
+        assert voxel_span_per_ml < volume_shape[1] and voxel_span_per_ml < volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"        
 
         # Traverse volume for every ray, and generate retardance and azimuth images
         full_img_r = None
@@ -229,7 +228,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             full_img_row_a = None
             # Iterate micro-lenses in x direction
             for ml_jj in range(-n_ml_half, n_ml_half+1):
-                current_offset = [n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj]
+                # Compute offset to top corner of the volume in front of the micro-lens (ii,jj)
+                current_offset = np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj]) + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
+
                 # Compute images for current microlens, by passing an offset to this function depending on the micro lens and the super resolution
                 ret_image_torch, azim_image_torch = self.ret_and_azim_images(volume_in, micro_lens_offset=current_offset)
                 # If this is the first image, create
@@ -398,9 +399,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def ret_and_azim_images_numpy(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
-        n_micro_lenses = self.optical_info['n_micro_lenses']
-        n_ml_half = floor(n_micro_lenses / 2.0)
-        micro_lens_offset = np.array(micro_lens_offset) + np.array(self.vox_ctr_idx[1:]) - n_ml_half
 
         pixels_per_ml = self.optical_info['pixels_per_ml']
         ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
@@ -423,11 +421,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def ret_and_azim_images_torch(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''This function computes the retardance and azimuth images of the precomputed rays going through a volume'''
         # Include offset to move to the center of the volume, as the ray collisions are computed only for a single micro-lens
-        # todo: n_micro_lenses and n_micro_lenses mismatch
-        # n_micro_lenses = self.optic_config.mla_config.n_micro_lenses
-        n_micro_lenses = self.optical_info['n_micro_lenses']
-        n_ml_half = floor(n_micro_lenses / 2.0)
-        micro_lens_offset = np.array(micro_lens_offset) + np.array(self.vox_ctr_idx[1:]) - n_ml_half
+
         # Fetch needed variables
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
         

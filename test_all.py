@@ -387,6 +387,63 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
+@pytest.mark.parametrize('n_voxels_per_ml', [
+        1,
+        3,
+        4
+    ])
+def test_forward_projection_different_super_samplings(global_data, n_voxels_per_ml):
+    torch.set_grad_enabled(False)
+    # Gather global data
+    local_data = copy.deepcopy(global_data)
+    optical_info = local_data['optical_info']
+
+    # Volume shape
+    volume_shape = [7,27,27]
+    optical_info['volume_shape'] = volume_shape
+
+    # The n_micro_lenses defines the active volume area, and it should be smaller than the volume_shape.
+    # This as some rays go beyond the volume in front of a single micro-lens
+    optical_info['n_micro_lenses']  = 5
+    optical_info['n_voxels_per_ml'] = n_voxels_per_ml
+    optical_info['pixels_per_ml'] = 17
+
+    
+    # Create Ray-tracing objects
+    BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
+    BF_raytrace_torch = BirefringentRaytraceLFM(backend=BackEnds.PYTORCH, optical_info=optical_info)
+    
+    BF_raytrace_numpy.compute_rays_geometry()
+    BF_raytrace_torch.compute_rays_geometry()
+
+    
+    # Generate a volume with random everywhere
+    voxel_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode='ellipsoid')
+    # Copy the volume, to have exactly the same things
+    voxel_numpy_random = BirefringentVolume(backend=BackEnds.NUMPY,  optical_info=optical_info,
+                                    Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
+
+
+    
+    assert BF_raytrace_numpy.optical_info == voxel_numpy_random.optical_info, 'Mismatch on RayTracer and volume optical_info numpy'
+    assert BF_raytrace_torch.optical_info == voxel_torch_random.optical_info, 'Mismatch on RayTracer and volume optical_info torch'
+    
+    with np.errstate(divide='raise'):
+        ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
+    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
+    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
+    
+    plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
+
+    assert np.all(np.isnan(ret_img_numpy)==False), "Error in numpy retardance computations nan found"
+    assert np.all(np.isnan(azi_img_numpy)==False), "Error in numpy azimuth computations nan found"
+    assert torch.all(torch.isnan(ret_img_torch)==False), "Error in torch retardance computations nan found"
+    assert torch.all(torch.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
+
+    assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
+    
+    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
+
 
 
 @pytest.mark.parametrize('volume_init_mode', [
