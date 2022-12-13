@@ -333,10 +333,7 @@ class BirefringentVolume(BirefringentElement):
             volume.get_optic_axis()[:, volume_axial_offset,
                                     vox_ctr_idx[1],
                                     vox_ctr_idx[2]] \
-                                    = torch.tensor([voxel_birefringence_axis[0],
-                                                    voxel_birefringence_axis[1],
-                                                    voxel_birefringence_axis[2]]) \
-                                    if backend == BackEnds.PYTORCH else voxel_birefringence_axis
+                                    = voxel_birefringence_axis
 
         elif vol_type in ["ellipsoid", "shell"]:    # whole plane
             ellipsoid_args = {  'radius' : [5.5, 9.5, 5.5],
