@@ -6,13 +6,11 @@ This script using numpy/pytorch back-end to:
     - Compute the retardance and azimuth for every ray.
     - Generate 2D images.
 """
-import time # to measure ray tracing time
-import numpy as np
+import time         # to measure ray tracing time
+import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
-# from plotting_tools import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-# from VolumeRaytraceLFM.birefringence_implementations import *
 from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM, JonesMatrixGenerators
 
 
@@ -60,13 +58,13 @@ if volume_type == 'single_voxel':
 
 
 # Create a Birefringent Raytracer
-BF_raytrace = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
+rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 
 # Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
 # If a filepath is passed as argument, the object with all its calculations
 #   get stored/loaded from a file
 startTime = time.time()
-BF_raytrace.compute_rays_geometry()
+rays.compute_rays_geometry()
 executionTime = (time.time() - startTime)
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
@@ -76,7 +74,7 @@ if backend == BackEnds.PYTORCH:
     torch.set_grad_enabled(False)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f'Using computing device: {device}')
-    BF_raytrace = BF_raytrace.to(device)
+    rays = rays.to(device)
 
 # Single voxel
 if volume_type == 'single_voxel':
@@ -86,15 +84,15 @@ if volume_type == 'single_voxel':
     voxel_birefringence_axis /= voxel_birefringence_axis.norm()
 
     # Create empty volume
-    my_volume = BF_raytrace.init_volume(optical_info['volume_shape'], init_mode='zeros')
+    my_volume = rays.init_volume(optical_info['volume_shape'], init_mode='zeros')
     # Set delta_n
     my_volume.get_delta_n()[volume_axial_offset,
-                                    BF_raytrace.vox_ctr_idx[1],
-                                    BF_raytrace.vox_ctr_idx[2]] = voxel_delta_n
+                                    rays.vox_ctr_idx[1],
+                                    rays.vox_ctr_idx[2]] = voxel_delta_n
     # set optical_axis
     my_volume.get_optic_axis()[:, volume_axial_offset,
-                            BF_raytrace.vox_ctr_idx[1],
-                            BF_raytrace.vox_ctr_idx[2]] \
+                            rays.vox_ctr_idx[1],
+                            rays.vox_ctr_idx[2]] \
                             = torch.tensor([voxel_birefringence_axis[0],
                                             voxel_birefringence_axis[1],
                                             voxel_birefringence_axis[2]]) \
@@ -106,7 +104,7 @@ elif volume_type in ['shell', 'ellipsoid']: # whole plane
                         'delta_n' : -0.1,
                         'border_thickness' : 0.3}
 
-    my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], \
+    my_volume = rays.init_volume(volume_shape=optical_info['volume_shape'], \
                                         init_mode='ellipsoid', init_args=ellipsoid_args)
 
 
@@ -120,7 +118,7 @@ elif volume_type in ['shell', 'ellipsoid']: # whole plane
 
 
 startTime = time.time()
-ret_image, azim_image = BF_raytrace.ray_trace_through_volume(my_volume)
+ret_image, azim_image = rays.ray_trace_through_volume(my_volume)
 executionTime = (time.time() - startTime)
 print(f'Execution time in seconds with backend {backend}: ' + str(executionTime))
 

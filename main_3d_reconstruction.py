@@ -1,20 +1,23 @@
-import torch
-from VolumeRaytraceLFM.birefringence_implementations import *
-from waveblocks.utils.misc_utils import *
+"""Main script to run 3D reconstruction
+- includes forward projection
+"""
 import time
-from tqdm import tqdm
 import os
+import torch
+from tqdm import tqdm
+from waveblocks.utils.misc_utils import *
+from VolumeRaytraceLFM.abstract_classes import BackEnds
+from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM
 
-
-# Select back end
+# Select backend: requires pytorch to calculate gradients
 backend = BackEnds.PYTORCH
 
 # Get optical parameters template
 optical_info = OpticalElement.get_optical_info_template()
-
+# Alter some of the optical parameters
 optical_info['volume_shape'] = [9,51,51]
 optical_info['axial_voxel_size_um'] = 1.0
-optical_info['pixels_per_ml'] = 17 
+optical_info['pixels_per_ml'] = 17
 optical_info['n_micro_lenses'] = 15
 optical_info['n_voxels_per_ml'] = 1
 
@@ -26,22 +29,23 @@ training_params = {
 }
 
 
-
 # Volume type
-# number is the shift from the end of the volume, change it as you wish, do single_voxel{volume_shape[0]//2} for a voxel in the center
+# number is the shift from the end of the volume, change it as you wish,
+#   do single_voxel{volume_shape[0]//2} for a voxel in the center
 # for shift in range(-5,6):
 shift_from_center = -1
-volume_axial_offset = optical_info['volume_shape'][0]//2+shift_from_center #for center
+volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 # volume_type = 'ellipsoid'
 volume_type = 'shell'
-# volume_type = 'single_voxel' 
+# volume_type = 'single_voxel'
 
 # Plot azimuth
 # azimuth_plot_type = 'lines'
 azimuth_plot_type = 'hsv'
 
-# Create output dir
-output_dir = f'reconstructions/recons_{volume_type}_{optical_info["volume_shape"][0]}x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}__{training_params["output_posfix"]}'
+# Create output directory
+output_dir = f'reconstructions/recons_{volume_type}_{optical_info["volume_shape"][0]} \
+                x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}__{training_params["output_posfix"]}'
 os.makedirs(output_dir, exist_ok=True)
 torch.save({'optical_info' : optical_info,
             'training_params' : training_params,
@@ -54,12 +58,14 @@ if volume_type == 'single_voxel':
 
 
 # Create a Birefringent Raytracer
-BF_raytrace = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
+rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 
-# Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
-# If a filepath is passed as argument, the object with all its calculations get stored/loaded from a file
+# Compute the rays and use the Siddon algorithm to compute the intersections
+#   with voxels.
+# If a filepath is passed as argument, the object with all its calculations
+#   get stored/loaded from a file.
 startTime = time.time()
-BF_raytrace.compute_rays_geometry() 
+rays.compute_rays_geometry()
 executionTime = (time.time() - startTime)
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
@@ -70,7 +76,7 @@ if backend == BackEnds.PYTORCH:
         )
     device = "cpu"
     print(f'Using computing device: {device}')
-    BF_raytrace = BF_raytrace.to(device)
+    rays = rays.to(device)
 
 
 # Single voxel
@@ -80,30 +86,33 @@ if volume_type == 'single_voxel':
     voxel_birefringence_axis /= voxel_birefringence_axis.norm()
 
     # Create empty volume
-    my_volume = BF_raytrace.init_volume(optical_info['volume_shape'], init_mode='zeros')
+    my_volume = rays.init_volume(optical_info['volume_shape'], init_mode='zeros')
     # Set delta_n
     my_volume.Delta_n.requires_grad = False
     my_volume.optic_axis.requires_grad = False
-    my_volume.get_delta_n()[volume_axial_offset, 
-                                    BF_raytrace.vox_ctr_idx[1], 
-                                    BF_raytrace.vox_ctr_idx[2]] = voxel_delta_n
+    my_volume.get_delta_n()[volume_axial_offset,
+                                    rays.vox_ctr_idx[1],
+                                    rays.vox_ctr_idx[2]] = voxel_delta_n
     # set optical_axis
-    my_volume.get_optic_axis()[:, volume_axial_offset, 
-                            BF_raytrace.vox_ctr_idx[1], 
-                            BF_raytrace.vox_ctr_idx[2]] = torch.tensor([voxel_birefringence_axis[0], 
-                                                                            voxel_birefringence_axis[1], 
-                                                                            voxel_birefringence_axis[2]]) if backend == BackEnds.PYTORCH else voxel_birefringence_axis
+    my_volume.get_optic_axis()[:, volume_axial_offset,
+                                rays.vox_ctr_idx[1],
+                                rays.vox_ctr_idx[2]] \
+            = torch.tensor([voxel_birefringence_axis[0],
+                            voxel_birefringence_axis[1],
+                            voxel_birefringence_axis[2]]) \
+            if backend == BackEnds.PYTORCH else voxel_birefringence_axis
 
     my_volume.Delta_n.requires_grad = True
     my_volume.optic_axis.requires_grad = True
 
 elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
     ellipsoid_args = {  'radius' : [3.5, 4.5, 3.5],
-                        'center' : [volume_axial_offset/optical_info['volume_shape'][0], 0.48, 0.51],   # from 0 to 1
+                        'center' : [volume_axial_offset / optical_info['volume_shape'][0], 0.48, 0.51],   # from 0 to 1
                         'delta_n' : -0.1,
                         'border_thickness' : 0.3}
 
-    my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='ellipsoid', init_args=ellipsoid_args)
+    my_volume = rays.init_volume(volume_shape=optical_info['volume_shape'], init_mode='ellipsoid', \
+                                    init_args=ellipsoid_args)
 
     my_volume.Delta_n.requires_grad = False
     my_volume.optic_axis.requires_grad = False
@@ -111,35 +120,34 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
     # Do we want a shell? let's remove some of the volume
     if volume_type == 'shell':
         my_volume.get_delta_n()[:optical_info['volume_shape'][0]//2+1,...] = 0
-        
+
     my_volume.Delta_n.requires_grad = True
     my_volume.optic_axis.requires_grad = True
 
+# Plot volume
 # with torch.no_grad():
 #     my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.1)
 
 
-
-
-
 # Create a Birefringent Raytracer
-BF_raytrace = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
+rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 
 # Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
-# If a filepath is passed as argument, the object with all its calculations get stored/loaded from a file
+# If a filepath is passed as argument, the object with all its calculations
+#   get stored/loaded from a file
 startTime = time.time()
-BF_raytrace.compute_rays_geometry() 
+rays.compute_rays_geometry()
 executionTime = (time.time() - startTime)
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
 print(f'Using computing device: {device}')
-BF_raytrace = BF_raytrace.to(device)
+rays = rays.to(device)
 
 
 with torch.no_grad():
     # Perform same calculation with torch
     startTime = time.time()
-    ret_image_measured, azim_image_measured = BF_raytrace.ray_trace_through_volume(my_volume) 
+    ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(my_volume)
     executionTime = (time.time() - startTime)
     print('Execution time in seconds with Torch: ' + str(executionTime))
 
@@ -148,13 +156,14 @@ with torch.no_grad():
     optic_axis_GT = my_volume.get_optic_axis().detach().clone()
     ret_image_measured = ret_image_measured.detach()
     azim_image_measured = azim_image_measured.detach()
-    azim_comp_measured = torch.arctan2(torch.sin(azim_image_measured), torch.cos(azim_image_measured)).detach()
+    azim_comp_measured = torch.arctan2(torch.sin(azim_image_measured), \
+                            torch.cos(azim_image_measured)).detach()
 
 
 ############# Torch
 # Let's create an optimizer
 # Initial guess
-my_volume = BF_raytrace.init_volume(volume_shape=optical_info['volume_shape'], init_mode='random')
+my_volume = rays.init_volume(volume_shape=optical_info['volume_shape'], init_mode='random')
 my_volume.members_to_learn.append('Delta_n')
 my_volume.members_to_learn.append('optic_axis')
 
@@ -170,22 +179,21 @@ plt.rcParams['image.origin'] = 'lower'
 co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
 for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     optimizer.zero_grad()
-    ret_image_current, azim_image_current = BF_raytrace.ray_trace_through_volume(my_volume)
+    ret_image_current, azim_image_current = rays.ray_trace_through_volume(my_volume)
     # Vector difference
     # co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
     # L = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).sqrt().mean()
     azim_diff = azim_comp_measured - torch.arctan2(torch.sin(azim_image_current), torch.cos(azim_image_current))
     L = loss_function(ret_image_measured, ret_image_current) + \
-        training_params['azimuth_weight'] * (2 * (1 - torch.cos(azim_image_measured - azim_image_current))).mean() 
+        training_params['azimuth_weight'] * (2 * (1 - torch.cos(azim_image_measured - azim_image_current))).mean()
     #     (torch.cos(azim_image_measured-azim_image_current)**2 + torch.sin(azim_image_measured-azim_image_current)**2).abs().mean()
         # cos + sine
         # 0.1*(torch.cos(azim_image_measured) - torch.cos(azim_image_current)).abs().mean() + 0.1*(torch.sin(azim_image_measured) - torch.sin(azim_image_current)).abs().mean()
         # (torch.atan2(torch.sin(azim_image_measured - azim_image_current), torch.cos(azim_image_measured - azim_image_current))).abs().mean()
-        # (2 * (1 - torch.cos(azim_image_measured - azim_image_current))).mean() 
+        # (2 * (1 - torch.cos(azim_image_measured - azim_image_current))).mean()
         # loss_function(azim_image_measured, azim_image_current)
-    
-    # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
 
+    # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
     L.backward()
     # Apply gradient updates to the volume
     optimizer.step()
@@ -204,7 +212,8 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         plt.colorbar()
         plt.title('Initial Azimuth')
         plt.subplot(2,4,3)
-        plt.imshow(volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0].detach().cpu().numpy())
+        plt.imshow(volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0] \
+                                        .detach().cpu().numpy())
         plt.colorbar()
         plt.title('Initial volume MIP')
 
@@ -217,12 +226,12 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         plt.colorbar()
         plt.title('Final Azimuth')
         plt.subplot(2,4,7)
-        plt.imshow(volume_2_projections(my_volume.get_delta_n().unsqueeze(0))[0,0].detach().cpu().numpy())
+        plt.imshow(volume_2_projections(my_volume.get_delta_n().unsqueeze(0))[0,0] \
+                                        .detach().cpu().numpy())
         plt.colorbar()
         plt.title('Final Volume MIP')
         plt.subplot(2,4,8)
         plt.plot(list(range(len(losses))),losses)
-        
         plt.gca().yaxis.set_label_position("right")
         plt.gca().yaxis.tick_right()
         plt.xlabel('Epoch')

@@ -11,7 +11,7 @@ For the forward model, the main script is main_forward_projection.py. The workfl
 1. Create a volume to image.
 1. Raytrace through the volume.
 
-For the iterative reconstruction, the main script is main_3D_bire_recon_pytorch.py.
+For the iterative reconstruction, the main script is main_3d_reconstruction.py.
 
 ## Requirements
 virtual environment should include the waveblocks requirements
