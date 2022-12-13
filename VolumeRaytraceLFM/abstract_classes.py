@@ -450,8 +450,10 @@ class RayTraceLFM(OpticalElement):
         n_valid_rays = len(ray_valid_indices)
 
         # Create the information to store
-
-        self.ray_valid_indices = torch.zeros(2, len(ray_valid_indices), dtype=int)
+        if self.backend == BackEnds.NUMPY:
+            self.ray_valid_indices = np.zeros((2, len(ray_valid_indices)), dtype=int)
+        elif self.backend == BackEnds.PYTORCH:
+            self.ray_valid_indices = torch.zeros(2, len(ray_valid_indices), dtype=int)
         for ix in range(len(ray_valid_indices)):
             self.ray_valid_indices[0,ix] = ray_valid_indices[ix][0]
             self.ray_valid_indices[1,ix] = ray_valid_indices[ix][1]
@@ -474,7 +476,8 @@ class RayTraceLFM(OpticalElement):
         for valid_ray in range(n_valid_rays):
             # Fetch the ray-voxel intersection length for this ray
             val_lengths = ray_vol_colli_lengths[valid_ray]
-            self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)    if self.backend == BackEnds.PYTORCH else val_lengths
+            self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths) \
+                            if self.backend == BackEnds.PYTORCH else val_lengths
             self.ray_valid_direction[valid_ray, :] = ray_valid_direction[valid_ray]
         
         # Update volume shape information, to account for the whole workspace
