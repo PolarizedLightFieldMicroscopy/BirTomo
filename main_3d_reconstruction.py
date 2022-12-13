@@ -75,6 +75,7 @@ if backend == BackEnds.PYTORCH:
     device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
+    # Force cpu, as for now cpu is faster
     device = "cpu"
     print(f'Using computing device: {device}')
     rays = rays.to(device)
@@ -84,6 +85,8 @@ if backend == BackEnds.PYTORCH:
 # Create a volume
 my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
+# Move volume to GPU if avaliable
+my_volume = my_volume.to(device)
 # Plot volume
 with torch.no_grad():
     my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n().abs(), opacity=0.1)
@@ -111,6 +114,7 @@ with torch.no_grad():
 my_volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args = {'init_mode' : 'random'})
 my_volume.members_to_learn.append('Delta_n')
 my_volume.members_to_learn.append('optic_axis')
+my_volume = my_volume.to(device)
 
 optimizer = torch.optim.Adam(my_volume.get_trainable_variables(), lr=training_params['lr'])
 loss_function = torch.nn.L1Loss()

@@ -160,8 +160,16 @@ class BirefringentVolume(BirefringentElement):
     def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
         
         voxels = voxels_in - voxels_in.min()
+        
+        # Check if this is a torch tensor
+        if not isinstance(voxels_in, np.ndarray):
+            try:
+                voxels = voxels.detach()
+                voxels = voxels.cpu().numpy()
+            except:
+                pass
+                
         import plotly.graph_objects as go
-        import numpy as np
         volume_shape = optical_info['volume_shape']
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
@@ -611,8 +619,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         azimuth = self.azimuth(effective_JM)
 
         # Create output images
-        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True)
-        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True)
+        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True, device=self.get_device())
+        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, requires_grad=True, device=self.get_device())
         ret_image.requires_grad = False
         azim_image.requires_grad = False
 

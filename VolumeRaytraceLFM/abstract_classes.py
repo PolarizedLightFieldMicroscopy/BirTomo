@@ -495,7 +495,7 @@ class RayTraceLFM(OpticalElement):
             for n_ray,ray in enumerate(self.ray_valid_direction):
                 self.ray_direction_basis.append(RayTraceLFM.calc_rayDir(ray))
         elif self.backend == BackEnds.PYTORCH:
-            self.ray_direction_basis = RayTraceLFM.calc_rayDir_torch(self.ray_valid_direction)
+            self.ray_direction_basis = nn.Parameter(RayTraceLFM.calc_rayDir_torch(self.ray_valid_direction))
 
         return self
 
