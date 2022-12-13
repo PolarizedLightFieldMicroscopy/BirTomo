@@ -1,5 +1,4 @@
-"""Main script to run 3D reconstruction
-- includes forward projection
+"""(in progess) 3D reconstruction of shell
 """
 import time
 import os
@@ -123,8 +122,8 @@ if backend == BackEnds.PYTORCH:
 
 #     my_volume.Delta_n.requires_grad = True
 #     my_volume.optic_axis.requires_grad = True
-
 def create_volume(rays_traced: BirefringentRaytraceLFM, vol_type="shell"):
+
     ellipsoid_args = {  'radius' : [3.5, 4.5, 3.5],
                     'center' : [volume_axial_offset / optical_info['volume_shape'][0], 0.48, 0.51],   # from 0 to 1
                     'delta_n' : -0.1,
