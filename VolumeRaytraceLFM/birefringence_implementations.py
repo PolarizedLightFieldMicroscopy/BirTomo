@@ -120,6 +120,30 @@ class BirefringentVolume(BirefringentElement):
         else:
             return self.optic_axis
 
+    def __iadd__(self, other):
+        ''' Overload the += operator to be able to sum volumes'''
+        # Check that shapes are the same
+        assert (self.get_delta_n().shape == other.get_delta_n().shape) \
+                and (self.get_optic_axis().shape == other.get_optic_axis().shape)
+        # Check if it's pytorch and need to have the grads disabled before modification
+        has_grads = False
+        if hasattr(self.Delta_n, 'requires_grad'):
+            torch.set_grad_enabled(False)
+            has_grads = True
+            self.Delta_n.requires_grad = False
+            self.optic_axis.requires_grad = False
+        
+        self.Delta_n += other.Delta_n
+        self.optic_axis += other.optic_axis
+        # Maybe normalize axis again?
+
+        if has_grads:
+            torch.set_grad_enabled(has_grads)
+            self.Delta_n.requires_grad = True
+            self.optic_axis.requires_grad = True
+        return self
+
+
     @staticmethod
     def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
         
@@ -149,7 +173,6 @@ class BirefringentVolume(BirefringentElement):
             surface_count=20, # needs to be a large number for good volume rendering
             # colorscale=colormap
             ))
-        # fig.data = fig.data[::-1]
         # Draw the whole volume span
         # fig.add_mesh3d(
         #         # 8 vertices of a cube
@@ -177,6 +200,7 @@ class BirefringentVolume(BirefringentElement):
             margin=dict(r=0, l=0, b=0, t=0),
             autosize=True
             )
+        fig.data = fig.data[::-1]
         fig.show()
         return
 
@@ -807,3 +831,60 @@ class JonesVectorGenerators(BirefringentElement):
     @staticmethod
     def vertical():
         return np.array([0, 1])
+
+
+    
+
+
+
+def create_volume(rays: BirefringentRaytraceLFM, vol_type="shell", volume_axial_offset=0):
+    '''Create different volumes...somehow incorporting the rays'''
+    if vol_type == "single_voxel":
+        voxel_delta_n = 0.01
+        # TODO: make numpy version of birefringence axis
+        voxel_birefringence_axis = torch.tensor([1,0.0,0])
+        voxel_birefringence_axis /= voxel_birefringence_axis.norm()
+
+        # Create empty volume
+        volume = rays.init_volume(rays.optical_info['volume_shape'], init_mode='zeros')
+        # Set delta_n
+        volume.get_delta_n()[volume_axial_offset,
+                                        rays.vox_ctr_idx[1],
+                                        rays.vox_ctr_idx[2]] = voxel_delta_n
+        # set optical_axis
+        volume.get_optic_axis()[:, volume_axial_offset,
+                                rays.vox_ctr_idx[1],
+                                rays.vox_ctr_idx[2]] \
+                                = torch.tensor([voxel_birefringence_axis[0],
+                                                voxel_birefringence_axis[1],
+                                                voxel_birefringence_axis[2]]) \
+                                if rays.backend == BackEnds.PYTORCH else voxel_birefringence_axis
+    elif vol_type in ["ellipsoid", "shell"]:    # whole plane
+        ellipsoid_args = {  'radius' : [5.5, 9.5, 5.5],
+                    'center' : [volume_axial_offset / rays.optical_info['volume_shape'][0], \
+                                    0.50, 0.5],  # from 0 to 1
+                    'delta_n' : -0.1,
+                    'border_thickness' : 0.3}
+        volume = rays.init_volume(volume_shape=rays.optical_info['volume_shape'], \
+                                            init_mode='ellipsoid', init_args=ellipsoid_args)
+
+        # Do we want a shell? let's remove some of the volume
+        if vol_type == 'shell':
+            volume.get_delta_n()[:rays.optical_info['volume_shape'][0] // 2 + 2,...] = 0
+
+
+    elif 'ellipsoids' in vol_type:
+        n_ellipsoids = int(vol_type[0])
+        volume = rays.init_volume(volume_shape=rays.optical_info['volume_shape'], init_mode='zeros')
+
+        for n_ell in range(n_ellipsoids):
+            ellipsoid_args = {  'radius' : np.random.uniform(1.5, 5.5, [3]),
+                                'center' : [np.random.uniform(0.35, 0.65),] + list(np.random.uniform(0.35, 0.65, [2])),
+                                'delta_n' : np.random.uniform(-0.25, -0.001),
+                                'border_thickness' : 0.3}
+            new_vol = rays.init_volume(volume_shape=rays.optical_info['volume_shape'], init_mode='ellipsoid', \
+                                            init_args=ellipsoid_args)
+            
+            volume += new_vol
+            
+    return volume
