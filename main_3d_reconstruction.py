@@ -128,22 +128,6 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 # with torch.no_grad():
 #     my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.1)
 
-
-# Create a Birefringent Raytracer
-rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
-
-# Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
-# If a filepath is passed as argument, the object with all its calculations
-#   get stored/loaded from a file
-startTime = time.time()
-rays.compute_rays_geometry()
-executionTime = (time.time() - startTime)
-print('Ray-tracing time in seconds: ' + str(executionTime))
-
-print(f'Using computing device: {device}')
-rays = rays.to(device)
-
-
 with torch.no_grad():
     # Perform same calculation with torch
     startTime = time.time()
