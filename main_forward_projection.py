@@ -11,8 +11,9 @@ import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM, JonesMatrixGenerators
-
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, \
+                                                            BirefringentRaytraceLFM, \
+                                                            JonesMatrixGenerators
 
 # Select backend method
 # backend = BackEnds.PYTORCH
@@ -42,7 +43,7 @@ shift_from_center = 0
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 # volume_type = 'ellipsoid'
 volume_type = 'shell'
-# volume_type = '2ellipsoids'
+volume_type = '2ellipsoids'
 # volume_type = 'single_voxel'
 
 # Plot azimuth
@@ -54,7 +55,6 @@ azimuth_plot_type = 'hsv'
 if volume_type == 'single_voxel':
     optical_info['n_micro_lenses'] = 1
     azimuth_plot_type = 'lines'
-
 
 
 # Create a Birefringent Raytracer
@@ -78,11 +78,12 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
+my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
+                                                    vol_type=volume_type, \
+                                                    volume_axial_offset=volume_axial_offset)
 
 # Plot the volume
 # my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
-
 
 
 startTime = time.time()
@@ -113,6 +114,7 @@ else:
 plt.colorbar(fraction=0.046, pad=0.04)
 plt.title('Ret+Azim')
 
+plt.pause(0.2)
 plt.show(block=True)
 # plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
 # plt.pause(0.2)
