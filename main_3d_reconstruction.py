@@ -83,7 +83,9 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
+my_volume = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
+                                                    vol_type=volume_type, \
+                                                    volume_axial_offset=volume_axial_offset)
 
 # Move volume to GPU if avaliable
 my_volume = my_volume.to(device)
@@ -111,7 +113,8 @@ with torch.no_grad():
 ############# 
 # Let's create an optimizer
 # Initial guess
-my_volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args = {'init_mode' : 'random'})
+my_volume = BirefringentVolume( backend=backend, optical_info=optical_info, \
+                                volume_creation_args = {'init_mode' : 'random'})
 my_volume.members_to_learn.append('Delta_n')
 my_volume.members_to_learn.append('optic_axis')
 my_volume = my_volume.to(device)

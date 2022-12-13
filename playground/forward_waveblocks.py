@@ -21,31 +21,63 @@ data_path = file_path.parent.joinpath("data")
 # Fetch Device to use: cpu or GPU?
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-################### Object space specification
-depth_step = 0.43
-depth_range = [-depth_step*1, depth_step*1]
-vol_xy_size = 501
-depths = np.arange(depth_range[0], depth_range[1] + depth_step, depth_step)
-nDepths = len(depths)
+# ################### Object space specification
+# depth_step = 0.43
+# depth_range = [-depth_step*1, depth_step*1]
+# vol_xy_size = 501
+# depths = np.arange(depth_range[0], depth_range[1] + depth_step, depth_step)
+# nDepths = len(depths)
 
-# Load volume to use as our object in front of the microscope
-vol_file = h5py.File(
-    data_path.joinpath("fish_phantom_251_251_51.h5"), "r"
-)
-GT_volume = (
-    torch.tensor(np.array(vol_file['fish_phantom']))
-    .permute(2, 1, 0)
-    .unsqueeze(0)
-    .unsqueeze(0)
-    .to(device)
-)
-GT_volume = torch.nn.functional.interpolate(
-    GT_volume, [vol_xy_size, vol_xy_size, nDepths]
-)
-# Set volume to correct shape [batch, z, x, y]
-GT_volume = GT_volume[:, 0, ...].permute(0, 3, 1, 2).contiguous()
-# Normalize volume
-GT_volume /= GT_volume.max()
+# # Load volume to use as our object in front of the microscope
+# vol_file = h5py.File(
+#     data_path.joinpath("fish_phantom_251_251_51.h5"), "r"
+# )
+# GT_volume = (
+#     torch.tensor(np.array(vol_file['fish_phantom']))
+#     .permute(2, 1, 0)
+#     .unsqueeze(0)
+#     .unsqueeze(0)
+#     .to(device)
+# )
+# GT_volume = torch.nn.functional.interpolate(
+#     GT_volume, [vol_xy_size, vol_xy_size, nDepths]
+# )
+# # Set volume to correct shape [batch, z, x, y]
+# GT_volume = GT_volume[:, 0, ...].permute(0, 3, 1, 2).contiguous()
+# # Normalize volume
+# GT_volume /= GT_volume.max()
+
+import time         # to measure ray tracing time
+import numpy as np  # to convert radians to degrees for plots
+import matplotlib.pyplot as plt
+from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
+from VolumeRaytraceLFM.abstract_classes import BackEnds
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, \
+                                                            BirefringentRaytraceLFM, \
+                                                            JonesMatrixGenerators
+
+# Select backend method
+# backend = BackEnds.PYTORCH
+backend = BackEnds.NUMPY
+
+if backend == BackEnds.PYTORCH:
+    from waveblocks.utils.misc_utils import *
+
+optical_info = BirefringentVolume.get_optical_info_template()
+# Alter some of the optical parameters
+optical_info['volume_shape'] = [15, 51, 51]
+optical_info['axial_voxel_size_um'] = 1.0
+optical_info['pixels_per_ml'] = 17
+optical_info['n_micro_lenses'] = 5
+optical_info['n_voxels_per_ml'] = 1
+# Create a volume
+volume_type = 'shell'
+shift_from_center = 0
+volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
+my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
+                                                    vol_type=volume_type, \
+                                                    volume_axial_offset=volume_axial_offset)
+
 
 
 ################### Configure Microscope
@@ -61,8 +93,8 @@ optical_config.PSF_config.wvl = 0.593
 optical_config.PSF_config.ni = 1.35
 optical_config.PSF_config.ni0 = 1.35
 
-optical_config.PSF_config.depth_step = depth_step
-optical_config.PSF_config.depths = depths
+# optical_config.PSF_config.depth_step = depth_step
+# optical_config.PSF_config.depths = depths
 
 # first zero found in the center at:
 # depths = np.append(depths,2*optical_config.PSF_config.wvl/(optical_config.PSF_config.NA**2))
@@ -79,11 +111,11 @@ optical_config.mla_config.focal_length = 2500
 # Update the optical configuration with the new parameters
 optical_config.setup_parameters()
 
-# Create and compute PSF
-PSF = psf.PSF(optical_config)
-_, psf_in = PSF.forward(
-    optical_config.PSF_config.voxel_size[0], psf_size, optical_config.PSF_config. depths
-)
+# # Create and compute PSF
+# PSF = psf.PSF(optical_config)
+# _, psf_in = PSF.forward(
+#     optical_config.PSF_config.voxel_size[0], psf_size, optical_config.PSF_config. depths
+# )
 
 # Create a ligth-field WaveBlocks microscope Microscope
 # Where: optical_config  = all microscope related information
