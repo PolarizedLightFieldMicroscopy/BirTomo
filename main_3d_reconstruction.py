@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 from waveblocks.utils.misc_utils import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM
+from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM, create_volume
 
 # Select backend: requires pytorch to calculate gradients
 backend = BackEnds.PYTORCH
@@ -15,10 +15,10 @@ backend = BackEnds.PYTORCH
 # Get optical parameters template
 optical_info = OpticalElement.get_optical_info_template()
 # Alter some of the optical parameters
-optical_info['volume_shape'] = [9,51,51]
+optical_info['volume_shape'] = [11,51,51]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 15
+optical_info['n_micro_lenses'] = 21
 optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
@@ -35,8 +35,9 @@ training_params = {
 # for shift in range(-5,6):
 shift_from_center = -1
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
+volume_type = '9ellipsoids'
 # volume_type = 'ellipsoid'
-volume_type = 'shell'
+# volume_type = 'shell'
 # volume_type = 'single_voxel'
 
 # Plot azimuth
@@ -79,61 +80,21 @@ if backend == BackEnds.PYTORCH:
     rays = rays.to(device)
 
 
-# Single voxel
-if volume_type == 'single_voxel':
-    voxel_delta_n = 0.1
-    voxel_birefringence_axis = torch.tensor([1,0.0,0])
-    voxel_birefringence_axis /= voxel_birefringence_axis.norm()
 
-    # Create empty volume
-    my_volume = rays.init_volume(optical_info['volume_shape'], init_mode='zeros')
-    # Set delta_n
-    my_volume.Delta_n.requires_grad = False
-    my_volume.optic_axis.requires_grad = False
-    my_volume.get_delta_n()[volume_axial_offset,
-                                    rays.vox_ctr_idx[1],
-                                    rays.vox_ctr_idx[2]] = voxel_delta_n
-    # set optical_axis
-    my_volume.get_optic_axis()[:, volume_axial_offset,
-                                rays.vox_ctr_idx[1],
-                                rays.vox_ctr_idx[2]] \
-            = torch.tensor([voxel_birefringence_axis[0],
-                            voxel_birefringence_axis[1],
-                            voxel_birefringence_axis[2]]) \
-            if backend == BackEnds.PYTORCH else voxel_birefringence_axis
-
-    my_volume.Delta_n.requires_grad = True
-    my_volume.optic_axis.requires_grad = True
-
-elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
-    ellipsoid_args = {  'radius' : [3.5, 4.5, 3.5],
-                        'center' : [volume_axial_offset / optical_info['volume_shape'][0], 0.48, 0.51],   # from 0 to 1
-                        'delta_n' : -0.1,
-                        'border_thickness' : 0.3}
-
-    my_volume = rays.init_volume(volume_shape=optical_info['volume_shape'], init_mode='ellipsoid', \
-                                    init_args=ellipsoid_args)
-
-    my_volume.Delta_n.requires_grad = False
-    my_volume.optic_axis.requires_grad = False
-
-    # Do we want a shell? let's remove some of the volume
-    if volume_type == 'shell':
-        my_volume.get_delta_n()[:optical_info['volume_shape'][0]//2+1,...] = 0
-
-    my_volume.Delta_n.requires_grad = True
-    my_volume.optic_axis.requires_grad = True
+# Create a volume
+my_volume = create_volume(rays, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
 # Plot volume
-# with torch.no_grad():
-#     my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.1)
+with torch.no_grad():
+    my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n().abs(), opacity=0.1)
+
 
 with torch.no_grad():
     # Perform same calculation with torch
     startTime = time.time()
     ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(my_volume)
     executionTime = (time.time() - startTime)
-    print('Execution time in seconds with Torch: ' + str(executionTime))
+    print('Warmup time in seconds with Torch: ' + str(executionTime))
 
     # Store GT images
     Delta_n_GT = my_volume.get_delta_n().detach().clone()

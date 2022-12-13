@@ -11,7 +11,7 @@ import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM, JonesMatrixGenerators
+from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM, JonesMatrixGenerators, create_volume
 
 
 # Select backend method
@@ -34,14 +34,15 @@ optical_info['n_voxels_per_ml'] = 1
 # optical_info['polarizer'] = JonesMatrixGenerators.polscope_analyzer()
 # optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator_modes(setting=0, swing=0)
 
+
 # Volume type
 # number is the shift from the end of the volume, change it as you wish,
 #       do single_voxel{volume_shape[0]//2} for a voxel in the center
-# for shift in range(-5,6):
 shift_from_center = 0
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 # volume_type = 'ellipsoid'
 volume_type = 'shell'
+# volume_type = '2ellipsoids'
 # volume_type = 'single_voxel'
 
 # Plot azimuth
@@ -49,6 +50,7 @@ volume_type = 'shell'
 azimuth_plot_type = 'hsv'
 
 
+# Different treatment to visualize single voxel
 if volume_type == 'single_voxel':
     optical_info['n_micro_lenses'] = 1
     azimuth_plot_type = 'lines'
@@ -74,49 +76,12 @@ if backend == BackEnds.PYTORCH:
     print(f'Using computing device: {device}')
     rays = rays.to(device)
 
-def create_volume(rays_traced: BirefringentRaytraceLFM, vol_type="shell"):
-    '''Create different volumes...somehow incorporting the rays'''
-    if vol_type == "single_voxel":
-        voxel_delta_n = 0.01
-        # TODO: make numpy version of birefringence axis
-        voxel_birefringence_axis = torch.tensor([1,0.0,0])
-        voxel_birefringence_axis /= voxel_birefringence_axis.norm()
 
-        # Create empty volume
-        volume = rays_traced.init_volume(optical_info['volume_shape'], init_mode='zeros')
-        # Set delta_n
-        volume.get_delta_n()[volume_axial_offset,
-                                        rays.vox_ctr_idx[1],
-                                        rays.vox_ctr_idx[2]] = voxel_delta_n
-        # set optical_axis
-        volume.get_optic_axis()[:, volume_axial_offset,
-                                rays.vox_ctr_idx[1],
-                                rays.vox_ctr_idx[2]] \
-                                = torch.tensor([voxel_birefringence_axis[0],
-                                                voxel_birefringence_axis[1],
-                                                voxel_birefringence_axis[2]]) \
-                                if backend == BackEnds.PYTORCH else voxel_birefringence_axis
-    elif vol_type in ["ellipsoid", "shell"]:    # whole plane
-        ellipsoid_args = {  'radius' : [5.5, 9.5, 5.5],
-                    'center' : [volume_axial_offset / optical_info['volume_shape'][0], \
-                                    0.50, 0.5],  # from 0 to 1
-                    'delta_n' : -0.1,
-                    'border_thickness' : 0.3}
-        volume = rays_traced.init_volume(volume_shape=optical_info['volume_shape'], \
-                                            init_mode='ellipsoid', init_args=ellipsoid_args)
-
-        # Do we want a shell? let's remove some of the volume
-        if vol_type == 'shell':
-            volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
-
-    return volume
-
-my_volume = create_volume(rays, vol_type=volume_type)
+# Create a volume
+my_volume = create_volume(rays, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
 # Plot the volume
-# my_volume.Delta_n = nn.Parameter(my_volume.Delta_n.flatten())
-# my_volume.optic_axis = nn.Parameter(my_volume.optic_axis.reshape(3,-1))
-# # my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
+my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
 
 
 
