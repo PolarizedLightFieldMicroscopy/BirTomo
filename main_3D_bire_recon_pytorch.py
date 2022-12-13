@@ -7,7 +7,7 @@ import os
 
 
 # Select back end
-back_end = BackEnds.PYTORCH
+backend = BackEnds.PYTORCH
 
 # Get optical parameters template
 optical_info = OpticalElement.get_optical_info_template()
@@ -54,7 +54,7 @@ if volume_type == 'single_voxel':
 
 
 # Create a Birefringent Raytracer
-BF_raytrace = BirefringentRaytraceLFM(back_end=back_end, optical_info=optical_info)
+BF_raytrace = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 
 # Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
 # If a filepath is passed as argument, the object with all its calculations get stored/loaded from a file
@@ -64,7 +64,7 @@ executionTime = (time.time() - startTime)
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
 # Move ray tracer to GPU
-if back_end == BackEnds.PYTORCH:
+if backend == BackEnds.PYTORCH:
     device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
@@ -92,7 +92,7 @@ if volume_type == 'single_voxel':
                             BF_raytrace.vox_ctr_idx[1], 
                             BF_raytrace.vox_ctr_idx[2]] = torch.tensor([voxel_birefringence_axis[0], 
                                                                             voxel_birefringence_axis[1], 
-                                                                            voxel_birefringence_axis[2]]) if back_end == BackEnds.PYTORCH else voxel_birefringence_axis
+                                                                            voxel_birefringence_axis[2]]) if backend == BackEnds.PYTORCH else voxel_birefringence_axis
 
     my_volume.Delta_n.requires_grad = True
     my_volume.optic_axis.requires_grad = True
@@ -123,7 +123,7 @@ elif volume_type == 'shell' or volume_type == 'ellipsoid': # whole plane
 
 
 # Create a Birefringent Raytracer
-BF_raytrace = BirefringentRaytraceLFM(back_end=back_end, optical_info=optical_info)
+BF_raytrace = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 
 # Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
 # If a filepath is passed as argument, the object with all its calculations get stored/loaded from a file

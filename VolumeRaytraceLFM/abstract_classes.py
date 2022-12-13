@@ -57,7 +57,7 @@ class OpticalElement(OpticBlock):
                             'polarizer'         : np.array([[1, 0], [0, 1]]),
                             'analyzer'          : np.array([[1, 0], [0, 1]])}
 
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
+    def __init__(self, backend : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
                 optical_info={}):
         # Optical info is needed
         assert len(optical_info) > 0, f'Optical info (optical_info) dictionary needed: use OpticalElement.default_optical_info as reference {OpticalElement.default_optical_info}'
@@ -66,7 +66,7 @@ class OpticalElement(OpticBlock):
         optical_info['voxel_size_um'] =  [optical_info['axial_voxel_size_um'],] + 2*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch'] / optical_info['M_obj']]
         
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
-        if back_end==BackEnds.PYTORCH:
+        if backend==BackEnds.PYTORCH:
             # We need to make a copy if we don't want to modify the torch_args default argument, very weird.
             new_torch_args = copy.deepcopy(torch_args)
             # If no optic_config is provided, create one
@@ -86,7 +86,7 @@ class OpticalElement(OpticBlock):
                     members_to_learn=new_torch_args['members_to_learn'] if 'members_to_learn' in new_torch_args.keys() else [])
 
         # Store variables
-        self.back_end = back_end
+        self.backend = backend
         self.simul_type = SimulType.NOT_SPECIFIED
         self.optical_info = optical_info
 
@@ -101,9 +101,9 @@ class RayTraceLFM(OpticalElement):
        The interaction between the voxels and the rays is defined by each specialization of this class.'''
 
     def __init__(
-        self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
+        self, backend : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
             optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1, 'n_voxels_per_ml' : 1}):
-        super(RayTraceLFM, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
+        super(RayTraceLFM, self).__init__(backend=backend, torch_args=torch_args, optical_info=optical_info)
         
         
         # Create dummy variables for pre-computed rays and paths through the volume
@@ -372,10 +372,10 @@ class RayTraceLFM(OpticalElement):
 
         # todo: We treat differently numpy and torch rays, as some rays go outside the volume of interest.
         # We need to revisit this when we start computing images with more than one micro-lens in numpy
-        # if False:#self.back_end == BackEnds.NUMPY:
+        # if False:#self.backend == BackEnds.NUMPY:
         #     # The valid workspace is defined by the number of micro-lenses
         #     valid_vol_shape = self.optical_info['volume_shape'][1]
-        # elif self.back_end == BackEnds.PYTORCH:
+        # elif self.backend == BackEnds.PYTORCH:
         valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
         
 
@@ -394,9 +394,9 @@ class RayTraceLFM(OpticalElement):
         ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(pixels_per_ml, naObj, nMedium, self.volume_ctr_um)
 
         # Store locally
-        self.ray_entry = torch.from_numpy(ray_enter).float()        if self.back_end == BackEnds.PYTORCH else ray_enter
-        self.ray_exit = torch.from_numpy(ray_exit).float()          if self.back_end == BackEnds.PYTORCH else ray_exit
-        self.ray_direction = torch.from_numpy(ray_diff).float()     if self.back_end == BackEnds.PYTORCH else ray_diff
+        self.ray_entry = torch.from_numpy(ray_enter).float()        if self.backend == BackEnds.PYTORCH else ray_enter
+        self.ray_exit = torch.from_numpy(ray_exit).float()          if self.backend == BackEnds.PYTORCH else ray_exit
+        self.ray_direction = torch.from_numpy(ray_diff).float()     if self.backend == BackEnds.PYTORCH else ray_diff
         self.voxel_span_per_ml = 0
 
 
@@ -418,7 +418,7 @@ class RayTraceLFM(OpticalElement):
 
                 # We only store the valid rays
                 if np.any(np.isnan(start)) or np.any(np.isnan(stop)):
-                    if self.back_end == BackEnds.PYTORCH:
+                    if self.backend == BackEnds.PYTORCH:
                         continue
                     siddon_list = []
                     voxels_of_segs = []
@@ -458,10 +458,10 @@ class RayTraceLFM(OpticalElement):
         
         # Store as tuples for now
         self.ray_vol_colli_indices = ray_vol_colli_indices
-        if self.back_end == BackEnds.NUMPY:
+        if self.backend == BackEnds.NUMPY:
             self.ray_vol_colli_lengths = np.zeros([n_valid_rays, max_ray_voxels_collision])
             self.ray_valid_direction = np.zeros([n_valid_rays, 3])
-        elif self.back_end == BackEnds.PYTORCH:
+        elif self.backend == BackEnds.PYTORCH:
             # Save as nn.Parameters so Pytorch can handle them correctly, for things like moving this whole class to GPU
             self.ray_vol_colli_lengths = nn.Parameter(torch.zeros(n_valid_rays, max_ray_voxels_collision)) 
             self.ray_vol_colli_lengths.requires_grad = False
@@ -474,7 +474,7 @@ class RayTraceLFM(OpticalElement):
         for valid_ray in range(n_valid_rays):
             # Fetch the ray-voxel intersection length for this ray
             val_lengths = ray_vol_colli_lengths[valid_ray]
-            self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)    if self.back_end == BackEnds.PYTORCH else val_lengths
+            self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)    if self.backend == BackEnds.PYTORCH else val_lengths
             self.ray_valid_direction[valid_ray, :] = ray_valid_direction[valid_ray]
         
         # Update volume shape information, to account for the whole workspace
@@ -490,11 +490,11 @@ class RayTraceLFM(OpticalElement):
     
         # Calculate the ray's direction with the two normalized perpendicular directions
         # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
-        if self.back_end == BackEnds.NUMPY:
+        if self.backend == BackEnds.NUMPY:
             self.ray_direction_basis = []
             for n_ray,ray in enumerate(self.ray_valid_direction):
                 self.ray_direction_basis.append(RayTraceLFM.calc_rayDir(ray))
-        elif self.back_end == BackEnds.PYTORCH:
+        elif self.backend == BackEnds.PYTORCH:
             self.ray_direction_basis = RayTraceLFM.calc_rayDir_torch(self.ray_valid_direction)
 
         return self

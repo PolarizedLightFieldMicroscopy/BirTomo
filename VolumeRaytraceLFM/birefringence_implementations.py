@@ -3,10 +3,10 @@ from tqdm import tqdm
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
+    def __init__(self, backend : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
                 optical_info={'volume_shape' : 3*[1], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 
                 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1, 'n_voxels_per_ml' : 1}):
-        super(BirefringentElement, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
+        super(BirefringentElement, self).__init__(backend=backend, torch_args=torch_args, optical_info=optical_info)
 
         self.simul_type = SimulType.BIREFRINGENT
 
@@ -16,15 +16,15 @@ class BirefringentElement(OpticalElement):
 # todo: rename to BirefringentVolume inherits 
 class BirefringentVolume(BirefringentElement):
     '''This class stores a 3D array of voxels with birefringence properties, either with a numpy or pytorch back-end.'''
-    def __init__(self, back_end=BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []}, 
+    def __init__(self, backend=BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []}, 
         optical_info={},#{'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1},
         Delta_n=0, optic_axis=[1, 0, 0]):
         '''BirefringentVolume
         Args:
-            back_end (BackEnd):     A computation BackEnd (Numpy vs Pytorch). If Pytorch is used, torch_args are required
+            backend (BackEnd):     A computation BackEnd (Numpy vs Pytorch). If Pytorch is used, torch_args are required
                                     to initialize the head class OpticBlock from Waveblocks.
-            torch_args (dic):       Required for PYTORCH back-end. Contains optic_config object and members_to_learn
-            optical_info (dic):
+            torch_args (dict):       Required for PYTORCH back-end. Contains optic_config object and members_to_learn
+            optical_info (dict):
                                     volume_shape ([3]:[sz,sy,sz]):
                                                             Shape of the volume in voxel numbers per dimension.
                                     voxel_size_um ([3]):    Size of a voxel in micrometers.
@@ -39,10 +39,9 @@ class BirefringentVolume(BirefringentElement):
                                     Defines the optic axis per voxel.
                                     If a single 3D vector is passed all the voxels will share this optic axis.
             '''
-        super(BirefringentVolume, self).__init__(back_end=back_end, torch_args=torch_args, optical_info=optical_info)
-       
+        super(BirefringentVolume, self).__init__(backend=backend, torch_args=torch_args, optical_info=optical_info)
 
-        if self.back_end == BackEnds.NUMPY:
+        if self.backend == BackEnds.NUMPY:
             self.volume_shape = self.optical_info['volume_shape']
             # In the case when an optic axis per voxel of a 3D volume is provided
             # e.g. [3,nz,ny,nx]
@@ -76,21 +75,19 @@ class BirefringentVolume(BirefringentElement):
             self.Delta_n[np.isnan(self.Delta_n)] = 0
             self.optic_axis[np.isnan(self.optic_axis)] = 0
                 
-        elif self.back_end == BackEnds.PYTORCH:
+        elif self.backend == BackEnds.PYTORCH:
             # Update volume shape from optic config 
             self.volume_shape = self.optical_info['volume_shape']
             # Normalization of optical axis, depending on input
             if not isinstance(optic_axis, list) and optic_axis.ndim==4:
                 if isinstance(optic_axis, np.ndarray):
-                    optic_axis = torch.from_numpy(optic_axis).type(torch.get_default_dtype())
-                    
+                    optic_axis = torch.from_numpy(optic_axis).type(torch.get_default_dtype())    
                 norm_A = (optic_axis[0,...]**2+optic_axis[1,...]**2+optic_axis[2,...]**2).sqrt()
                 self.optic_axis = optic_axis / norm_A.repeat(3,1,1,1)
                 assert len(Delta_n.shape) == 3, '3D Delta_n expected, as the optic_axis was provided as a 3D torch tensor'
                 self.Delta_n = Delta_n
                 if not torch.is_tensor(Delta_n):
                     self.Delta_n = torch.from_numpy(Delta_n).type(torch.get_default_dtype())
-                
             else:
                 # Same optic axis for all voxels
                 optic_axis = np.array(optic_axis).astype(np.float32)
@@ -111,13 +108,13 @@ class BirefringentVolume(BirefringentElement):
             self.Delta_n = nn.Parameter(self.Delta_n.flatten() ).type(torch.get_default_dtype())
 
     def get_delta_n(self):
-        if self.back_end == BackEnds.PYTORCH:
+        if self.backend == BackEnds.PYTORCH:
             return self.Delta_n.view(self.optical_info['volume_shape'])
         else:
             return self.Delta_n
-        
+
     def get_optic_axis(self):
-        if self.back_end == BackEnds.PYTORCH:
+        if self.backend == BackEnds.PYTORCH:
             return self.optic_axis.view(3, self.optical_info['volume_shape'][0],
                                             self.optical_info['volume_shape'][1],
                                             self.optical_info['volume_shape'][2])
@@ -193,11 +190,11 @@ class BirefringentVolume(BirefringentElement):
 class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     """This class extends RayTraceLFM, and implements the forward function, where voxels contribute to ray's Jones-matrices with a retardance and axis in a non-commutative matter"""
     def __init__(
-            self, back_end : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
+            self, backend : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
             optical_info={}):#{'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}):
         # optic_config contains mla_config and volume_config
         super(BirefringentRaytraceLFM, self).__init__(
-            back_end=back_end, torch_args=torch_args, optical_info=optical_info
+            backend=backend, torch_args=torch_args, optical_info=optical_info
         )
 
         # Ray-voxel colisions for different micro-lenses, this dictionary gets filled in: calc_cummulative_JM_of_ray_torch
@@ -221,13 +218,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 1
         assert voxel_span_per_ml < volume_shape[1] and voxel_span_per_ml < volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"
         # assert volume_shape[1] - 2*self.voxel_span_per_ml > 0 and volume_shape[2] - 2*self.voxel_span_per_ml > 0, f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large. \
-        
+
 
         # Traverse volume for every ray, and generate retardance and azimuth images
         full_img_r = None
         full_img_a = None
         # Iterate micro-lenses in y direction
-        for ml_ii in tqdm(range(-n_ml_half, n_ml_half+1), f'Computing rows of micro-lens ret+azim {self.back_end}'):
+        for ml_ii in tqdm(range(-n_ml_half, n_ml_half+1), f'Computing rows of micro-lens ret+azim {self.backend}'):
             full_img_row_r = None
             full_img_row_a = None
             # Iterate micro-lenses in x direction
@@ -240,31 +237,31 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     full_img_row_r = ret_image_torch
                     full_img_row_a = azim_image_torch
                 else: # Concatenate to existing image otherwise
-                    if self.back_end == BackEnds.NUMPY:
+                    if self.backend == BackEnds.NUMPY:
                         full_img_row_r = np.concatenate((full_img_row_r, ret_image_torch), 0)
                         full_img_row_a = np.concatenate((full_img_row_a, azim_image_torch), 0)
-                    elif self.back_end == BackEnds.PYTORCH:
+                    elif self.backend == BackEnds.PYTORCH:
                         full_img_row_r = torch.cat((full_img_row_r, ret_image_torch), 0)
                         full_img_row_a = torch.cat((full_img_row_a, azim_image_torch), 0)
             if full_img_r is None:
                 full_img_r = full_img_row_r
                 full_img_a = full_img_row_a
             else:
-                if self.back_end == BackEnds.NUMPY:
+                if self.backend == BackEnds.NUMPY:
                     full_img_r = np.concatenate((full_img_r, full_img_row_r), 1)
                     full_img_a = np.concatenate((full_img_a, full_img_row_a), 1)
-                elif self.back_end == BackEnds.PYTORCH:
+                elif self.backend == BackEnds.PYTORCH:
                     full_img_r = torch.cat((full_img_r, full_img_row_r), 1)
                     full_img_a = torch.cat((full_img_a, full_img_row_a), 1)
         return full_img_r, full_img_a
-    
+ 
     def retardance(self, JM):
         '''Phase delay introduced between the fast and slow axis in a Jones Matrix'''
-        if self.back_end == BackEnds.NUMPY:
+        if self.backend == BackEnds.NUMPY:
             e1, e2 = np.linalg.eigvals(JM)
             phase_diff = np.angle(e1) - np.angle(e2)
             retardance = np.abs(phase_diff)
-        elif self.back_end == BackEnds.PYTORCH:
+        elif self.backend == BackEnds.PYTORCH:
             x = torch.linalg.eigvals(JM)
             retardance = (torch.angle(x[:,1]) - torch.angle(x[:,0])).abs()
         else:
@@ -273,7 +270,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def azimuth(self, JM):
         '''Rotation angle of the fast axis (neg phase)'''
-        if self.back_end == BackEnds.NUMPY:
+        if self.backend == BackEnds.NUMPY:
             diag_sum = JM[0, 0] + JM[1, 1]
             diag_diff = JM[1, 1] - JM[0, 0]
             off_diag_sum = JM[0, 1] + JM[1, 0]
@@ -286,7 +283,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             azimuth = np.arctan2(-b, -a) / 2 + np.pi / 2
             # if np.isclose(azimuth,np.pi):
             #     azimuth = 0.0
-        elif self.back_end == BackEnds.PYTORCH: 
+        elif self.backend == BackEnds.PYTORCH: 
             diag_sum = (JM[:, 0, 0] + JM[:, 1, 1])
             diag_diff = (JM[:, 1, 1] - JM[: ,0, 0])
             off_diag_sum = JM[:, 0, 1] + JM[:, 1, 0]
@@ -302,11 +299,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         else:
             raise NotImplementedError
         return azimuth
-    
+
     def calc_cummulative_JM_of_ray(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
-        if self.back_end==BackEnds.NUMPY:
+        if self.backend==BackEnds.NUMPY:
             return self.calc_cummulative_JM_of_ray_numpy(volume_in, micro_lens_offset)
-        elif self.back_end==BackEnds.PYTORCH:
+        elif self.backend==BackEnds.PYTORCH:
             return self.calc_cummulative_JM_of_ray_torch(volume_in, micro_lens_offset)
 
     def calc_cummulative_JM_of_ray_numpy(self, i, j, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
@@ -348,8 +345,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if key not in self.vox_indices_ml_shifted.keys():
             self.vox_indices_ml_shifted[key] = [[RayTraceLFM.ravel_index((vox[ix][0], vox[ix][1]+micro_lens_offset[0], vox[ix][2]+micro_lens_offset[1]), self.optical_info['volume_shape']) for ix in range(len(vox))] for vox in self.ray_vol_colli_indices]
         voxels_of_segs = self.vox_indices_ml_shifted[key]
-        
-            
+
         # Init an array to store the Jones matrices.
         JM_list = []
 
@@ -395,9 +391,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
-        if self.back_end==BackEnds.NUMPY:
+        if self.backend==BackEnds.NUMPY:
             return self.ret_and_azim_images_numpy(volume_in, micro_lens_offset)
-        elif self.back_end==BackEnds.PYTORCH:
+        elif self.backend==BackEnds.PYTORCH:
             return self.ret_and_azim_images_torch(volume_in, micro_lens_offset)
 
     def ret_and_azim_images_numpy(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
@@ -462,7 +458,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     # todo: these are re-implemented in abstract_classes in OpticalElement
     def voxRayJM(self, Delta_n, opticAxis, rayDir, ell, wavelength):
         '''Compute Jones matrix associated with a particular ray and voxel combination'''
-        if self.back_end == BackEnds.NUMPY:
+        if self.backend == BackEnds.NUMPY:
             # Azimuth is the angle of the slow axis of retardance.
             azim = np.arctan2(np.dot(opticAxis, rayDir[1]), np.dot(opticAxis, rayDir[2]))
             if Delta_n == 0:
@@ -472,7 +468,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # print(f"Azimuth angle of index ellipsoid is {np.around(np.rad2deg(azim), decimals=0)} degrees.")
             ret = abs(Delta_n) * (1 - np.dot(opticAxis, rayDir[0]) ** 2) * 2 * np.pi * ell / wavelength
             # print(f"Accumulated retardance from index ellipsoid is {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
-            
+
             # todo: compare speed
             # old method
             if False:
@@ -484,11 +480,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             else:
                 JM = JonesMatrixGenerators.linear_retarder(ret,azim)
 
-        elif self.back_end == BackEnds.PYTORCH:
+        elif self.backend == BackEnds.PYTORCH:
             n_voxels = opticAxis.shape[0]
             if not torch.is_tensor(opticAxis):
                 opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
-            
+
             # Dot product of optical axis and 3 ray-direction vectors
             OA_dot_rayDir = torch.linalg.vecdot(opticAxis, rayDir)
 
@@ -507,7 +503,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 JM[:,1,0] = offdiag
                 JM[:,1,1] = diag2
             else: # Much more operations in this method
-                JM = JonesMatrixGenerators.linear_retarder(ret, azim, self.back_end)
+                JM = JonesMatrixGenerators.linear_retarder(ret, azim, self.backend)
         return JM
 
     @staticmethod
@@ -538,11 +534,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
 ########### Generate different birefringent volumes 
     def init_volume(self, volume_shape, init_mode='zeros', init_args={}):
-        
         if init_mode=='zeros':
-            if self.back_end == BackEnds.NUMPY:
+            if self.backend == BackEnds.NUMPY:
                 voxel_parameters = np.zeros([4,] + volume_shape)
-            if self.back_end == BackEnds.PYTORCH:
+            if self.backend == BackEnds.PYTORCH:
                 voxel_parameters = torch.zeros([4,] + volume_shape)
         elif init_mode=='random':
             voxel_parameters = self.generate_random_volume(volume_shape)
@@ -558,10 +553,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             
             voxel_parameters = self.generate_ellipsoid_volume(volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n)
         
-        volume_ref = BirefringentVolume(back_end=self.back_end, optical_info=self.optical_info,
+        volume_ref = BirefringentVolume(backend=self.backend, optical_info=self.optical_info,
                                         Delta_n=voxel_parameters[0,...], optic_axis=voxel_parameters[1:,...])
         # Enable gradients for auto-differentiation 
-        # if self.back_end == BackEnds.PYTORCH:
+        # if self.backend == BackEnds.PYTORCH:
         #     volume_ref.Delta_n.requires_grad = False
         #     volume_ref.optic_axis.requires_grad = False
         #     volume_ref.Delta_n = nn.Parameter(volume_ref.Delta_n.to(self.get_device()))
@@ -571,7 +566,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         return volume_ref
 
-    
+
     @staticmethod
     def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [0,0.01], 'axes_range' : [-1,1]}):
         Delta_n = np.random.uniform(init_args['Delta_n_range'][0], init_args['Delta_n_range'][1], volume_shape)
@@ -638,42 +633,42 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     # This methods are constructors only, they don't support torch optimization of internal variables
 
 class JonesMatrixGenerators(BirefringentElement):
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY):
-        super(BirefringentElement, self).__init__(back_end=back_end, torch_args={}, optical_info={})
+    def __init__(self, backend : BackEnds = BackEnds.NUMPY):
+        super(BirefringentElement, self).__init__(backend=backend, torch_args={}, optical_info={})
 
     @staticmethod
-    def rotator(angle, back_end=BackEnds.NUMPY):
+    def rotator(angle, backend=BackEnds.NUMPY):
         '''2D rotation matrix
         Args:
             angle: angle to rotate by counterclockwise [radians]
         Return: Jones matrix'''
-        if back_end == BackEnds.NUMPY:
+        if backend == BackEnds.NUMPY:
             s = np.sin(angle)
             c = np.cos(angle)
             R = np.array([[c, -s], [s, c]])
-        elif back_end == BackEnds.PYTORCH:
+        elif backend == BackEnds.PYTORCH:
             s = torch.sin(angle)
             c = torch.cos(angle)
             R = torch.tensor([[c, -s], [s, c]])
         return R
 
     @staticmethod
-    def linear_retarder(ret, azim, back_end=BackEnds.NUMPY):
+    def linear_retarder(ret, azim, backend=BackEnds.NUMPY):
         '''Linear retarder
         Args:
             ret (float): retardance [radians]
             azim (float): azimuth angle of fast axis [radians]
         Return: Jones matrix    
         '''
-        retarder_azim0 = JonesMatrixGenerators.linear_retarder_azim0(ret, back_end=back_end)
-        R = JonesMatrixGenerators.rotator(azim, back_end=back_end)
-        Rinv = JonesMatrixGenerators.rotator(-azim, back_end=back_end)
+        retarder_azim0 = JonesMatrixGenerators.linear_retarder_azim0(ret, backend=backend)
+        R = JonesMatrixGenerators.rotator(azim, backend=backend)
+        Rinv = JonesMatrixGenerators.rotator(-azim, backend=backend)
         return R @ retarder_azim0 @ Rinv
 
     @staticmethod
-    def linear_retarder_azim0(ret, back_end=BackEnds.NUMPY):
+    def linear_retarder_azim0(ret, backend=BackEnds.NUMPY):
         '''todo'''
-        if back_end == BackEnds.NUMPY:
+        if backend == BackEnds.NUMPY:
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
             return torch.cat(
@@ -684,10 +679,10 @@ class JonesMatrixGenerators(BirefringentElement):
             return torch.tensor([[torch.exp(1j * ret / 2), 0], [0, torch.exp(-1j * ret / 2)]])
 
     @staticmethod
-    def linear_retarter_azim90(ret, back_end=BackEnds.NUMPY):
+    def linear_retarter_azim90(ret, backend=BackEnds.NUMPY):
         '''todo
         using same convention as linear_retarder_azim90'''
-        if back_end == BackEnds.NUMPY:
+        if backend == BackEnds.NUMPY:
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
             return torch.tensor([torch.exp(1j * ret / 2), 0], [0, torch.exp(-1j * ret / 2)])
@@ -796,15 +791,15 @@ class JonesMatrixGenerators(BirefringentElement):
 
 
 class JonesVectorGenerators(BirefringentElement):
-    def __init__(self, back_end : BackEnds = BackEnds.NUMPY):
-        super(BirefringentElement, self).__init__(back_end=back_end, torch_args={}, optical_info={})
+    def __init__(self, backend : BackEnds = BackEnds.NUMPY):
+        super(BirefringentElement, self).__init__(backend=backend, torch_args={}, optical_info={})
 
     @staticmethod
-    def right_circular(back_end=BackEnds.NUMPY):
+    def right_circular(backend=BackEnds.NUMPY):
         return np.array([1, -1j])
 
     @staticmethod
-    def left_circular(back_end=BackEnds.NUMPY):
+    def left_circular(backend=BackEnds.NUMPY):
         return np.array([1, 1j])
 
     @staticmethod
