@@ -11,7 +11,7 @@ import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM, JonesMatrixGenerators, create_volume
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM, JonesMatrixGenerators
 
 
 # Select backend method
@@ -22,7 +22,7 @@ if backend == BackEnds.PYTORCH:
     from waveblocks.utils.misc_utils import *
 
 # Get optical parameters template
-optical_info = OpticalElement.get_optical_info_template()
+optical_info = BirefringentVolume.get_optical_info_template()
 # Alter some of the optical parameters
 optical_info['volume_shape'] = [15, 51, 51]
 optical_info['axial_voxel_size_um'] = 1.0
@@ -78,10 +78,10 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-my_volume = create_volume(rays, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
+my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
 # Plot the volume
-my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
+# my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
 
 
 

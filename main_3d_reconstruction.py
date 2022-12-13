@@ -7,13 +7,13 @@ import torch
 from tqdm import tqdm
 from waveblocks.utils.misc_utils import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM, create_volume
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 
 # Select backend: requires pytorch to calculate gradients
 backend = BackEnds.PYTORCH
 
 # Get optical parameters template
-optical_info = OpticalElement.get_optical_info_template()
+optical_info = BirefringentVolume.get_optical_info_template()
 # Alter some of the optical parameters
 optical_info['volume_shape'] = [11,51,51]
 optical_info['axial_voxel_size_um'] = 1.0
@@ -35,7 +35,7 @@ training_params = {
 # for shift in range(-5,6):
 shift_from_center = -1
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-volume_type = '9ellipsoids'
+volume_type = '5ellipsoids'
 # volume_type = 'ellipsoid'
 # volume_type = 'shell'
 # volume_type = 'single_voxel'
@@ -82,7 +82,7 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-my_volume = create_volume(rays, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
+my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
 # Plot volume
 with torch.no_grad():
@@ -105,10 +105,10 @@ with torch.no_grad():
                             torch.cos(azim_image_measured)).detach()
 
 
-############# Torch
+############# 
 # Let's create an optimizer
 # Initial guess
-my_volume = rays.init_volume(volume_shape=optical_info['volume_shape'], init_mode='random')
+my_volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args = {'init_mode' : 'random'})
 my_volume.members_to_learn.append('Delta_n')
 my_volume.members_to_learn.append('optic_axis')
 

@@ -1,4 +1,5 @@
 import pytest
+
 from VolumeRaytraceLFM.birefringence_implementations import *
 import matplotlib.pyplot as plt
 import copy
@@ -298,10 +299,8 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
 
     
     # Generate a volume with random everywhere
-    # voxel_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode='ellipsoid')
-    # voxel_numpy_random = BF_raytrace_numpy.init_volume(volume_shape, init_mode='ellipsoid')
-    voxel_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode='random')
-    # voxel_numpy_random = BF_raytrace_numpy.init_volume(volume_shape, init_mode='random')
+    voxel_torch_random = BirefringentVolume(backend=BackEnds.PYTORCH, optical_info=optical_info, volume_creation_args={'init_mode' : 'random'})
+
     # Copy the volume, to have exactly the same things
     voxel_numpy_random = BirefringentVolume(backend=BackEnds.NUMPY,  optical_info=optical_info,
                                     Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
@@ -358,10 +357,7 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
 
     
     # Generate a volume with random everywhere
-    # voxel_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode='ellipsoid')
-    # voxel_numpy_random = BF_raytrace_numpy.init_volume(volume_shape, init_mode='ellipsoid')
-    voxel_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode=volume_init_mode)
-    # voxel_numpy_random = BF_raytrace_numpy.init_volume(volume_shape, init_mode='random')
+    voxel_torch_random = BirefringentVolume(backend=BackEnds.PYTORCH, optical_info=optical_info, volume_creation_args={'init_mode' : volume_init_mode})
     # Copy the volume, to have exactly the same things
     voxel_numpy_random = BirefringentVolume(backend=BackEnds.NUMPY,  optical_info=optical_info,
                                     Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
@@ -418,7 +414,7 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
 
     
     # Generate a volume with random everywhere
-    voxel_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode='ellipsoid')
+    voxel_torch_random = BirefringentVolume(backend=BackEnds.PYTORCH,  optical_info=optical_info, volume_creation_args={'init_mode' : 'ellipsoid'})
     # Copy the volume, to have exactly the same things
     voxel_numpy_random = BirefringentVolume(backend=BackEnds.NUMPY,  optical_info=optical_info,
                                     Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
@@ -467,7 +463,7 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     BF_raytrace_torch = BirefringentRaytraceLFM(backend=BackEnds.PYTORCH, optical_info=optical_info)
     BF_raytrace_torch.compute_rays_geometry()
 
-    volume_torch_random = BF_raytrace_torch.init_volume(volume_shape, init_mode=volume_init_mode)
+    volume_torch_random = BirefringentVolume(backend=BackEnds.PYTORCH,  optical_info=optical_info, volume_creation_args={'init_mode' : volume_init_mode})
     # make volume trainable, by telling waveblocks which variables to optimize
     volume_torch_random.members_to_learn.append('Delta_n')
     volume_torch_random.members_to_learn.append('optic_axis')
