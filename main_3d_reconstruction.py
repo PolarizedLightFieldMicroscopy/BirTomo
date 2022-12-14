@@ -25,10 +25,10 @@ optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
     'n_epochs' : 2000,                      # How long to train for
-    'azimuth_weight' : 1,                   # Azimuth loss weight
+    'azimuth_weight' : .1,                   # Azimuth loss weight
     'regularization_weight' : 0.1,          # Regularization weight
-    'lr' : 2e-4,                            # Learning rate
-    'output_posfix' : '25ml_L1loss_reg_N'     # Output file name posfix
+    'lr' : 1e-4,                            # Learning rate
+    'output_posfix' : '25ml_L1loss_Noreg_01azimuth_weight'     # Output file name posfix
 }
 
 
@@ -86,11 +86,11 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
-                                                    vol_type=volume_type, \
-                                                    volume_axial_offset=volume_axial_offset)
+# volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
+#                                                     vol_type=volume_type, \
+#                                                     volume_axial_offset=volume_axial_offset)
 
-# volume_GT  = BirefringentVolume.init_from_file("objects/volume_gt.h5", backend, optical_info)
+volume_GT  = BirefringentVolume.init_from_file("objects/volume_gt.h5", backend, optical_info)
 
 # Move volume to GPU if avaliable
 volume_GT = volume_GT.to(device)
@@ -184,10 +184,10 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     # N(volume_estimation.Delt_n)
     # N(volume_estimation.Delt_n * optic_axis)
     # N(spatial gradients volume_estimation.Delt_n)
-    reg_input = torch.cat((volume_estimation.get_delta_n().unsqueeze(0), volume_estimation.get_optic_axis()), 0).unsqueeze(0)
-    regularization_term = reg_net(reg_input)
+    # reg_input = torch.cat((volume_estimation.get_delta_n().unsqueeze(0), volume_estimation.get_optic_axis()), 0).unsqueeze(0)
+    # regularization_term = reg_net(reg_input)
 
-    L = data_term + training_params['regularization_weight'] * regularization_term
+    L = data_term #+ training_params['regularization_weight'] * regularization_term
 
     # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
     L.backward()
