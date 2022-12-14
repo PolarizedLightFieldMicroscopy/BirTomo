@@ -118,6 +118,13 @@ class BirefringentVolume(BirefringentElement):
         # Check if a volume creation was requested
         if volume_creation_args is not None:
             self.init_volume(volume_creation_args['init_mode'], volume_creation_args['init_args'] if 'init_args' in volume_creation_args.keys() else {})
+        
+        self.normalize_optic_axis()
+
+    def normalize_optic_axis(self):
+        with torch.no_grad():
+            self.norm_optic_axis = (self.optic_axis[0,...]**2+self.optic_axis[1,...]**2+self.optic_axis[2,...]**2).sqrt().repeat(3,1)
+            self.norm_optic_axis[self.norm_optic_axis==0] = 1.0
 
     def get_delta_n(self):
         if self.backend == BackEnds.PYTORCH:
@@ -605,6 +612,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         JM_list = []
 
         assert self.optical_info == volume_in.optical_info, 'Optical info between ray-tracer and volume mismatch. This might cause issues on the border micro-lenses.'
+
+        optic_axis = volume_in.optic_axis / volume_in.norm_optic_axis
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels, so we mask the rays valid
         # for this step with rays_with_voxels
@@ -612,7 +621,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # Check which rays still have voxels to traverse
             rays_with_voxels = [len(vx)>m for vx in _voxels_of_segs]
             # How many rays at this step
-            n_rays_with_voxels = sum(rays_with_voxels)
+            # n_rays_with_voxels = sum(rays_with_voxels)
             # The lengths these rays traveled through the current voxels
             ell = ell_in_voxels[rays_with_voxels,m]
             # The voxel coordinates each ray collides with
@@ -622,7 +631,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # Birefringence 
             Delta_n = volume_in.Delta_n[vox]
             # And axis
-            opticAxis = volume_in.optic_axis[:,vox].permute(1,0)
+            opticAxis = optic_axis[:,vox].permute(1,0)
             # Grab the subset of precomputed ray directions that have voxels in this step
             filtered_rayDir = self.ray_direction_basis[:,rays_with_voxels,:]
 

@@ -79,12 +79,13 @@ if backend == BackEnds.PYTORCH:
     rays = rays.to(device)
 
 # Load volume from a file
-# loaded_volume = BirefringentVolume.init_from_file("objects/bundleY.h5", backend, optical_info)
+loaded_volume = BirefringentVolume.init_from_file("objects/bundleY.h5", backend, optical_info)
+my_volume = BirefringentVolume.init_from_file("reconstructions/recons_5ellipsoids_11x51x51__25ml_L1loss_only_axis/volume_gt.h5", backend, optical_info)
 
 # Create a volume
-my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
-                                                    vol_type=volume_type, \
-                                                    volume_axial_offset=volume_axial_offset)
+# my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
+#                                                     vol_type=volume_type, \
+#                                                     volume_axial_offset=volume_axial_offset)
 
 # Plot the volume
 my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.1)
