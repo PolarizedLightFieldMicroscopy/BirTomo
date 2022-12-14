@@ -21,6 +21,8 @@ backend = BackEnds.NUMPY
 
 if backend == BackEnds.PYTORCH:
     from waveblocks.utils.misc_utils import *
+    torch.set_grad_enabled(False)
+
 
 # Get optical parameters template
 optical_info = BirefringentVolume.get_optical_info_template()
@@ -76,6 +78,8 @@ if backend == BackEnds.PYTORCH:
     print(f'Using computing device: {device}')
     rays = rays.to(device)
 
+# Load volume from a file
+# loaded_volume = BirefringentVolume.init_from_file("objects/bundleY.h5", backend, optical_info)
 
 # Create a volume
 my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
@@ -83,7 +87,7 @@ my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info
                                                     volume_axial_offset=volume_axial_offset)
 
 # Plot the volume
-# my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
+my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.1)
 
 
 startTime = time.time()
@@ -92,7 +96,7 @@ executionTime = (time.time() - startTime)
 print(f'Execution time in seconds with backend {backend}: ' + str(executionTime))
 
 if backend == BackEnds.PYTORCH:
-    ret_image, azim_image = ret_image.numpy(), azim_image.numpy()
+    ret_image, azim_image = ret_image.detach().cpu().numpy(), azim_image.detach().cpu().numpy()
 
 # Plot
 colormap = 'viridis'
