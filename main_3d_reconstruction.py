@@ -9,6 +9,7 @@ from waveblocks.utils.misc_utils import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
+from N_regularization import N
 
 # Select backend: requires pytorch to calculate gradients
 backend = BackEnds.PYTORCH
@@ -19,15 +20,15 @@ optical_info = BirefringentVolume.get_optical_info_template()
 optical_info['volume_shape'] = [11,51,51]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 15
+optical_info['n_micro_lenses'] = 9
 optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
     'n_epochs' : 2000,                      # How long to train for
     'azimuth_weight' : 1,                   # Azimuth loss weight
-    'regularization_weight' : 1,            # Regularization weight
-    'lr' : 1e-4,                            # Learning rate
-    'output_posfix' : '25ml_L1loss_reg'     # Output file name posfix
+    'regularization_weight' : 0.1,          # Regularization weight
+    'lr' : 2e-4,                            # Learning rate
+    'output_posfix' : '25ml_L1loss_reg_N'     # Output file name posfix
 }
 
 
@@ -37,9 +38,9 @@ training_params = {
 # for shift in range(-5,6):
 shift_from_center = -1
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-# volume_type = '8ellipsoids'
+volume_type = '4ellipsoids'
 # volume_type = 'ellipsoid'
-volume_type = 'shell'
+# volume_type = 'shell'
 # volume_type = 'single_voxel'
 
 # Plot azimuth
@@ -85,17 +86,17 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-# volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
-#                                                     vol_type=volume_type, \
-#                                                     volume_axial_offset=volume_axial_offset)
+volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
+                                                    vol_type=volume_type, \
+                                                    volume_axial_offset=volume_axial_offset)
 
-volume_GT  = BirefringentVolume.init_from_file("objects/volume_gt.h5", backend, optical_info)
+# volume_GT  = BirefringentVolume.init_from_file("objects/volume_gt.h5", backend, optical_info)
 
 # Move volume to GPU if avaliable
 volume_GT = volume_GT.to(device)
 # Plot volume
-# with torch.no_grad():
-#     volume_GT.plot_volume_plotly(optical_info, voxels_in=volume_GT.get_delta_n().abs(), opacity=0.1)
+with torch.no_grad():
+    volume_GT.plot_volume_plotly(optical_info, voxels_in=volume_GT.get_delta_n().abs(), opacity=0.1)
 
 
 # Forward project the GT volume and store the measurments
@@ -116,6 +117,7 @@ with torch.no_grad():
     # Save volume to disk
     volume_GT.save_as_file(f'{output_dir}/volume_gt.h5')
 
+
 ############# 
 # Let's create an optimizer
 # Initial guess:
@@ -128,8 +130,19 @@ volume_estimation.members_to_learn.append('Delta_n')
 volume_estimation.members_to_learn.append('optic_axis')
 volume_estimation = volume_estimation.to(device)
 
+trainable_parameters = volume_estimation.get_trainable_variables()
+
+
+#############
+# Create regularization network
+reg_net = N()
+
+for name, param in reg_net.named_parameters():
+    trainable_parameters.append(param)
+#############
+
 # Create optimizer and loss function
-optimizer = torch.optim.Adam(volume_estimation.get_trainable_variables(), lr=training_params['lr'])
+optimizer = torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
 # loss_function = torch.nn.L1Loss()
 
 # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
@@ -159,7 +172,20 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     data_term = (ret_image_measured - ret_image_current).abs().mean() + \
         training_params['azimuth_weight'] * (2 * (1 - torch.cos(azim_image_measured - azim_image_current)) * azimuth_damp_mask).mean()
     
-    regularization_term = volume_estimation.Delta_n.abs().mean()
+    # L1 or sparsity 
+    # regularization_term = volume_estimation.Delta_n.abs().mean()
+    # L2 or sparsity 
+    # regularization_term = (volume_estimation.Delta_n**2).mean()
+    # Unit length regularizer
+    # regularization_term  = (1-(volume_estimation.optic_axis[0,...]**2+volume_estimation.optic_axis[1,...]**2+volume_estimation.optic_axis[2,...]**2)).abs().mean()
+    # Total variation regularization would be computing the 3D spatial derivative of the volume and apply an L1 norm to it.
+
+    # Learned regularization
+    # N(volume_estimation.Delt_n)
+    # N(volume_estimation.Delt_n * optic_axis)
+    # N(spatial gradients volume_estimation.Delt_n)
+    reg_input = torch.cat((volume_estimation.get_delta_n().unsqueeze(0), volume_estimation.get_optic_axis()), 0).unsqueeze(0)
+    regularization_term = reg_net(reg_input)
 
     L = data_term + training_params['regularization_weight'] * regularization_term
 
@@ -167,6 +193,9 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     L.backward()
     # Apply gradient updates to the volume
     optimizer.step()
+
+    # volume_estimation.normalize_optic_axis()
+    
     # print(f'Ep:{ep} loss: {L.item()}')
     losses.append(L.item())
 

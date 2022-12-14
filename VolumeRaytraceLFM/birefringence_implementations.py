@@ -431,8 +431,8 @@ class BirefringentVolume(BirefringentElement):
             volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args={'init_mode' : 'zeros'})
 
             for n_ell in range(n_ellipsoids):
-                ellipsoid_args = {  'radius' : np.random.uniform(.5, 3.5, [3]),
-                                    'center' : [np.random.uniform(0.35, 0.65),] + list(np.random.uniform(0.3, 0.70, [2])),
+                ellipsoid_args = {  'radius' : np.random.uniform(.5, 1.5, [3]),
+                                    'center' : [np.random.uniform(0.4, 0.6),] + list(np.random.uniform(0.4, 0.6, [2])),
                                     'delta_n' : np.random.uniform(-0.01, -0.001),
                                     'border_thickness' : 0.1}
                 new_vol = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : ellipsoid_args})
