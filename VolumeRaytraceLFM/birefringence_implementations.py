@@ -228,13 +228,21 @@ class BirefringentVolume(BirefringentElement):
             for k,v in self.optical_info.items():
                 try:
                     oc_grp.create_dataset(k, np.array(v).shape if isinstance(v,list) else [1], data=v)
-                    print(f'Added optical_info/{k} to {h5_file_path}')
+                    # print(f'Added optical_info/{k} to {h5_file_path}')
                 except:
                     pass
+
             # Save data (birefringence and optic_axis)
+            delta_n = self.get_delta_n()
+            optic_axis = self.get_optic_axis()
+
+            if self.backend == BackEnds.PYTORCH:
+                delta_n = delta_n.detach().cpu().numpy()
+                optic_axis = optic_axis.detach().cpu().numpy()
+            
             data_grp = f.create_group('data')
-            data_grp.create_dataset("delta_n", self.get_delta_n().shape, data=self.get_delta_n().float())
-            data_grp.create_dataset("optic_axis", self.get_optic_axis().shape, data=self.get_optic_axis().float())
+            data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n.astype(np.float32))
+            data_grp.create_dataset("optic_axis", optic_axis.shape, data=optic_axis.astype(np.float32))
 
     @staticmethod
     def init_from_file(h5_file_path, backend=BackEnds.NUMPY, optical_info=None):
@@ -311,7 +319,7 @@ class BirefringentVolume(BirefringentElement):
         self.optic_axis = volume_ref.optic_axis
 
     @staticmethod
-    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [-0.00005,0.00005], 'axes_range' : [-1,1]}):
+    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [-0.00005,0.00005], 'axes_range' : [-0.05,0.05]}):
         Delta_n = np.random.uniform(init_args['Delta_n_range'][0], init_args['Delta_n_range'][1], volume_shape)
         # Random axis
         a_0 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
