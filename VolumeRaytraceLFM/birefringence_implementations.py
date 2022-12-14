@@ -160,13 +160,13 @@ class BirefringentVolume(BirefringentElement):
     @staticmethod
     def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
         
-        voxels = voxels_in.abs()
+        voxels = np.abs(voxels_in)
         
         # Check if this is a torch tensor
         if not isinstance(voxels_in, np.ndarray):
             try:
                 voxels = voxels.detach()
-                voxels = voxels.cpu().numpy()
+                voxels = voxels.cpu().abs().numpy()
             except:
                 pass
                 
@@ -217,6 +217,25 @@ class BirefringentVolume(BirefringentElement):
 
 
 ########### Generate different birefringent volumes 
+    def save_as_file(self, h5_file_path):
+        '''Store this volume into an h5 file'''
+        print(f'Saving volume to h5 file: {h5_file_path}')
+
+        # Create file
+        with h5py.File(h5_file_path, "w") as f:
+            # Save optical_info
+            oc_grp = f.create_group('optical_info')
+            for k,v in self.optical_info.items():
+                try:
+                    oc_grp.create_dataset(k, np.array(v).shape if isinstance(v,list) else [1], data=v)
+                    print(f'Added optical_info/{k} to {h5_file_path}')
+                except:
+                    pass
+            # Save data (birefringence and optic_axis)
+            data_grp = f.create_group('data')
+            data_grp.create_dataset("delta_n", self.get_delta_n().shape, data=self.get_delta_n().float())
+            data_grp.create_dataset("optic_axis", self.get_optic_axis().shape, data=self.get_optic_axis().float())
+
     @staticmethod
     def init_from_file(h5_file_path, backend=BackEnds.NUMPY, optical_info=None):
         ''' Loads a birefringent volume from an h5 file and places it in the center of the volume
@@ -236,7 +255,7 @@ class BirefringentVolume(BirefringentElement):
         # Compute padding to match optica_info['volume_shape]
         z_,y_, x_ = delta_n.shape
         z, y, x = optical_info['volume_shape']
-        assert z_<z and y_<y and x_<x, f"Input volume is to large ({delta_n.shape}) for optical_info defined volume_shape {optical_info['volume_shape']}"
+        assert z_<=z and y_<=y and x_<=x, f"Input volume is to large ({delta_n.shape}) for optical_info defined volume_shape {optical_info['volume_shape']}"
 
         z_pad = abs(z_-z)
         y_pad = abs(y_-y)
@@ -247,13 +266,13 @@ class BirefringentVolume(BirefringentElement):
                         (z_pad//2, z_pad//2 + z_pad%2),
                         (y_pad//2, y_pad//2 + y_pad%2), 
                         (x_pad//2, x_pad//2 + x_pad%2)),
-                    mode = 'constant')
+                    mode = 'constant').astype(np.float64)
         
         optic_axis = np.pad(optic_axis,((0,0),
                         (z_pad//2, z_pad//2 + z_pad%2),
                         (y_pad//2, y_pad//2 + y_pad%2), 
                         (x_pad//2, x_pad//2 + x_pad%2)),
-                    mode = 'constant')
+                    mode = 'constant').astype(np.float64)
 
         # Create volume
         volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
@@ -397,10 +416,10 @@ class BirefringentVolume(BirefringentElement):
             volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args={'init_mode' : 'zeros'})
 
             for n_ell in range(n_ellipsoids):
-                ellipsoid_args = {  'radius' : np.random.uniform(1.5, 2.5, [3]),
-                                    'center' : [np.random.uniform(0.35, 0.65),] + list(np.random.uniform(0.45, 0.60, [2])),
+                ellipsoid_args = {  'radius' : np.random.uniform(.5, 3.5, [3]),
+                                    'center' : [np.random.uniform(0.35, 0.65),] + list(np.random.uniform(0.3, 0.70, [2])),
                                     'delta_n' : np.random.uniform(-0.01, -0.001),
-                                    'border_thickness' : 0.3}
+                                    'border_thickness' : 0.1}
                 new_vol = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : ellipsoid_args})
                 
                 volume += new_vol
