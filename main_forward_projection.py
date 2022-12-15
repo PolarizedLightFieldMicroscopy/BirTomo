@@ -16,8 +16,8 @@ from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, 
                                                             JonesMatrixGenerators
 
 # Select backend method
-# backend = BackEnds.PYTORCH
-backend = BackEnds.NUMPY
+backend = BackEnds.PYTORCH
+# backend = BackEnds.NUMPY
 
 if backend == BackEnds.PYTORCH:
     from waveblocks.utils.misc_utils import *
@@ -69,6 +69,9 @@ startTime = time.time()
 rays.compute_rays_geometry()
 executionTime = (time.time() - startTime)
 print('Ray-tracing time in seconds: ' + str(executionTime))
+
+# Plot single lenslet rays passing through volume
+# rays.plot_rays()
 
 # Move ray tracer to GPU
 if backend == BackEnds.PYTORCH:
