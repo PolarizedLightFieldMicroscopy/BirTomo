@@ -7,8 +7,8 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hello Rudolf",
-    page_icon="👋",
+    page_title="Forward",
+    page_icon="",
     layout="wide",
 )
 

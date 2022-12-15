@@ -41,7 +41,7 @@ with columns[0]:
 with columns[1]:
 ############ Volume #################
     st.subheader('Volume')
-    volumeStuff = st.container() # set up a home for other volume selections to go
+    volume_container = st.container() # set up a home for other volume selections to go
     shift_from_center = st.slider('Axial shift from center [voxels]', \
                                     min_value = -int(optical_info['volume_shape'][0]/2), \
                                     max_value = int(optical_info['volume_shape'][0]/2),value = 0)
@@ -52,15 +52,11 @@ with columns[1]:
     st.subheader('Other')
     backend_choice = st.radio('Backend', ['torch'])
     st.write("Backend needs to be torch for the reconstructions")
+    backend = BackEnds.PYTORCH
 
 ############ Volume continued... #################    
-    if backend_choice == 'torch':
-        backend = BackEnds.PYTORCH
-        from waveblocks.utils.misc_utils import *
-    else:
-        backend = BackEnds.NUMPY
 
-    with volumeStuff: # now that we know backend and shift, we can fill in the rest of the volume params
+    with volume_container: # now that we know backend and shift, we can fill in the rest of the volume params
         how_get_vol = st.radio("Volume can be created or uploaded as an h5 file", \
                                 ['h5 upload', 'Create a new volume'], index=1)
         if how_get_vol == 'h5 upload':
@@ -77,55 +73,6 @@ with columns[1]:
             with torch.no_grad():
                 st.session_state['my_volume'].plot_volume_plotly(optical_info, 
                                         voxels_in=st.session_state['my_volume'].Delta_n, opacity=0.1)
-
-######################################################################
-
-# st.header("Choose parameters")
-# # Get optical parameters template
-# optical_info = BirefringentVolume.get_optical_info_template()
-# # Alter some of the optical parameters
-# st.subheader('Optical Properties')
-# optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=25, value=5)
-# optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
-# optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
-# optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=5, value=1)
-# optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
-# # y will follow x if x is changed. x will not follow y if y is changed
-# optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
-# optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
-
-# st.subheader('Sample Properties')
-# volume_type = st.selectbox('Volume type',['ellipsoid','shell','5ellipsoids','single_voxel'],1)
-# shift_from_center = st.slider('Axial shift from center[chunks]', min_value = -int(optical_info['volume_shape'][0]/2), max_value = int(optical_info['volume_shape'][0]/2),value = 0)
-# volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-
-# st.subheader('Other Parameters')
-# st.write("Backend needs to be torch for the reconstructions")
-# backend_choice = st.radio('Backend', ['torch'])
-# if backend_choice == 'torch':
-#     backend = BackEnds.PYTORCH
-#     from waveblocks.utils.misc_utils import *
-# else:
-#     backend = BackEnds.NUMPY
-
-
-# ############ Volume #################
-# st.header("Create a volume")
-# st.write("Volume can be created or uploaded as an h5 file")
-# my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, 
-#                                     vol_type=volume_type, volume_axial_offset=volume_axial_offset)
-
-# loaded_volume = BirefringentVolume.init_from_file("objects/bundleY.h5", backend=backend, 
-#                                                     optical_info=optical_info)
-
-# if st.button('Plot Volume!'):
-#     try:
-#         with torch.no_grad():
-#             my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n().abs(), opacity=0.1)
-#     except:
-#         st.text("Sorry, torch is needed.")
-
-
 
 
 ######################################################################
@@ -205,6 +152,9 @@ if st.button("Reconstruct!"):
     width = st.sidebar.slider("Plot width", 1, 25, 15)
     height = st.sidebar.slider("Plot height", 1, 25, 8)
     co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
+
+    my_plot = st.empty() # set up a place holder for the plot
+
     for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         optimizer.zero_grad()
         ret_image_current, azim_image_current = rays.ray_trace_through_volume(my_volume)
@@ -267,7 +217,7 @@ if st.button("Reconstruct!"):
             # time.sleep(0.1)
             # plt.savefig(f"{output_dir}/Optimization_ep_{'{:02d}'.format(ep)}.pdf")
             # time.sleep(0.1)
-            st.pyplot(fig)
+            my_plot.pyplot(fig)
             # st.image(fig)
 
 
