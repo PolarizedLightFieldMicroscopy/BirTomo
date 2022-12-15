@@ -416,8 +416,8 @@ class BirefringentVolume(BirefringentElement):
 
             # Do we want a shell? let's remove some of the volume
             if vol_type == 'shell':
-                volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
-
+                with torch.no_grad():
+                    volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
 
         elif 'ellipsoids' in vol_type:
             n_ellipsoids = int(vol_type[0])
