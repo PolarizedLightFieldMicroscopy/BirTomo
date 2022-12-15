@@ -50,7 +50,7 @@ class OpticalElement(OpticBlock):
                             # Objetive lens information
                             'M_obj'             : 60,
                             'na_obj'            : 1.2,
-                            'n_medium'          : 1.52,
+                            'n_medium'          : 1.35,
                             'wavelength'        : 0.550,
                             'camera_pix_pitch'  : 6.5,
                             # Polarization information
