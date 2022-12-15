@@ -7,6 +7,12 @@
 ######################################################################
 # Content below is extracted from main_forward_projection.py
 import streamlit as st
+
+st.set_page_config(
+    page_title="Hello Rudolf",
+    page_icon="👋",
+)
+
 st.title("Forward projection")
 
 import time         # to measure ray tracing time
@@ -17,20 +23,12 @@ from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM, JonesMatrixGenerators
 
 
-######################################################################
-#Collect Parameters form the streamlit page
 
+st.header("Choose the optical parameters")
 # Get optical parameters template
 optical_info = BirefringentVolume.get_optical_info_template()
 # Alter some of the optical parameters
-optical_info['volume_shape'] = [15, 51, 51]
-optical_info['axial_voxel_size_um'] = 1.0
-optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 5
-optical_info['n_voxels_per_ml'] = 1
-
-
-st.header('Optical Properties')
+st.subheader('Optical Properties')
 optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=25, value=5)
 optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
 optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
@@ -40,14 +38,21 @@ optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=
 optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
 optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
 
-st.header('Sample Properties')
+st.subheader('Sample Properties')
 volume_type = st.selectbox('Volume type',['ellipsoid','shell','2ellipsoids','single_voxel'],1)
 shift_from_center = st.slider('Axial shift from center[chunks]', min_value = -int(optical_info['volume_shape'][0]/2), max_value = int(optical_info['volume_shape'][0]/2),value = 0)
+volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 
-st.header('Other Parameters')
-backend_choice = st.radio('Backend',['numpy','torch'])
+st.subheader('Other Parameters')
+backend_choice = st.radio('Backend', ['numpy', 'torch'])
 
+if backend_choice == 'torch':
+    backend = BackEnds.PYTORCH
+    from waveblocks.utils.misc_utils import *
+else:
+    backend = BackEnds.NUMPY
 
+########################################################################
 #display the current values on a sidebar
 st.sidebar.title('Current Properties')
 st.sidebar.header('Optical Properties')
@@ -65,19 +70,27 @@ st.sidebar.header('Other Parameters')
 st.sidebar.text('backend = %s' % backend_choice)
 
 ########################################################################
-#Now we calculate based on the selected inputs
-if st.button('Calculate!'):
 
-    # final conversions of the streamlit inputs to things 
-    # the forward model understands
-    if backend_choice == 'torch':
-        backend = BackEnds.PYTORCH
-        from waveblocks.utils.misc_utils import *
-    else:
-        backend = BackEnds.NUMPY
+############ Volume #################
+st.header("Create a volume")
+st.write("Volume can be created or uploaded as an h5 file")
+my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, 
+                                    vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
-    volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
+loaded_volume = BirefringentVolume.init_from_file("objects/bundleY.h5", backend=backend, 
+                                                    optical_info=optical_info)
 
+if st.button('Plot Volume!'):
+    my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
+
+
+
+######################################################################
+# Create a function for doing the forward propagation math
+# Decorate with st.cache to prevent streamlit from recalculating
+# max_entries=3 prevents too much stuff from being added to the cache
+@st.cache(max_entries=3, suppress_st_warning=True, show_spinner=False)
+def forwardPropagate():
     # Now we begin the calculation
     # Changed all print statements to sp.text
 
@@ -100,15 +113,6 @@ if st.button('Calculate!'):
         st.text(f'Using computing device: {device}')
         rays = rays.to(device)
 
-
-    # Create a volume
-    my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, vol_type=volume_type, volume_axial_offset=volume_axial_offset)
-
-    # Plot the volume
-    # my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.Delta_n, opacity=0.1)
-
-
-
     startTime = time.time()
     ret_image, azim_image = rays.ray_trace_through_volume(my_volume)
     executionTime = (time.time() - startTime)
@@ -117,7 +121,19 @@ if st.button('Calculate!'):
     if backend == BackEnds.PYTORCH:
         ret_image, azim_image = ret_image.numpy(), azim_image.numpy()
 
-    # Plot
+    return ret_image, azim_image
+
+
+########################################################################
+#Now we calculate based on the selected inputs
+
+st.header("Calculate the retardance and azimuth images")
+
+azimuth_plot_type = st.selectbox('Azmiuth Plot Type', ['lines','hsv'], index = 1)
+
+if st.button('Calculate and Plot!'):
+    ret_image, azim_image =  forwardPropagate()
+    # Plot with streamlit
     colormap = 'viridis'
     plt.rcParams['image.origin'] = 'lower'
     fig = plt.figure(figsize=(12,2.5))
@@ -128,7 +144,6 @@ if st.button('Calculate!'):
     plt.subplot(1,3,2)
     plt.imshow(np.rad2deg(azim_image), cmap=colormap)
     plt.colorbar(fraction=0.046, pad=0.04)
-    azimuth_plot_type = 'hsv'
     plt.title('Azimuth')
     ax = plt.subplot(1,3,3)
     if azimuth_plot_type == 'lines':
@@ -137,32 +152,6 @@ if st.button('Calculate!'):
         plot_birefringence_colorized(ret_image, azim_image)
     plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Ret+Azim')
-
     st.pyplot(fig)
     # plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
     # plt.pause(0.2)
-
-
-
-
-
-
-
-
-
-# Tutorial website: https://www.datacamp.com/tutorial/streamlit
-
-######################### Working example ###############################
-# import streamlit as st
-# st.title("this is the app title")
-# st.code("x=2021")
-# st.latex(r''' a+a r^1+a r^2+a r^3 ''')
-# st.checkbox('yes')
-# st.button('Click')
-# st.multiselect('Choose a planet',['Jupiter', 'Mars', 'neptune'])
-# st.slider('Pick a number', 0,50)
-# st.text_area('Description')
-# st.file_uploader('Upload a photo')
-# st.color_picker('Choose your favorite color')
-
-####################################################################
