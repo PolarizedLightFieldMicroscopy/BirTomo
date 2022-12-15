@@ -51,7 +51,7 @@ with columns[0]:
     optical_info['M_obj'] = st.slider('Magnification', min_value=1, max_value=100, value=60, step=10)
     optical_info['na_obj'] = st.slider('NA of objective', min_value=0.5, max_value=1.75, value=1.2)
 
-    st.write("Computed voxel size [um]:", optical_info['voxel_size_um'])
+    # st.write("Computed voxel size [um]:", optical_info['voxel_size_um'])
 
     # microlens size is 6.5*17 = 110.5 (then divided by mag 60)
 ############ Other #################
