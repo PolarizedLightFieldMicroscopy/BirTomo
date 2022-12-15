@@ -32,6 +32,10 @@ except:
 
 st.header("Choose our parameters")
 
+st.subheader("Parameters currently have the following values:")
+optical_info = BirefringentVolume.get_optical_info_template()
+st.write(optical_info)
+
 columns = st.columns(2)
 # First Column
 with columns[0]:
@@ -42,10 +46,14 @@ with columns[0]:
     st.subheader('Optical')
     optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=25, value=5)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
-    optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
-    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=3, value=1)
+    # optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
+    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (supersampling)', min_value=1, max_value=3, value=1)
+    optical_info['M_obj'] = st.slider('Magnification', min_value=1, max_value=100, value=60, step=10)
+    optical_info['na_obj'] = st.slider('NA of objective', min_value=0.5, max_value=1.75, value=1.2)
 
+    st.write("Computed voxel size [um]:", optical_info['voxel_size_um'])
 
+    # microlens size is 6.5*17 = 110.5 (then divided by mag 60)
 ############ Other #################
     st.subheader('Other')
     backend_choice = st.radio('Backend', ['numpy', 'torch'])
