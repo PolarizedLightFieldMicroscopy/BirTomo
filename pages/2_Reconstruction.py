@@ -11,11 +11,57 @@ st.write("Let's try to reconstruct a volume based on our images!")
 
 import time
 import os
+import numpy as np
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
-from waveblocks.utils.misc_utils import *
+import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
+
+################# temporary placement of function ######################
+# Convert volume to single 2D MIP image, input [batch,1,xDim,yDim,zDim]
+def volume_2_projections(vol_in, proj_type=torch.amax, scaling_factors=[1,1,2], depths_in_ch=True, ths=[0.0,1.0], normalize=False, border_thickness=2, add_scale_bars=True, scale_bar_vox_sizes=[40,20]):
+    vol = vol_in.detach().clone().abs()
+    # Normalize sets limits from 0 to 1
+    if normalize:
+        vol -= vol.min()
+        vol /= vol.max()
+    if depths_in_ch:
+        vol = vol.permute(0,2,3,1).unsqueeze(1)
+    if ths[0]!=0.0 or ths[1]!=1.0:
+        vol_min,vol_max = vol.min(),vol.max()
+        vol[(vol-vol_min)<(vol_max-vol_min)*ths[0]] = 0
+        vol[(vol-vol_min)>(vol_max-vol_min)*ths[1]] = vol_min + (vol_max-vol_min)*ths[1]
+
+    vol_size = list(vol.shape)
+    vol_size[2:] = [vol.shape[i+2] * scaling_factors[i] for i in range(len(scaling_factors))]
+
+    x_projection = proj_type(vol.float().cpu(), dim=2)
+    y_projection = proj_type(vol.float().cpu(), dim=3)
+    z_projection = proj_type(vol.float().cpu(), dim=4)
+
+    out_img = z_projection.min() * torch.ones(
+        vol_size[0], vol_size[1], vol_size[2] + vol_size[4] + border_thickness, vol_size[3] + vol_size[4] + border_thickness
+    )
+
+    out_img[:, :, : vol_size[2], : vol_size[3]] = z_projection
+    out_img[:, :, vol_size[2] + border_thickness :, : vol_size[3]] = F.interpolate(x_projection.permute(0, 1, 3, 2), size=[vol_size[-1],vol_size[-3]], mode='nearest')
+    out_img[:, :, : vol_size[2], vol_size[3] + border_thickness :] = F.interpolate(y_projection, size=[vol_size[2],vol_size[4]], mode='nearest')
+
+
+    if add_scale_bars:
+        line_color = out_img.max()
+        # Draw white lines
+        out_img[:, :, vol_size[2]: vol_size[2]+ border_thickness, ...] = line_color
+        out_img[:, :, :, vol_size[3]:vol_size[3]+border_thickness, ...] = line_color
+        # start = 0.02
+        # out_img[:, :, int(start* vol_size[2]):int(start* vol_size[2])+4, int(0.9* vol_size[3]):int(0.9* vol_size[3])+scale_bar_vox_sizes[0]] = line_color
+        # out_img[:, :, int(start* vol_size[2]):int(start* vol_size[2])+4, vol_size[2] + border_thickness + 10 : vol_size[2] + border_thickness + 10 + scale_bar_vox_sizes[1]*scaling_factors[2]] = line_color
+        # out_img[:, :, vol_size[2] + border_thickness + 10 : vol_size[2] + border_thickness + 10 + scale_bar_vox_sizes[1]*scaling_factors[2], int(start* vol_size[2]):int(start* vol_size[2])+4] = line_color
+
+    return out_img
+####################################################
 
 st.header("Choose our parameters")
 
@@ -31,28 +77,28 @@ with columns[0]:
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
     optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
     optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=3, value=1)
-    optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
-    # y will follow x if x is changed. x will not follow y if y is changed
-    optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
-    optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
 
-
-#second Column
-with columns[1]:
-############ Volume #################
-    st.subheader('Volume')
-    volume_container = st.container() # set up a home for other volume selections to go
-    shift_from_center = st.slider('Axial shift from center [voxels]', \
-                                    min_value = -int(optical_info['volume_shape'][0]/2), \
-                                    max_value = int(optical_info['volume_shape'][0]/2),value = 0)
-    volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-############ To be continued... #################
 
 ############ Other #################
     st.subheader('Other')
     backend_choice = st.radio('Backend', ['torch'])
     st.write("Backend needs to be torch for the reconstructions")
     backend = BackEnds.PYTORCH
+
+# Second Column
+with columns[1]:
+############ Volume #################
+    st.subheader('Volume')
+    volume_container = st.container() # set up a home for other volume selections to go
+    optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
+    # y will follow x if x is changed. x will not follow y if y is changed
+    optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
+    optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
+    shift_from_center = st.slider('Axial shift from center [voxels]', \
+                                    min_value = -int(optical_info['volume_shape'][0]/2), \
+                                    max_value = int(optical_info['volume_shape'][0]/2),value = 0)
+    volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
+############ To be continued... #################
 
 ############ Volume continued... #################    
 
@@ -62,19 +108,21 @@ with columns[1]:
         if how_get_vol == 'h5 upload':
             h5file = st.file_uploader("Upload Volume h5 Here", type=['h5'])
             if h5file is not None:
-                st.session_state['my_volume'] = BirefringentVolume.init_from_file(h5file, backend=backend, \
+                st.session_state['my_recon_volume'] = BirefringentVolume.init_from_file(h5file, backend=backend, \
                                                         optical_info=optical_info)
         else:
             volume_type = st.selectbox('Volume type',['ellipsoid','shell','2ellipsoids','single_voxel'],1)
-            st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
+            st.session_state['my_recon_volume'] = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
                                         vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
-        if st.button('Plot Volume!'):
-            with torch.no_grad():
-                st.session_state['my_volume'].plot_volume_plotly(optical_info, 
-                                        voxels_in=st.session_state['my_volume'].Delta_n, opacity=0.1)
-
-
+st.subheader("Volume viewing")
+st.write("See Forward Projection page for plotting")
+# if st.button("Plot volume!"):
+#     st.write("Scroll over image to zoom in and out.")
+#     with torch.no_grad():
+#         my_fig = st.session_state['my_recon_volume'].plot_volume_plotly_streamlit(optical_info, 
+#                                 voxels_in=st.session_state['my_recon_volume'].Delta_n, opacity=0.1)
+#     st.plotly_chart(my_fig)
 ######################################################################
 
 st.subheader("Training parameters")
@@ -91,7 +139,7 @@ training_params = {
 
 
 if st.button("Reconstruct!"):
-    my_volume = st.session_state['my_volume']
+    my_volume = st.session_state['my_recon_volume']
     output_dir = f'reconstructions/recons_{volume_type}_{optical_info["volume_shape"][0]} \
                     x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}__{training_params["output_posfix"]}'
     os.makedirs(output_dir, exist_ok=True)
@@ -225,4 +273,5 @@ if st.button("Reconstruct!"):
     # Display
     # plt.savefig(f"{output_dir}/g_Optimization_final.pdf")
     # plt.show()
+
     st.success("Done reconstructing! How does it look?", icon="✅")

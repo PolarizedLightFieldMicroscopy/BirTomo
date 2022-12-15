@@ -210,6 +210,59 @@ class BirefringentVolume(BirefringentElement):
         fig.show()
         return
 
+    @staticmethod
+    def plot_volume_plotly_streamlit(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
+        
+        voxels = np.abs(voxels_in)
+        
+        # Check if this is a torch tensor
+        if not isinstance(voxels_in, np.ndarray):
+            try:
+                voxels = voxels.detach()
+                voxels = voxels.cpu().abs().numpy()
+            except:
+                pass
+                
+        import plotly.graph_objects as go
+        volume_shape = optical_info['volume_shape']
+        volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
+        [dz, dxy, dxy] = optical_info['voxel_size_um']
+        # Define grid 
+        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
+        
+        x_coords += 0.5
+        y_coords += 0.5
+        z_coords += 0.5
+        x_coords *= dxy
+        y_coords *= dxy
+        z_coords *= dz
+        fig = go.Figure(data=go.Volume(
+            x=z_coords[:-1,:-1,:-1].flatten(),
+            y=y_coords[:-1,:-1,:-1].flatten(),
+            z=x_coords[:-1,:-1,:-1].flatten(),
+            value=voxels.flatten() / voxels.max(),
+            isomin=0,
+            isomax=0.1,
+            opacity=opacity, # needs to be small to see through all surfaces
+            surface_count=20, # needs to be a large number for good volume rendering
+            # colorscale=colormap
+            ))
+
+        fig.update_layout(
+            scene = dict(
+                        xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
+                        yaxis = dict(nticks=volume_shape[1], range=[0, volume_size_um[1]]),
+                        zaxis = dict(nticks=volume_shape[2], range=[0, volume_size_um[2]]),
+                        xaxis_title='Axial dimension',
+                        aspectratio = dict( x=volume_size_um[0], y=volume_size_um[1], z=volume_size_um[2] ), aspectmode = 'manual'),
+            # width=700,
+            margin=dict(r=0, l=0, b=0, t=0),
+            autosize=True
+            )
+        fig.data = fig.data[::-1]
+        return fig
+
+
     def get_vox_params(self, vox_index):
         '''vox_index is a tuple'''
         return self.Delta_n[vox_index], self.optic_axis[vox_index]
@@ -416,8 +469,9 @@ class BirefringentVolume(BirefringentElement):
 
             # Do we want a shell? let's remove some of the volume
             if vol_type == 'shell':
-                with torch.no_grad():
-                    volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
+                if backend == BackEnds.PYTORCH:
+                    with torch.no_grad():
+                        volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
 
         elif 'ellipsoids' in vol_type:
             n_ellipsoids = int(vol_type[0])

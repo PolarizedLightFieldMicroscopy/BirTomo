@@ -19,12 +19,16 @@ import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM, JonesMatrixGenerators
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
+try:
+    import torch
+except:
+    pass
 
 st.header("Choose our parameters")
 
 columns = st.columns(2)
-#first Column
+# First Column
 with columns[0]:
 ############ Optical Params #################
     # Get optical parameters template
@@ -35,35 +39,34 @@ with columns[0]:
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
     optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
     optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=3, value=1)
+
+
+############ Other #################
+    st.subheader('Other')
+    backend_choice = st.radio('Backend', ['numpy', 'torch'])
+
+# Second Column
+with columns[1]:
+############ Volume #################
+    st.subheader('Volume')
+    volume_container = st.container() # set up a home for other volume selections to go
     optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
     # y will follow x if x is changed. x will not follow y if y is changed
     optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
     optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
-
-
-#second Column
-with columns[1]:
-############ Volume #################
-    st.subheader('Volume')
-    volumeStuff = st.container() # set up a home for other volume selections to go
     shift_from_center = st.slider('Axial shift from center [voxels]', \
                                     min_value = -int(optical_info['volume_shape'][0]/2), \
                                     max_value = int(optical_info['volume_shape'][0]/2),value = 0)
     volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 ############ To be continued... #################
 
-############ Other #################
-    st.subheader('Other')
-    backend_choice = st.radio('Backend', ['numpy', 'torch'])
-
 ############ Volume continued... #################    
     if backend_choice == 'torch':
         backend = BackEnds.PYTORCH
-        from waveblocks.utils.misc_utils import *
     else:
         backend = BackEnds.NUMPY
 
-    with volumeStuff: # now that we know backend and shift, we can fill in the rest of the volume params
+    with volume_container: # now that we know backend and shift, we can fill in the rest of the volume params
         how_get_vol = st.radio("Volume can be created or uploaded as an h5 file", \
                                 ['h5 upload', 'Create a new volume'], index=1)
         if how_get_vol == 'h5 upload':
@@ -76,10 +79,12 @@ with columns[1]:
             st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
                                         vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
-        if st.button('Plot Volume!'):
-            st.session_state['my_volume'].plot_volume_plotly(optical_info, 
-                                    voxels_in=st.session_state['my_volume'].Delta_n, opacity=0.1)
-
+st.subheader("Volume viewing")
+if st.button("Plot volume!"):
+    st.write("Scroll over image to zoom in and out.")
+    my_fig = st.session_state['my_volume'].plot_volume_plotly_streamlit(optical_info, 
+                            voxels_in=st.session_state['my_volume'].Delta_n, opacity=0.1)
+    st.plotly_chart(my_fig)
 ######################################################################
 # Create a function for doing the forward propagation math
 def forwardPropagate():
