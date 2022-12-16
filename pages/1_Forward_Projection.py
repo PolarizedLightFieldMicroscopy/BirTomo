@@ -43,8 +43,13 @@ with columns[0]:
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
     # optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
     optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (supersampling)', min_value=1, max_value=3, value=1)
-    optical_info['M_obj'] = st.slider('Magnification', min_value=1, max_value=100, value=60, step=10)
+    optical_info['M_obj'] = st.slider('Magnification', min_value=10, max_value=100, value=60, step=10)
     optical_info['na_obj'] = st.slider('NA of objective', min_value=0.5, max_value=1.75, value=1.2)
+    optical_info['wavelength'] = st.slider('Wavelength of the light', min_value=0.5, max_value=1.75, value=1.2)
+    optical_info['camera_pix_pitch'] = st.slider('Camera pixel size [um]', min_value=3.0, max_value=12.0, value=6.5, step=0.5)
+    medium_option = st.radio('Refractive index of the medium', ['Water: n = 1.35', 'Oil: n = 1.65'], 0)
+    # if medium_option == 'Water: n = 1.35':
+    optical_info['n_medium'] = float(medium_option[-4:-1])
 
     # st.write("Computed voxel size [um]:", optical_info['voxel_size_um'])
 
