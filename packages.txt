@@ -1,5 +1,0 @@
-streamlit
-tqdm
-matplotlib
-h5py
-plotly
