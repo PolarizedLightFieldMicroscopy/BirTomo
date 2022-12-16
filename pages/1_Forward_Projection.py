@@ -66,8 +66,8 @@ with columns[1]:
     volume_container = st.container() # set up a home for other volume selections to go
     optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
     # y will follow x if x is changed. x will not follow y if y is changed
-    optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
-    optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
+    optical_info['volume_shape'][1] = st.slider('Y volume dimension', min_value=1, max_value=100, value=51)
+    optical_info['volume_shape'][2] = st.slider('Z volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
     shift_from_center = st.slider('Axial shift from center [voxels]', \
                                     min_value = -int(optical_info['volume_shape'][0]/2), \
                                     max_value = int(optical_info['volume_shape'][0]/2),value = 0)
