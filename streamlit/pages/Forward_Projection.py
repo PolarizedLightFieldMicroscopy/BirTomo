@@ -17,7 +17,9 @@ st.title("Forward Projection")
 import time         # to measure ray tracing time
 import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
+# from .. import plotting_tools
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
+# import ..plotting_tools
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 try:
