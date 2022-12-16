@@ -27,16 +27,17 @@ except:
 
 st.header("Choose our parameters")
 
-st.subheader("Parameters currently have the following values:")
-optical_info = BirefringentVolume.get_optical_info_template()
-st.write(optical_info)
+
+
+# Get optical parameters template
+st.session_state['optical_info'] = BirefringentVolume.get_optical_info_template()
+optical_info = st.session_state['optical_info']
+# st.write(optical_info)
 
 columns = st.columns(2)
 # First Column
 with columns[0]:
 ############ Optical Params #################
-    # Get optical parameters template
-    optical_info = BirefringentVolume.get_optical_info_template()
     # Alter some of the optical parameters
     st.subheader('Optical')
     optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=25, value=5)
@@ -94,7 +95,7 @@ with columns[1]:
 
 st.subheader("Volume viewing")
 if st.button("Plot volume!"):
-    st.write("Scroll over image to zoom in and out.")
+    st.markdown("Scroll over image to zoom in and out.")
     my_fig = st.session_state['my_volume'].plot_volume_plotly_streamlit(optical_info, 
                             voxels_in=st.session_state['my_volume'].Delta_n, opacity=0.1)
     camera = dict(eye=dict(x=50, y=0., z=0))
@@ -143,10 +144,13 @@ st.header("Retardance and azimuth images")
 if st.button('Calculate!'):
     forwardPropagate()
 
+def plot_retardance_orientation(azimuth_plot_type):
+
+    pass
 
 if "ret_image" in st.session_state:
     # Plot with streamlit
-    azimuth_plot_type = st.selectbox('Azmiuth Plot Type', ['lines','hsv'], index = 1)
+    azimuth_plot_type = st.selectbox('Azmiuth Plot Type', ['lines', 'hsv'], index = 1)
     colormap = 'viridis'
     plt.rcParams['image.origin'] = 'lower'
     fig = plt.figure(figsize=(12,2.5))
