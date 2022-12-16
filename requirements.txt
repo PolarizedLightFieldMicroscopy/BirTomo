@@ -1,1 +1,5 @@
 matplotlib
+h5py
+tqdm
+pytorch
+plotly
