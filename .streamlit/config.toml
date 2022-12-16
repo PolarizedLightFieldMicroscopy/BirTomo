@@ -1,0 +1,11 @@
+[server]
+runOnSave = true
+
+[theme]
+# primaryColor = "#E694FF"
+# backgroundColor = "#00172B"
+# secondaryBackgroundColor = "#0083B8"
+# textColor = "#DCDCDC"
+# font = "sans serif"
+
+# type the following to see all the settings: streamlit config show
