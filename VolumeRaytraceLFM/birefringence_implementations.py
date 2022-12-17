@@ -181,18 +181,14 @@ class BirefringentVolume(BirefringentElement):
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
         # Define grid 
-        z_coords,y_coords,x_coords = np.indices(np.array(delta_n.shape)).astype(float)
+        coords = np.indices(np.array(delta_n.shape)).astype(float)
         
-        x_coords += 0.5
-        y_coords += 0.5
-        z_coords += 0.5
+        coords_base = [(coords[i] + 0.5) * optical_info['voxel_size_um'][i] for i in range(3)]
+        coords_tip =  [(coords[i] + 0.5 + optic_axis[i,...] * delta_n * 0.75) * optical_info['voxel_size_um'][i] for i in range(3)]
 
         # Plot single line per voxel, where it's length is delta_n
-        x_base, y_base, z_base = x_coords * dxy, y_coords * dxy, z_coords * dz
-        x_tip = (x_coords + optic_axis[2,...] * delta_n * 0.75) * dxy 
-        y_tip = (y_coords + optic_axis[1,...] * delta_n * 0.75) * dxy 
-        z_tip = (z_coords + optic_axis[0,...] * delta_n * 0.75) * dz 
-        
+        z_base, y_base, x_base = coords_base
+        z_tip, y_tip, x_tip = coords_tip
 
         # Don't plot zero values
         mask = delta_n==0
@@ -286,24 +282,19 @@ class BirefringentVolume(BirefringentElement):
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
-        [dz, dxy, dxy] = optical_info['voxel_size_um']
+
         # Define grid 
-        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape)).astype(float)
-        
-        x_coords += 0.5
-        y_coords += 0.5
-        z_coords += 0.5
-        x_coords *= dxy
-        y_coords *= dxy
-        z_coords *= dz
+        coords = np.indices(np.array(voxels.shape)).astype(float)
+        # Shift by half a voxel and multiply by voxel size
+        coords = [(coords[i]+0.5) * optical_info['voxel_size_um'][i] for i in range(3)]
 
 
         if fig is None:
             fig = go.Figure()
         fig.add_volume(
-            x=z_coords.flatten(),
-            y=y_coords.flatten(),
-            z=x_coords.flatten(),
+            x=coords[0].flatten(),
+            y=coords[1].flatten(),
+            z=coords[2].flatten(),
             value=voxels.flatten() / voxels.max(),
             isomin=0,
             isomax=0.1,
