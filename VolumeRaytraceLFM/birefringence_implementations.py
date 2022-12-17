@@ -164,7 +164,7 @@ class BirefringentVolume(BirefringentElement):
         return self
 
     
-    def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=10, fig=None, draw_spheres=False):
+    def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=5, fig=None, draw_spheres=True):
         
         # Fetch local data
         delta_n = self.get_delta_n() * 1
@@ -190,6 +190,10 @@ class BirefringentVolume(BirefringentElement):
         # Define grid 
         z_coords,y_coords,x_coords = np.indices(np.array(delta_n.shape)).astype(float)
         
+        x_coords += 0.5
+        y_coords += 0.5
+        z_coords += 0.5
+
         # Plot single line per voxel, where it's length is delta_n
         x_base, y_base, z_base = x_coords * dxy, y_coords * dxy, z_coords * dz
         x_tip = (x_coords + optic_axis[2,...] * delta_n * 0.75) * dxy 
@@ -240,18 +244,20 @@ class BirefringentVolume(BirefringentElement):
         all_color += 0.5
         all_color /= all_color.max()
 
-        # if fig is None:
-        #     fig = go.Figure()
-        fig = go.Figure(data=go.Scatter3d(z=all_x, y=all_y, x=all_z,
+        if fig is None:
+            fig = go.Figure()
+        
+        fig.add_scatter3d(z=all_x, y=all_y, x=all_z,
             marker=dict(color=all_color, colorscale=colormap, size=4), 
             line=dict(color=all_color, colorscale=colormap, width=size_scaler), 
-            connectgaps=False, mode='lines'
-            ))
+            connectgaps=False, 
+            mode='lines'
+            )
         
         if draw_spheres:
             fig.add_scatter3d(z=x_base.flatten(), y=y_base.flatten(), x=z_base.flatten(),
-                marker=dict(color=all_color[::3], colorscale=colormap, size=size_scaler*5*all_color[::3]),
-                line=dict(color=all_color[::3], colorscale=colormap, width=5), 
+                marker=dict(color=all_color[::3]-0.5, colorscale=colormap, size=size_scaler*5*all_color[::3]),
+                line=dict(color=all_color[::3]-0.5, colorscale=colormap, width=5), 
                 mode = 'markers')
         
 
@@ -268,10 +274,10 @@ class BirefringentVolume(BirefringentElement):
             )
         # fig.data = fig.data[::-1]
         fig.show()
-        return
+        return fig
 
     @staticmethod
-    def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
+    def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray', fig=None):
         
         voxels = voxels_in * 1.0
         
@@ -289,7 +295,7 @@ class BirefringentVolume(BirefringentElement):
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
         # Define grid 
-        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
+        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape)).astype(float)
         
         x_coords += 0.5
         y_coords += 0.5
@@ -297,17 +303,21 @@ class BirefringentVolume(BirefringentElement):
         x_coords *= dxy
         y_coords *= dxy
         z_coords *= dz
-        fig = go.Figure(data=go.Volume(
-            x=z_coords[:-1,:-1,:-1].flatten(),
-            y=y_coords[:-1,:-1,:-1].flatten(),
-            z=x_coords[:-1,:-1,:-1].flatten(),
+
+
+        if fig is None:
+            fig = go.Figure()
+        fig.add_volume(
+            x=z_coords.flatten(),
+            y=y_coords.flatten(),
+            z=x_coords.flatten(),
             value=voxels.flatten() / voxels.max(),
             isomin=0,
             isomax=0.1,
             opacity=opacity, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
             # colorscale=colormap
-            ))
+            )
 
         fig.update_layout(
             scene = dict(
@@ -322,7 +332,7 @@ class BirefringentVolume(BirefringentElement):
             )
         fig.data = fig.data[::-1]
         fig.show()
-        return
+        return fig
 
     def get_vox_params(self, vox_index):
         '''vox_index is a tuple'''
