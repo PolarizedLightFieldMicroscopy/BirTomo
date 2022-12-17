@@ -157,10 +157,122 @@ class BirefringentVolume(BirefringentElement):
         return self
 
 
-    @staticmethod
-    def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray'):
+    def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=5, fig=None, draw_spheres=True):
         
-        voxels = np.abs(voxels_in)
+        # Fetch local data
+        delta_n = self.get_delta_n() * 1
+        optic_axis = self.get_optic_axis() * 1
+        optical_info = self.optical_info
+        
+        # Check if this is a torch tensor
+        if not isinstance(delta_n, np.ndarray):
+            try:
+                delta_n = delta_n.cpu().detach().numpy()
+                optic_axis = optic_axis.cpu().detach().numpy()
+            except:
+                pass
+        
+        delta_n /= np.max(np.abs(delta_n))
+
+        from plotly.subplots import make_subplots
+        import plotly.graph_objects as go
+
+        volume_shape = optical_info['volume_shape']
+        volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
+        [dz, dxy, dxy] = optical_info['voxel_size_um']
+        # Define grid 
+        z_coords,y_coords,x_coords = np.indices(np.array(delta_n.shape)).astype(float)
+        
+        x_coords += 0.5
+        y_coords += 0.5
+        z_coords += 0.5
+
+        # Plot single line per voxel, where it's length is delta_n
+        x_base, y_base, z_base = x_coords * dxy, y_coords * dxy, z_coords * dz
+        x_tip = (x_coords + optic_axis[2,...] * delta_n * 0.75) * dxy 
+        y_tip = (y_coords + optic_axis[1,...] * delta_n * 0.75) * dxy 
+        z_tip = (z_coords + optic_axis[0,...] * delta_n * 0.75) * dz 
+        
+
+        # Don't plot zero values
+        mask = delta_n==0
+        x_base[mask] = np.NaN
+        y_base[mask] = np.NaN
+        z_base[mask] = np.NaN
+        x_tip[mask] = np.NaN
+        y_tip[mask] = np.NaN
+        z_tip[mask] = np.NaN
+        
+
+        # Gather all rays in single arrays, to plot them all at once, placing NAN in between them
+        array_size = 3 * len(x_base.flatten())
+        # Prepare colormap
+        all_x = np.empty((array_size))
+        all_x[::3] = x_base.flatten()
+        all_x[1::3] = x_tip.flatten()
+        all_x[2::3] = np.NaN
+
+        all_y = np.empty((array_size))
+        all_y[::3] = y_base.flatten()
+        all_y[1::3] = y_tip.flatten()
+        all_y[2::3] = np.NaN
+
+        all_z = np.empty((array_size))
+        all_z[::3] = z_base.flatten()
+        all_z[1::3] = z_tip.flatten()
+        all_z[2::3] = np.NaN
+
+        # Compute colors
+        all_color = np.empty((array_size))
+        all_color[::3] =    (x_base-x_tip).flatten() ** 2 + \
+                            (y_base-y_tip).flatten() ** 2 + \
+                            (z_base-z_tip).flatten() ** 2
+        # all_color[::3] =  delta_n.flatten() * 1.0
+        all_color[1::3] = all_color[::3]
+        all_color[2::3] = 0
+
+        all_color[np.isnan(all_color)] = 0
+
+        all_color[all_color!=0] -= all_color[all_color!=0].min()
+        all_color += 0.5
+        all_color /= all_color.max()
+
+        if fig is None:
+            fig = go.Figure()
+        
+        fig.add_scatter3d(z=all_x, y=all_y, x=all_z,
+            marker=dict(color=all_color, colorscale=colormap, size=4), 
+            line=dict(color=all_color, colorscale=colormap, width=size_scaler), 
+            connectgaps=False, 
+            mode='lines'
+            )
+        
+        if draw_spheres:
+            fig.add_scatter3d(z=x_base.flatten(), y=y_base.flatten(), x=z_base.flatten(),
+                marker=dict(color=all_color[::3]-0.5, colorscale=colormap, size=size_scaler*5*all_color[::3]),
+                line=dict(color=all_color[::3]-0.5, colorscale=colormap, width=5), 
+                mode = 'markers')
+        
+
+        fig.update_layout(
+            scene = dict(
+                        xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
+                        yaxis = dict(nticks=volume_shape[1], range=[0, volume_size_um[1]]),
+                        zaxis = dict(nticks=volume_shape[2], range=[0, volume_size_um[2]]),
+                        xaxis_title='Axial dimension',
+                        aspectratio = dict( x=volume_size_um[0], y=volume_size_um[1], z=volume_size_um[2] ), aspectmode = 'manual'),
+            # width=700,
+            margin=dict(r=0, l=0, b=0, t=0),
+            # autosize=True
+            )
+        # fig.data = fig.data[::-1]
+        fig.show()
+        return fig
+
+    @staticmethod
+    def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray', fig=None):
+        
+        voxels = voxels_in * 1.0
         
         # Check if this is a torch tensor
         if not isinstance(voxels_in, np.ndarray):
@@ -169,13 +281,14 @@ class BirefringentVolume(BirefringentElement):
                 voxels = voxels.cpu().abs().numpy()
             except:
                 pass
+        voxels = np.abs(voxels)
                 
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
         # Define grid 
-        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
+        z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape)).astype(float)
         
         x_coords += 0.5
         y_coords += 0.5
@@ -183,17 +296,21 @@ class BirefringentVolume(BirefringentElement):
         x_coords *= dxy
         y_coords *= dxy
         z_coords *= dz
-        fig = go.Figure(data=go.Volume(
-            x=z_coords[:-1,:-1,:-1].flatten(),
-            y=y_coords[:-1,:-1,:-1].flatten(),
-            z=x_coords[:-1,:-1,:-1].flatten(),
+
+
+        if fig is None:
+            fig = go.Figure()
+        fig.add_volume(
+            x=z_coords.flatten(),
+            y=y_coords.flatten(),
+            z=x_coords.flatten(),
             value=voxels.flatten() / voxels.max(),
             isomin=0,
             isomax=0.1,
             opacity=opacity, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
             # colorscale=colormap
-            ))
+            )
 
         fig.update_layout(
             scene = dict(
@@ -208,7 +325,7 @@ class BirefringentVolume(BirefringentElement):
             )
         fig.data = fig.data[::-1]
         fig.show()
-        return
+        return fig
 
     def get_vox_params(self, vox_index):
         '''vox_index is a tuple'''
@@ -416,8 +533,8 @@ class BirefringentVolume(BirefringentElement):
 
             # Do we want a shell? let's remove some of the volume
             if vol_type == 'shell':
-                with torch.no_grad():
-                    volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
+                volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
+
 
         elif 'ellipsoids' in vol_type:
             n_ellipsoids = int(vol_type[0])
@@ -612,7 +729,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # Check which rays still have voxels to traverse
             rays_with_voxels = [len(vx)>m for vx in _voxels_of_segs]
             # How many rays at this step
-            n_rays_with_voxels = sum(rays_with_voxels)
+            # n_rays_with_voxels = sum(rays_with_voxels)
             # The lengths these rays traveled through the current voxels
             ell = ell_in_voxels[rays_with_voxels,m]
             # The voxel coordinates each ray collides with
