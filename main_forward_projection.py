@@ -91,8 +91,9 @@ my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info
 
 # Plot the volume
 plotly_figure = my_volume.plot_lines_plotly()
-my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.05, fig=plotly_figure)
-
+# Append volumes to plot
+plotly_figure = my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.01, fig=plotly_figure)
+plotly_figure.show()
 
 startTime = time.time()
 ret_image, azim_image = rays.ray_trace_through_volume(my_volume)

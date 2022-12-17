@@ -266,7 +266,7 @@ class BirefringentVolume(BirefringentElement):
             # autosize=True
             )
         # fig.data = fig.data[::-1]
-        fig.show()
+        # fig.show()
         return fig
 
     @staticmethod
@@ -323,8 +323,8 @@ class BirefringentVolume(BirefringentElement):
             margin=dict(r=0, l=0, b=0, t=0),
             autosize=True
             )
-        fig.data = fig.data[::-1]
-        fig.show()
+        # fig.data = fig.data[::-1]
+        # fig.show()
         return fig
 
     def get_vox_params(self, vox_index):
