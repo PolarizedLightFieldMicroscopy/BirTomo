@@ -388,7 +388,7 @@ class BirefringentVolume(BirefringentElement):
                         (z_pad//2, z_pad//2 + z_pad%2),
                         (y_pad//2, y_pad//2 + y_pad%2), 
                         (x_pad//2, x_pad//2 + x_pad%2)),
-                    mode = 'constant').astype(np.float64)
+                    mode = 'constant', constant_values=np.sqrt(3)).astype(np.float64)
 
         # Create volume
         volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
@@ -427,7 +427,7 @@ class BirefringentVolume(BirefringentElement):
         self.optic_axis = volume_ref.optic_axis
 
     @staticmethod
-    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [0,0.01], 'axes_range' : [-1,1]}):
+    def generate_random_volume(volume_shape, init_args={'Delta_n_range' : [0,1], 'axes_range' : [-1,1]}):
         Delta_n = np.random.uniform(init_args['Delta_n_range'][0], init_args['Delta_n_range'][1], volume_shape)
         # Random axis
         a_0 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
@@ -561,6 +561,26 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Ray-voxel colisions for different micro-lenses, this dictionary gets filled in: calc_cummulative_JM_of_ray_torch
         self.vox_indices_ml_shifted = {}
         
+    def get_volume_reachable_region(self):
+        ''' Returns a binary mask where the MLA's can reach into the volume'''
+
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
+        n_ml_half = floor(n_micro_lenses * n_voxels_per_ml / 2.0)
+        mask = torch.zeros(self.optical_info['volume_shape'])
+        mask[:, 
+            self.vox_ctr_idx[1]-n_ml_half+1 : self.vox_ctr_idx[1]+n_ml_half, 
+            self.vox_ctr_idx[2]-n_ml_half+1 : self.vox_ctr_idx[2]+n_ml_half] = 1.0
+        # mask_volume = BirefringentVolume(backend=self.backend, optical_info=self.optical_info, Delta_n=0.01, optic_axis=[0.5,0.5,0])
+        # r,a = self.ray_trace_through_volume(mask_volume)
+        
+        # # Check gradients to see what is affected
+        # L = r.mean() + a.mean()
+        # L.backward()
+        # with torch.no_grad():
+        #     mask = mask_volume.Delta_n
+        #     mask[mask.grad==0] = 0
+        return mask.detach()
         
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None):
         """ This function forward projects a whole volume, by iterating through the volume in front of each micro-lens in the system.
@@ -652,7 +672,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             off_diag_sum = JM[:, 0, 1] + JM[:, 1, 0]
             a = (diag_diff / diag_sum).imag
             b = (off_diag_sum / diag_sum).imag
-            azimuth = torch.arctan2(-b, -a) / 2.0 + torch.pi / 2.0
+            # atan2 with zero entries causes nan in backward, so let's filter them out
+            azimuth = torch.zeros_like(a)
+            zero_a_b = torch.isclose(a,torch.zeros([1],dtype=a.dtype)).bitwise_and(torch.isclose(b,torch.zeros([1],dtype=b.dtype)))
+            azimuth[~zero_a_b] = torch.arctan2(-b[~zero_a_b], -a[~zero_a_b]) / 2.0 + torch.pi / 2.0
+            
 
             # todo: if output azimuth is pi, make it 0 and vice-versa (arctan2 bug)
             # zero_index = torch.isclose(azimuth, torch.zeros([1]), atol=1e-5)
@@ -729,6 +753,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # Extract the information from the volume
             # Birefringence 
             Delta_n = volume_in.Delta_n[vox]
+
             # And axis
             opticAxis = volume_in.optic_axis[:,vox].permute(1,0)
             # Grab the subset of precomputed ray directions that have voxels in this step
@@ -740,7 +765,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                 rayDir = filtered_rayDir,
                                 ell = ell,
                                 wavelength=self.optical_info['wavelength'])
-
+            
             if m==0:
                 material_JM = JM
             else:
