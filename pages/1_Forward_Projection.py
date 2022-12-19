@@ -7,8 +7,8 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Hello Rudolf",
-    page_icon="👋",
+    page_title="Forward",
+    page_icon="",
     layout="wide",
 )
 
@@ -19,51 +19,68 @@ import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM, JonesMatrixGenerators
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
+try:
+    import torch
+except:
+    pass
 
 st.header("Choose our parameters")
 
+
+
+# Get optical parameters template
+st.session_state['optical_info'] = BirefringentVolume.get_optical_info_template()
+optical_info = st.session_state['optical_info']
+# st.write(optical_info)
+
 columns = st.columns(2)
-#first Column
+# First Column
 with columns[0]:
 ############ Optical Params #################
-    # Get optical parameters template
-    optical_info = BirefringentVolume.get_optical_info_template()
     # Alter some of the optical parameters
     st.subheader('Optical')
     optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=25, value=5)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
-    optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
-    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=3, value=1)
+    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (supersampling)', min_value=1, max_value=3, value=1)
+    # optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
+    optical_info['M_obj'] = st.slider('Magnification', min_value=10, max_value=100, value=60, step=10)
+    optical_info['na_obj'] = st.slider('NA of objective', min_value=0.5, max_value=1.75, value=1.2)
+    optical_info['wavelength'] = st.slider('Wavelength of the light', min_value=0.5, max_value=1.75, value=1.2)
+    optical_info['camera_pix_pitch'] = st.slider('Camera pixel size [um]', min_value=3.0, max_value=12.0, value=6.5, step=0.5)
+    medium_option = st.radio('Refractive index of the medium', ['Water: n = 1.35', 'Oil: n = 1.65'], 0)
+    # if medium_option == 'Water: n = 1.35':
+    optical_info['n_medium'] = float(medium_option[-4:-1])
+
+    # st.write("Computed voxel size [um]:", optical_info['voxel_size_um'])
+
+    # microlens size is 6.5*17 = 110.5 (then divided by mag 60)
+############ Other #################
+    st.subheader('Other')
+    backend_choice = st.radio('Backend', ['numpy', 'torch'])
+
+# Second Column
+with columns[1]:
+############ Volume #################
+    st.subheader('Volume')
+    volume_container = st.container() # set up a home for other volume selections to go
     optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
     # y will follow x if x is changed. x will not follow y if y is changed
     optical_info['volume_shape'][1] = st.slider('Y volume dimension', min_value=1, max_value=100, value=51)
     optical_info['volume_shape'][2] = st.slider('Z volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
-
-
-#second Column
-with columns[1]:
-############ Volume #################
-    st.subheader('Volume')
-    volumeStuff = st.container() # set up a home for other volume selections to go
     shift_from_center = st.slider('Axial shift from center [voxels]', \
                                     min_value = -int(optical_info['volume_shape'][0]/2), \
                                     max_value = int(optical_info['volume_shape'][0]/2),value = 0)
     volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 ############ To be continued... #################
 
-############ Other #################
-    st.subheader('Other')
-    backend_choice = st.radio('Backend', ['numpy', 'torch'])
-
 ############ Volume continued... #################    
     if backend_choice == 'torch':
         backend = BackEnds.PYTORCH
-        from waveblocks.utils.misc_utils import *
     else:
         backend = BackEnds.NUMPY
 
-    with volumeStuff: # now that we know backend and shift, we can fill in the rest of the volume params
+    with volume_container: # now that we know backend and shift, we can fill in the rest of the volume params
         how_get_vol = st.radio("Volume can be created or uploaded as an h5 file", \
                                 ['h5 upload', 'Create a new volume'], index=1)
         if how_get_vol == 'h5 upload':
@@ -76,10 +93,14 @@ with columns[1]:
             st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
                                         vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
-        if st.button('Plot Volume!'):
-            st.session_state['my_volume'].plot_volume_plotly(optical_info, 
-                                    voxels_in=st.session_state['my_volume'].Delta_n, opacity=0.1)
-
+st.subheader("Volume viewing")
+if st.button("Plot volume!"):
+    st.markdown("Scroll over image to zoom in and out.")
+    my_fig = st.session_state['my_volume'].plot_volume_plotly(optical_info, 
+                            voxels_in=st.session_state['my_volume'].Delta_n, opacity=0.1)
+    camera = dict(eye=dict(x=50, y=0., z=0))
+    my_fig.update_layout(scene_camera=camera)
+    st.plotly_chart(my_fig)
 ######################################################################
 # Create a function for doing the forward propagation math
 def forwardPropagate():
@@ -123,10 +144,13 @@ st.header("Retardance and azimuth images")
 if st.button('Calculate!'):
     forwardPropagate()
 
+def plot_retardance_orientation(azimuth_plot_type):
+
+    pass
 
 if "ret_image" in st.session_state:
     # Plot with streamlit
-    azimuth_plot_type = st.selectbox('Azmiuth Plot Type', ['lines','hsv'], index = 1)
+    azimuth_plot_type = st.selectbox('Azmiuth Plot Type', ['lines', 'hsv'], index = 1)
     colormap = 'viridis'
     plt.rcParams['image.origin'] = 'lower'
     fig = plt.figure(figsize=(12,2.5))

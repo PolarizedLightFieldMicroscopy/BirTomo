@@ -96,7 +96,7 @@ volume_GT = BirefringentVolume.init_from_file('objects/bundleX.h5', backend, opt
 my_volume = volume_GT.to(device)
 # Plot volume
 with torch.no_grad():
-    # Plot the volume
+    # Plot the optic axis and birefringence within the volume
     plotly_figure = volume_GT.plot_lines_plotly()
     # Append volumes to plot
     plotly_figure = volume_GT.plot_volume_plotly(optical_info, voxels_in=volume_GT.get_delta_n(), opacity=0.02, fig=plotly_figure)
