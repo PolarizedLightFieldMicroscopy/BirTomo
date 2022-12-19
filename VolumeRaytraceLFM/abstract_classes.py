@@ -64,6 +64,8 @@ class OpticalElement(OpticBlock):
         
         # Compute voxel size 
         optical_info['voxel_size_um'] =  [optical_info['axial_voxel_size_um'],] + 2*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch'] / optical_info['M_obj']]
+        # Option to make voxel size uniform
+        # optical_info['voxel_size_um'] =  3*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch'] / optical_info['M_obj']]
         
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks compatibility.
         if backend==BackEnds.PYTORCH:

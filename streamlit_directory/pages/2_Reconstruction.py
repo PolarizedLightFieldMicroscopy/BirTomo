@@ -29,7 +29,6 @@ with columns[0]:
     st.subheader('Optical')
     optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=25, value=5)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
-    optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
     optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=3, value=1)
 
 
@@ -74,7 +73,7 @@ st.write("See Forward Projection page for plotting")
 # if st.button("Plot volume!"):
 #     st.write("Scroll over image to zoom in and out.")
 #     with torch.no_grad():
-#         my_fig = st.session_state['my_recon_volume'].plot_volume_plotly_streamlit(optical_info, 
+#         my_fig = st.session_state['my_recon_volume'].plot_volume_plotly(optical_info, 
 #                                 voxels_in=st.session_state['my_recon_volume'].Delta_n, opacity=0.1)
 #     st.plotly_chart(my_fig)
 ######################################################################
