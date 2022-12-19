@@ -35,7 +35,7 @@ training_params = {
 # for shift in range(-5,6):
 shift_from_center = -1
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-volume_type = '5ellipsoids'
+volume_type = '3ellipsoids'
 # volume_type = 'ellipsoid'
 # volume_type = 'shell'
 # volume_type = 'single_voxel'
@@ -83,15 +83,21 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-my_volume = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
-                                                    vol_type=volume_type, \
-                                                    volume_axial_offset=volume_axial_offset)
+# my_volume = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
+#                                                     vol_type=volume_type, \
+#                                                     volume_axial_offset=volume_axial_offset)
+
+my_volume = BirefringentVolume.init_from_file('objects/bundleX.h5', backend, optical_info)
 
 # Move volume to GPU if avaliable
 my_volume = my_volume.to(device)
 # Plot volume
 with torch.no_grad():
-    my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n().abs(), opacity=0.1)
+    # Plot the optic axis and birefringence within the volume
+    plotly_figure = my_volume.plot_lines_plotly()
+    # Append volumes to plot
+    plotly_figure = my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.02, fig=plotly_figure)
+    plotly_figure.show()
 
 
 with torch.no_grad():
@@ -166,6 +172,8 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         plt.subplot(2,4,3)
         plt.imshow(volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0] \
                                         .detach().cpu().numpy())
+        plt.xlabel('x')
+        plt.ylabel('y')
         plt.colorbar()
         plt.title('Initial volume MIP')
 
