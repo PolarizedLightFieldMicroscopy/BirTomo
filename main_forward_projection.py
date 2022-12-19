@@ -79,7 +79,8 @@ if backend == BackEnds.PYTORCH:
     rays = rays.to(device)
 
 # Load volume from a file
-# loaded_volume = BirefringentVolume.init_from_file("objects/bundleY.h5", backend, optical_info)
+# loaded_volume = BirefringentVolume.init_from_file("objects/bundleX.h5", backend, optical_info)
+# my_volume = loaded_volume
 
 # Create a volume
 my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \

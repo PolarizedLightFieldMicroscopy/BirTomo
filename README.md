@@ -13,6 +13,8 @@ For the forward model, the main script is main_forward_projection.py. The workfl
 
 For the iterative reconstruction, the main script is main_3d_reconstruction.py.
 
+You can also use our streamlit app that is only the streamlit cloud: https://polarizedlightfieldmicroscopy-forward-mo-user-interface-dc1r85.streamlit.app/
+
 ## Requirements
 virtual environment should include the waveblocks requirements
 
