@@ -45,7 +45,7 @@ shift_from_center = 0
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 # volume_type = 'ellipsoid'
 volume_type = 'shell'
-volume_type = '2ellipsoids'
+# volume_type = '2ellipsoids'
 # volume_type = 'single_voxel'
 
 # Plot azimuth
@@ -86,9 +86,14 @@ my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info
                                                     vol_type=volume_type, \
                                                     volume_axial_offset=volume_axial_offset)
 
-# Plot the volume
-my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.1)
+# Plot ray geometry
+# rays.plot_rays()
 
+# Plot the volume
+plotly_figure = my_volume.plot_lines_plotly()
+# Append volumes to plot
+plotly_figure = my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.01, fig=plotly_figure)
+plotly_figure.show()
 
 startTime = time.time()
 ret_image, azim_image = rays.ray_trace_through_volume(my_volume)
