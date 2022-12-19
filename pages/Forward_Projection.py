@@ -37,8 +37,8 @@ with columns[0]:
     optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=3, value=1)
     optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
     # y will follow x if x is changed. x will not follow y if y is changed
-    optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
-    optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
+    optical_info['volume_shape'][1] = st.slider('Y volume dimension', min_value=1, max_value=100, value=51)
+    optical_info['volume_shape'][2] = st.slider('Z volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
 
 
 #second Column
