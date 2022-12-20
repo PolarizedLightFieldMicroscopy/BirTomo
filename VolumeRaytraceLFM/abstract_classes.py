@@ -2,6 +2,7 @@
 from enum import Enum
 import pickle
 from os.path import exists
+import numpy as np
 import matplotlib.pyplot as plt
 
 # from VolumeRaytraceLFM.my_siddon import *
