@@ -7,13 +7,14 @@ This script using numpy/pytorch back-end to:
     - Generate 2D images.
 """
 import time         # to measure ray tracing time
-import numpy as np  # to convert radians to degrees for plots
 import matplotlib.pyplot as plt
-from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
+from plotting_tools import plot_retardance_orientation
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, \
-                                                            BirefringentRaytraceLFM, \
-                                                            JonesMatrixGenerators
+from VolumeRaytraceLFM.birefringence_implementations import  (
+    BirefringentVolume,
+    BirefringentRaytraceLFM,
+    JonesMatrixGenerators
+)
 
 # Select backend method
 # backend = BackEnds.PYTORCH
@@ -44,9 +45,9 @@ optical_info['n_voxels_per_ml'] = 1
 shift_from_center = 0
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 # volume_type = 'ellipsoid'
-volume_type = 'shell'
+# volume_type = 'shell'
 # volume_type = '2ellipsoids'
-# volume_type = 'single_voxel'
+volume_type = 'single_voxel'
 
 # Plot azimuth
 # azimuth_plot_type = 'lines'
@@ -59,7 +60,7 @@ if volume_type == 'single_voxel':
     azimuth_plot_type = 'lines'
 
 
-# Create a Birefringent Raytracer
+# Create a Birefringent Raytracer!
 rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 
 # Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
@@ -78,23 +79,31 @@ if backend == BackEnds.PYTORCH:
     print(f'Using computing device: {device}')
     rays = rays.to(device)
 
+
+# Create a volume!
+
 # Load volume from a file
-# loaded_volume = BirefringentVolume.init_from_file("objects/bundleX.h5", backend, optical_info)
-# my_volume = loaded_volume
+# loaded_volume = BirefringentVolume.init_from_file("objects/bundleXY.h5", backend, optical_info)
+loaded_volume = BirefringentVolume.init_from_file("objects/single_voxel.h5", backend, optical_info)
+my_volume = loaded_volume
 
 # Create a volume
-my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
-                                                    vol_type=volume_type, \
-                                                    volume_axial_offset=volume_axial_offset)
+# my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info,
+#                                                     vol_type=volume_type,
+#                                                     volume_axial_offset=volume_axial_offset)
+# Save the volume as a file
+# my_volume.save_as_file('objects/single_voxel.h5')
 
-# Plot ray geometry
+
+# # Plot ray geometry
 # rays.plot_rays()
 
-# Plot the volume
-plotly_figure = my_volume.plot_lines_plotly()
-# Append volumes to plot
-plotly_figure = my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(), opacity=0.01, fig=plotly_figure)
-plotly_figure.show()
+# # Plot the volume
+# plotly_figure = my_volume.plot_lines_plotly()
+# # Append volumes to plot
+# plotly_figure = my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(),
+#                                               opacity=0.01, fig=plotly_figure)
+# plotly_figure.show()
 
 startTime = time.time()
 ret_image, azim_image = rays.ray_trace_through_volume(my_volume)
@@ -104,27 +113,10 @@ print(f'Execution time in seconds with backend {backend}: ' + str(executionTime)
 if backend == BackEnds.PYTORCH:
     ret_image, azim_image = ret_image.detach().cpu().numpy(), azim_image.detach().cpu().numpy()
 
-# Plot
-colormap = 'viridis'
-plt.rcParams['image.origin'] = 'lower'
-plt.figure(figsize=(12,2.5))
-plt.subplot(1,3,1)
-plt.imshow(ret_image,cmap=colormap)
-plt.colorbar(fraction=0.046, pad=0.04)
-plt.title(F'Retardance {backend}')
-plt.subplot(1,3,2)
-plt.imshow(np.rad2deg(azim_image), cmap=colormap)
-plt.colorbar(fraction=0.046, pad=0.04)
-plt.title('Azimuth')
-ax = plt.subplot(1,3,3)
-if azimuth_plot_type == 'lines':
-    im = plot_birefringence_lines(ret_image, azim_image,cmap=colormap, line_color='white', ax=ax)
-else:
-    plot_birefringence_colorized(ret_image, azim_image)
-plt.colorbar(fraction=0.046, pad=0.04)
-plt.title('Ret+Azim')
-
+# Plot retardance and orientation images
+my_fig = plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type)
 plt.pause(0.2)
 plt.show(block=True)
-# plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}_axial_offset_{volume_axial_offset}.pdf')
+plt.savefig(f'Forward_projection_off_axis_thickness03_deltan-01_{volume_type}'
+            + '_axial_offset_{volume_axial_offset}.pdf')
 # plt.pause(0.2)

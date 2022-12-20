@@ -2,7 +2,12 @@
 from enum import Enum
 import pickle
 from os.path import exists
-from VolumeRaytraceLFM.my_siddon import *
+
+# from VolumeRaytraceLFM.my_siddon import *
+# The following imports are used instead of the line above
+from math import floor
+from VolumeRaytraceLFM.my_siddon import (siddon_params, siddon_midpoints,
+                                         vox_indices, siddon_lengths, siddon)
 import copy
 
 # Optional imports: as the classes here depend on Waveblocks Opticblock.

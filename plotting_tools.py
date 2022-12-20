@@ -308,3 +308,25 @@ def plot_birefringence_colorized(retardance_img, azimuth_img):
     rgb = hsv_to_rgb(colors)
     
     plt.imshow(rgb, cmap='hsv')
+
+def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
+    fig = plt.figure(figsize=(12,2.5))
+    colormap = 'viridis'
+    plt.rcParams['image.origin'] = 'lower'
+    # plt.figure(figsize=(12,2.5))
+    plt.subplot(1,3,1)
+    plt.imshow(ret_image,cmap=colormap)
+    plt.colorbar(fraction=0.046, pad=0.04)
+    plt.title(F'Retardance')
+    plt.subplot(1,3,2)
+    plt.imshow(np.rad2deg(azim_image), cmap=colormap)
+    plt.colorbar(fraction=0.046, pad=0.04)
+    plt.title('Orientation')
+    ax = plt.subplot(1,3,3)
+    if azimuth_plot_type == 'lines':
+        plot_birefringence_lines(ret_image, azim_image, cmap=colormap, line_color='white', ax=ax)
+    else:
+        plot_birefringence_colorized(ret_image, azim_image)
+    plt.colorbar(fraction=0.046, pad=0.04)
+    plt.title('Retardance & Orientation')
+    return fig

@@ -116,10 +116,10 @@ if st.button("Reconstruct!"):
 
     with torch.no_grad():
         # Perform same calculation with torch
-        startTime = time.time()
+        start_time = time.time()
         ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(my_volume)
-        executionTime = (time.time() - startTime)
-        print('Warmup time in seconds with Torch: ' + str(executionTime))
+        execution_time = (time.time() - start_time)
+        print('Warmup time in seconds with Torch: ' + str(execution_time))
 
         # Store GT images
         Delta_n_GT = my_volume.get_delta_n().detach().clone()
@@ -186,7 +186,7 @@ if st.button("Reconstruct!"):
             plt.subplot(2,4,2)
             plt.imshow(azim_image_measured.detach().cpu().numpy())
             plt.colorbar()
-            plt.title('Initial Azimuth')
+            plt.title('Initial Orientation')
             plt.subplot(2,4,3)
             plt.imshow(volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0] \
                                             .detach().cpu().numpy())
@@ -200,7 +200,7 @@ if st.button("Reconstruct!"):
             plt.subplot(2,4,6)
             plt.imshow(np.rad2deg(azim_image_current.detach().cpu().numpy()))
             plt.colorbar()
-            plt.title('Final Azimuth')
+            plt.title('Final Orientation')
             plt.subplot(2,4,7)
             plt.imshow(volume_2_projections(my_volume.get_delta_n().unsqueeze(0))[0,0] \
                                             .detach().cpu().numpy())
