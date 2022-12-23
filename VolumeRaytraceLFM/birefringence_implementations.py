@@ -600,9 +600,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml_half = floor(self.optical_info['n_voxels_per_ml'] * n_micro_lenses / 2.0)
 
         # Check if the volume_size can fit these micro_lenses.
-        # considering that some rays go beyond the volume in front of the micro-lens
-        voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 1
-        assert voxel_span_per_ml < volume_shape[1] and voxel_span_per_ml < volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"        
+        # # considering that some rays go beyond the volume in front of the micro-lens
+        # border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
+        min_needed_volume_size = int(self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml))
+        assert min_needed_volume_size <= volume_shape[1] and min_needed_volume_size <= volume_shape[2], f"The volume in front of the microlenses" + \
+             f"({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
+                f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"        
 
         # Traverse volume for every ray, and generate retardance and azimuth images
         full_img_r = None

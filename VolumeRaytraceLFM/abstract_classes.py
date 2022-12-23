@@ -138,6 +138,8 @@ class RayTraceLFM(OpticalElement):
 
     @staticmethod
     def ravel_index(x, dims):
+        if x[0]>=dims[0] and x[1]>=dims[1] and x[2]>=dims[2]:
+            print('here')
         c = np.cumprod([1] + dims[::-1])[:-1][::-1]
         return np.dot(c,x)
         
@@ -386,7 +388,7 @@ class RayTraceLFM(OpticalElement):
         # We need to revisit this when we start computing images with more than one micro-lens in numpy
         # if False:#self.backend == BackEnds.NUMPY:
         #     # The valid workspace is defined by the number of micro-lenses
-        #     valid_vol_shape = self.optical_info['volume_shape'][1]
+        # valid_vol_shape = self.optical_info['volume_shape'][1]
         # elif self.backend == BackEnds.PYTORCH:
         valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
         
@@ -411,7 +413,21 @@ class RayTraceLFM(OpticalElement):
         self.ray_direction = torch.from_numpy(ray_diff).float()     if self.backend == BackEnds.PYTORCH else ray_diff
         self.voxel_span_per_ml = 0
 
+        # The maximum voxel-span is with respect to the middle voxel, let's shift that to the origin
+        # find first valid ray from one of the borders
+        half_ml_shape = ray_diff.shape[1]//2
+        valid_ray_coord = 0
+        while np.isnan(ray_diff[0, valid_ray_coord, half_ml_shape]):
+            valid_ray_coord += 1
+        # Compute how long is the ray laterally 
+        self.voxel_span_per_ml = vol_shape[0] * \
+            ray_diff[2,valid_ray_coord,half_ml_shape] / ray_diff[0,valid_ray_coord,half_ml_shape]
+        # Compensate for different voxel sizes axially vs laterally 
+        # self.voxel_span_per_ml *= self.optical_info['voxel_size_um'][1] / self.optical_info['voxel_size_um'][0]
+        # Compute what's the maximum reach of a ray from the center voxel
+        self.voxel_span_per_ml = np.ceil(self.voxel_span_per_ml / 2)
 
+        
         # Pre-comute things for torch and store in tensors
         i_range,j_range = self.ray_entry.shape[1:]
 
@@ -450,13 +466,8 @@ class RayTraceLFM(OpticalElement):
                 ray_vol_colli_indices.append(voxels_of_segs)
                 ray_vol_colli_lengths.append(voxel_intersection_lengths)
                 ray_valid_direction.append(self.ray_direction[:,ii,jj])
-
-                # What is the maximum span of the rays of a micro lens?
-                self.voxel_span_per_ml = max([self.voxel_span_per_ml,] + [vx[1] for vx in voxels_of_segs])
-
         
-        # The maximum voxel-span is with respect to the middle voxel, let's shift that to the origin
-        self.voxel_span_per_ml -= self.vox_ctr_idx[1]
+        
         # Maximum number of ray-voxel interactions, to define 
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
         n_valid_rays = len(ray_valid_indices)

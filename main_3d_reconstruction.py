@@ -17,7 +17,7 @@ backend = BackEnds.PYTORCH
 # Get optical parameters template
 optical_info = BirefringentVolume.get_optical_info_template()
 # Alter some of the optical parameters
-optical_info['volume_shape'] = [11,21,21]
+optical_info['volume_shape'] = [5,21,21]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['pixels_per_ml'] = 17
 optical_info['n_micro_lenses'] = 15
@@ -90,7 +90,7 @@ if backend == BackEnds.PYTORCH:
 #                                                     vol_type=volume_type, \
 #                                                     volume_axial_offset=volume_axial_offset)
 
-volume_GT = BirefringentVolume.init_from_file('objects/bundleX.h5', backend, optical_info)
+volume_GT = BirefringentVolume.init_from_file('objects/bundleX_E.h5', backend, optical_info)
 
 # Move volume to GPU if avaliable
 my_volume = volume_GT.to(device)
@@ -132,7 +132,7 @@ volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_inf
 # Let's rescale the random to initialize the volume
 volume_estimation.Delta_n.requires_grad = False
 volume_estimation.optic_axis.requires_grad = False
-# volume_estimation.Delta_n *= 0.0001
+volume_estimation.Delta_n *= 0.0001
 # And mask out volume that is outside FOV of the microscope
 mask = rays.get_volume_reachable_region()
 volume_estimation.Delta_n[mask.view(-1)==0] = 0
