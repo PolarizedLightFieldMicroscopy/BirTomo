@@ -17,10 +17,10 @@ backend = BackEnds.PYTORCH
 # Get optical parameters template
 optical_info = BirefringentVolume.get_optical_info_template()
 # Alter some of the optical parameters
-optical_info['volume_shape'] = [5,21,21]
+optical_info['volume_shape'] = [5,201,201]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 15
+optical_info['n_micro_lenses'] = 51
 optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
@@ -38,7 +38,7 @@ training_params = {
 # for shift in range(-5,6):
 shift_from_center = -1
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-volume_type = '3ellipsoids'
+volume_type = '30ellipsoids'
 # volume_type = 'ellipsoid'
 # volume_type = 'shell'
 # volume_type = 'single_voxel'
@@ -86,11 +86,11 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-# my_volume = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
-#                                                     vol_type=volume_type, \
-#                                                     volume_axial_offset=volume_axial_offset)
+volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
+                                                    vol_type=volume_type, \
+                                                    volume_axial_offset=volume_axial_offset)
 
-volume_GT = BirefringentVolume.init_from_file('objects/bundleX_E.h5', backend, optical_info)
+# volume_GT = BirefringentVolume.init_from_file('objects/bundleX_E.h5', backend, optical_info)
 
 # Move volume to GPU if avaliable
 my_volume = volume_GT.to(device)

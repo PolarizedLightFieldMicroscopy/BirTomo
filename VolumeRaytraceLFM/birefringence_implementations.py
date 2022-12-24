@@ -1,6 +1,7 @@
 from VolumeRaytraceLFM.abstract_classes import *
 import h5py
 from tqdm import tqdm
+import re
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
@@ -531,7 +532,7 @@ class BirefringentVolume(BirefringentElement):
                     volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
 
         elif 'ellipsoids' in vol_type:
-            n_ellipsoids = int(vol_type[0])
+            n_ellipsoids = int(re.match('(\d*)ellipsoids', vol_type)[1])
             volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args={'init_mode' : 'zeros'})
 
             for n_ell in range(n_ellipsoids):
