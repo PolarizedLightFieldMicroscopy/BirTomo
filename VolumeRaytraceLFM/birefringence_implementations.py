@@ -610,11 +610,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
              f"({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
                 f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"        
 
+        odd_mla_shift = np.mod(n_micro_lenses,2)
         # Iterate micro-lenses in y direction
-        for iix,ml_ii in tqdm(enumerate(range(-n_ml_half, n_ml_half+1)), f'Computing rows of micro-lens ret+azim {self.backend}'):
+        for iix,ml_ii in tqdm(enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)), f'Computing rows of micro-lens ret+azim {self.backend}'):
 
             # Iterate micro-lenses in x direction
-            for jjx,ml_jj in enumerate(range(-n_ml_half, n_ml_half+1)):
+            for jjx,ml_jj in enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)):
                 # Compute offset to top corner of the volume in front of the micro-lens (ii,jj)
                 current_offset = np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj]) + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
                 self.vox_indices_ml_shifted_all += [[RayTraceLFM.ravel_index((vox[ix][0], vox[ix][1]+current_offset[0], vox[ix][2]+current_offset[1]), self.optical_info['volume_shape']) for ix in range(len(vox))] for vox in self.ray_vol_colli_indices]
@@ -663,12 +664,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Traverse volume for every ray, and generate retardance and azimuth images
         full_img_r = None
         full_img_a = None
+        odd_mla_shift = np.mod(n_micro_lenses,2)
         # Iterate micro-lenses in y direction
-        for ml_ii in tqdm(range(-n_ml_half, n_ml_half+1), f'Computing rows of micro-lens ret+azim {self.backend}'):
+        for ml_ii in tqdm(range(-n_ml_half, n_ml_half+odd_mla_shift), f'Computing rows of micro-lens ret+azim {self.backend}'):
             full_img_row_r = None
             full_img_row_a = None
             # Iterate micro-lenses in x direction
-            for ml_jj in range(-n_ml_half, n_ml_half+1):
+            for ml_jj in range(-n_ml_half, n_ml_half+odd_mla_shift):
                 # Compute offset to top corner of the volume in front of the micro-lens (ii,jj)
                 current_offset = np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj]) + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
 

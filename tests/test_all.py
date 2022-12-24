@@ -570,7 +570,8 @@ def speed_speed(global_data, volume_init_mode):
 
 
 def main():
-    speed_speed(global_data(), 'ellipsoid')
+    # speed_speed(global_data(), 'ellipsoid')
+    test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[8])
     # Multi lenslet example
     # test_forward_projection_different_volumes(global_data(), 'ellipsoid')
     # test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[51])

@@ -17,8 +17,8 @@ from VolumeRaytraceLFM.birefringence_implementations import  (
 )
 
 # Select backend method
-# backend = BackEnds.PYTORCH
-backend = BackEnds.NUMPY
+backend = BackEnds.PYTORCH
+# backend = BackEnds.NUMPY
 
 if backend == BackEnds.PYTORCH:
     from waveblocks.utils.misc_utils import *
