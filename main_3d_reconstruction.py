@@ -24,11 +24,11 @@ optical_info['n_micro_lenses'] = 15
 optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
-    'n_epochs' : 5000,                      # How long to train for
+    'n_epochs' : 51,                      # How long to train for
     'azimuth_weight' : .5,                   # Azimuth loss weight
     'regularization_weight' : 1.0,          # Regularization weight
     'lr' : 1e-3,                            # Learning rate
-    'output_posfix' : '15ml_bundleX_E_vector_unit_reg_'     # Output file name posfix
+    'output_posfix' : '15ml_bundleX_E_vector_unit_reg'     # Output file name posfix
 }
 
 
@@ -48,7 +48,7 @@ volume_type = '3ellipsoids'
 azimuth_plot_type = 'hsv'
 
 # Create output directory
-output_dir = f'reconstructions/recons_{volume_type}_{optical_info["volume_shape"][0]}' \
+output_dir = f'reconstructions/g_recons_{volume_type}_{optical_info["volume_shape"][0]}' \
                 + f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}__{training_params["output_posfix"]}'
 os.makedirs(output_dir, exist_ok=True)
 torch.save({'optical_info' : optical_info,

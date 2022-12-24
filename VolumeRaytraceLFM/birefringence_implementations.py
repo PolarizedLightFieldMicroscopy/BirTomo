@@ -587,9 +587,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         #     mask[mask.grad==0] = 0
         return mask.detach()
 
-
     def precompute_MLA_volume_geometry(self):
-        """ """
+        """ Expand the ray-voxel interactions from a single micro-lens to an nxn MLA"""
         if self.MLA_volume_geometry_ready:
             return
         
@@ -632,7 +631,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.MLA_volume_geometry_ready = True
         return
  
-
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None, all_rays_at_once=True):
         """ This function forward projects a whole volume, by iterating through the volume in front of each micro-lens in the system.
             By computing an offset (current_offset) that shifts the volume indices reached by each ray.
@@ -864,12 +862,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return ret_image, azim_image
 
     def ret_and_azim_images_mla_torch(self, volume_in : BirefringentVolume):
-        '''This function computes the retardance and azimuth images of the precomputed rays going through a volume'''
-        # Include offset to move to the center of the volume, as the ray collisions are computed only for a single micro-lens
+        '''This function computes the retardance and azimuth images of the precomputed rays going through a volume for all rays at once'''
 
         # Fetch needed variables
         pixels_per_mla = self.optical_info['pixels_per_ml'] * self.optical_info['n_micro_lenses']
-        
         
         # Calculate Jones Matrices for all rays
         effective_JM = self.calc_cummulative_JM_of_ray_torch(volume_in, all_rays_at_once=True)
@@ -996,7 +992,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             product[rays_with_voxels,...] = product[rays_with_voxels,...] @ JM
         return product
         
-
 
 ###########################################################################################
     # Constructors for different types of elements
