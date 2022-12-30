@@ -114,9 +114,17 @@ if st.button("Plot volume!"):
                 voxels_in=st.session_state['my_volume'].Delta_n,
                 opacity=0.1
                 )
-    camera = dict(eye=dict(x=50, y=0., z=0))
-    my_fig.update_layout(scene_camera=camera)
     st.plotly_chart(my_fig)
+
+if st.button("Plot volume with optic axis!"):
+    st.write("Scroll over image to zoom in and out.")
+    my_fig = st.session_state['my_volume'].plot_lines_plotly()
+    st.session_state['my_volume'].plot_volume_plotly(
+                optical_info,
+                voxels_in=st.session_state['my_volume'].Delta_n,
+                opacity=0.1
+                )
+    st.plotly_chart(my_fig, use_container_width=True)
 ######################################################################
 def forward_propagate():
     '''Ray trace through the volume'''

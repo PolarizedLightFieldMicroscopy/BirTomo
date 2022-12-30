@@ -250,7 +250,7 @@ class BirefringentVolume(BirefringentElement):
                 line=dict(color=all_color[::3]-0.5, colorscale=colormap, width=5), 
                 mode = 'markers')
         
-
+        camera = dict(eye=dict(x=50, y=0, z=0))
         fig.update_layout(
             scene = dict(
                         xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
@@ -258,7 +258,7 @@ class BirefringentVolume(BirefringentElement):
                         zaxis = dict(nticks=volume_shape[2], range=[0, volume_size_um[2]]),
                         xaxis_title='Axial dimension',
                         aspectratio = dict( x=volume_size_um[0], y=volume_size_um[1], z=volume_size_um[2] ), aspectmode = 'manual'),
-            # width=700,
+            scene_camera=camera,
             margin=dict(r=0, l=0, b=0, t=0),
             # autosize=True
             )
@@ -303,7 +303,7 @@ class BirefringentVolume(BirefringentElement):
             surface_count=20, # needs to be a large number for good volume rendering
             # colorscale=colormap
             )
-
+        camera = dict(eye=dict(x=50, y=0, z=0))
         fig.update_layout(
             scene = dict(
                         xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
@@ -311,7 +311,7 @@ class BirefringentVolume(BirefringentElement):
                         zaxis = dict(nticks=volume_shape[2], range=[0, volume_size_um[2]]),
                         xaxis_title='Axial dimension',
                         aspectratio = dict( x=volume_size_um[0], y=volume_size_um[1], z=volume_size_um[2] ), aspectmode = 'manual'),
-            # width=700,
+            scene_camera=camera,
             margin=dict(r=0, l=0, b=0, t=0),
             autosize=True
             )
@@ -324,9 +324,8 @@ class BirefringentVolume(BirefringentElement):
         return self.Delta_n[vox_index], self.optic_axis[vox_index]
 
 
-
 ########### Generate different birefringent volumes 
-    def save_as_file(self, h5_file_path):
+    def save_as_file(self, h5_file_path, description="Temporary description", optical_all=False):
         '''Store this volume into an h5 file'''
         print(f'Saving volume to h5 file: {h5_file_path}')
 
@@ -334,12 +333,30 @@ class BirefringentVolume(BirefringentElement):
         with h5py.File(h5_file_path, "w") as f:
             # Save optical_info
             oc_grp = f.create_group('optical_info')
-            for k,v in self.optical_info.items():
+            try:
+                oc_grp.create_dataset('description',
+                    [1],
+                    data=description
+                    )
+                vol_shape = self.optical_info['volume_shape']
+            except:
+                pass
+
+            if optical_all == False:
                 try:
-                    oc_grp.create_dataset(k, np.array(v).shape if isinstance(v,list) else [1], data=v)
-                    # print(f'Added optical_info/{k} to {h5_file_path}')
+                    oc_grp.create_dataset('volume_shape',
+                        np.array(vol_shape).shape if isinstance(vol_shape, list) else [1],
+                        data=vol_shape
+                        )
                 except:
                     pass
+            else:
+                for k,v in self.optical_info.items():
+                    try:
+                        oc_grp.create_dataset(k, np.array(v).shape if isinstance(v,list) else [1], data=v)
+                        # print(f'Added optical_info/{k} to {h5_file_path}')
+                    except:
+                        pass
 
             # Save data (birefringence and optic_axis)
             delta_n = self.get_delta_n()
@@ -348,7 +365,7 @@ class BirefringentVolume(BirefringentElement):
             if self.backend == BackEnds.PYTORCH:
                 delta_n = delta_n.detach().cpu().numpy()
                 optic_axis = optic_axis.detach().cpu().numpy()
-            
+
             data_grp = f.create_group('data')
             data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n.astype(np.float32))
             data_grp.create_dataset("optic_axis", optic_axis.shape, data=optic_axis.astype(np.float32))
@@ -384,7 +401,7 @@ class BirefringentVolume(BirefringentElement):
                         (y_pad//2, y_pad//2 + y_pad%2), 
                         (x_pad//2, x_pad//2 + x_pad%2)),
                     mode = 'constant').astype(np.float64)
-        
+
         optic_axis = np.pad(optic_axis,((0,0),
                         (z_pad//2, z_pad//2 + z_pad%2),
                         (y_pad//2, y_pad//2 + y_pad%2), 
@@ -393,7 +410,7 @@ class BirefringentVolume(BirefringentElement):
 
         # Create volume
         volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
-        # return
+
         return volume_out
 
     def init_volume(self, init_mode='zeros', init_args={}):
@@ -434,7 +451,7 @@ class BirefringentVolume(BirefringentElement):
         a_0 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
         a_1 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
         a_2 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
-        norm_A = np.sqrt(a_0**2+a_1**2+a_2**2)
+        norm_A = np.sqrt(a_0**2 + a_1**2 + a_2**2)
         return np.concatenate((np.expand_dims(Delta_n, axis=0), np.expand_dims(a_0/norm_A, axis=0), np.expand_dims(a_1/norm_A, axis=0), np.expand_dims(a_2/norm_A, axis=0)),0)
     
     @staticmethod
