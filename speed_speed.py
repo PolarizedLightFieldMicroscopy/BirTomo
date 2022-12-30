@@ -6,7 +6,7 @@ import copy
 import os
 
 
-@pytest.fixture(scope = 'module')
+# @pytest.fixture(scope = 'module')
 def global_data():
     '''Create global optic_setting and optical_info containing all the optics and volume information
         The tests can access this by passing the name of this function as an argument for example:

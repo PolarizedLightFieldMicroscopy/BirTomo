@@ -1,6 +1,7 @@
 from VolumeRaytraceLFM.abstract_classes import *
 import h5py
 from tqdm import tqdm
+import re
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''
@@ -531,7 +532,7 @@ class BirefringentVolume(BirefringentElement):
                     volume.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
 
         elif 'ellipsoids' in vol_type:
-            n_ellipsoids = int(vol_type[0])
+            n_ellipsoids = int(re.match('(\d*)ellipsoids', vol_type)[1])
             volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args={'init_mode' : 'zeros'})
 
             for n_ell in range(n_ellipsoids):
@@ -563,7 +564,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Ray-voxel colisions for different micro-lenses, this dictionary gets filled in: calc_cummulative_JM_of_ray_torch
         self.vox_indices_ml_shifted = {}
-        
+        self.vox_indices_ml_shifted_all = []
+        self.ray_valid_indices_all = None
+        self.MLA_volume_geometry_ready = False
     def get_volume_reachable_region(self):
         ''' Returns a binary mask where the MLA's can reach into the volume'''
 
@@ -584,11 +587,60 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         #     mask = mask_volume.Delta_n
         #     mask[mask.grad==0] = 0
         return mask.detach()
+
+    def precompute_MLA_volume_geometry(self):
+        """ Expand the ray-voxel interactions from a single micro-lens to an nxn MLA"""
+        if self.MLA_volume_geometry_ready:
+            return
         
-    def ray_trace_through_volume(self, volume_in : BirefringentVolume = None):
+        # volume_shape defines the size of the workspace
+        # the number of micro lenses defines the valid volume inside the workspace
+        volume_shape = self.optical_info['volume_shape']
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
+        n_pixels_per_ml = self.optical_info['pixels_per_ml']
+        n_ml_half = floor(n_micro_lenses / 2.0)
+
+        n_voxels_per_ml_half = floor(self.optical_info['n_voxels_per_ml'] * n_micro_lenses / 2.0)
+
+        # Check if the volume_size can fit these micro_lenses.
+        # # considering that some rays go beyond the volume in front of the micro-lens
+        # border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
+        min_needed_volume_size = int(self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml))
+        assert min_needed_volume_size <= volume_shape[1] and min_needed_volume_size <= volume_shape[2], f"The volume in front of the microlenses" + \
+             f"({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
+                f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"        
+
+        odd_mla_shift = np.mod(n_micro_lenses,2)
+        # Iterate micro-lenses in y direction
+        for iix,ml_ii in tqdm(enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)), f'Computing rows of micro-lens ret+azim {self.backend}'):
+
+            # Iterate micro-lenses in x direction
+            for jjx,ml_jj in enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)):
+                # Compute offset to top corner of the volume in front of the micro-lens (ii,jj)
+                current_offset = np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj]) + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
+                self.vox_indices_ml_shifted_all += [[RayTraceLFM.ravel_index((vox[ix][0], vox[ix][1]+current_offset[0], vox[ix][2]+current_offset[1]), self.optical_info['volume_shape']) for ix in range(len(vox))] for vox in self.ray_vol_colli_indices]
+
+                # Shift ray-pixel indices
+                if self.ray_valid_indices_all  == None:
+                    self.ray_valid_indices_all = self.ray_valid_indices.clone()
+                else:
+                    self.ray_valid_indices_all = torch.cat((self.ray_valid_indices_all, self.ray_valid_indices + torch.tensor([jjx*n_pixels_per_ml, iix*n_pixels_per_ml]).unsqueeze(1)),1)
+        # Replicate ray info for all the micro-lenses
+        self.ray_vol_colli_lengths = nn.Parameter(self.ray_vol_colli_lengths.repeat(n_micro_lenses*n_micro_lenses,1))
+        self.ray_direction_basis = nn.Parameter(self.ray_direction_basis.repeat(1,n_micro_lenses*n_micro_lenses,1))
+
+        self.MLA_volume_geometry_ready = True
+        return
+ 
+    def ray_trace_through_volume(self, volume_in : BirefringentVolume = None, all_rays_at_once=True):
         """ This function forward projects a whole volume, by iterating through the volume in front of each micro-lens in the system.
             By computing an offset (current_offset) that shifts the volume indices reached by each ray.
             Then we accumulate the images generated by each micro-lens, and concatenate in a final image"""
+
+        if self.backend == BackEnds.PYTORCH and all_rays_at_once:
+            self.precompute_MLA_volume_geometry()
+            return self.ret_and_azim_images_mla_torch(volume_in)
 
         # volume_shape defines the size of the workspace
         # the number of micro lenses defines the valid volume inside the workspace
@@ -600,19 +652,26 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml_half = floor(self.optical_info['n_voxels_per_ml'] * n_micro_lenses / 2.0)
 
         # Check if the volume_size can fit these micro_lenses.
-        # considering that some rays go beyond the volume in front of the micro-lens
-        voxel_span_per_ml = self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml) + 1
-        assert voxel_span_per_ml < volume_shape[1] and voxel_span_per_ml < volume_shape[2], f"The volume in front of the microlenses ({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. Increase the volume_shape to at least [{voxel_span_per_ml},{voxel_span_per_ml}]"        
+        # # considering that some rays go beyond the volume in front of the micro-lens
+        # border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
+        min_needed_volume_size = int(self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml))
+        assert min_needed_volume_size <= volume_shape[1] and min_needed_volume_size <= volume_shape[2], f"The volume in front of the microlenses" + \
+             f"({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
+                f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"        
 
+        # if self.ray_valid_indices_all is None:
+        #     self.ray_valid_indices_all = torch.zeros(2, len(self.ray_valid_indices)* n_micro_lenses**2, dtype=int)
+            
         # Traverse volume for every ray, and generate retardance and azimuth images
         full_img_r = None
         full_img_a = None
+        odd_mla_shift = np.mod(n_micro_lenses,2)
         # Iterate micro-lenses in y direction
-        for ml_ii in tqdm(range(-n_ml_half, n_ml_half+1), f'Computing rows of micro-lens ret+azim {self.backend}'):
+        for ml_ii in tqdm(range(-n_ml_half, n_ml_half+odd_mla_shift), f'Computing rows of micro-lens ret+azim {self.backend}'):
             full_img_row_r = None
             full_img_row_a = None
             # Iterate micro-lenses in x direction
-            for ml_jj in range(-n_ml_half, n_ml_half+1):
+            for ml_jj in range(-n_ml_half, n_ml_half+odd_mla_shift):
                 # Compute offset to top corner of the volume in front of the micro-lens (ii,jj)
                 current_offset = np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj]) + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
 
@@ -720,24 +779,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         effective_JM = BirefringentRaytraceLFM.rayJM_numpy(JM_list)
         return effective_JM
 
-    def calc_cummulative_JM_of_ray_torch(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
+    def calc_cummulative_JM_of_ray_torch(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0], all_rays_at_once=False):
         '''This function computes the Jones Matrices of all rays defined in this object.
             It uses pytorch's batch dimension to store each ray, and process them in parallel'''
 
         # Fetch the voxels traversed per ray and the lengths that each ray travels through every voxel
-        _voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
-
-
-        # Compute the 1D index of each micro-lens.
-        # compute once and store for later.
-        # accessing 1D arrays increases training speed by 25%
-        key = str(micro_lens_offset)
-        if key not in self.vox_indices_ml_shifted.keys():
-            self.vox_indices_ml_shifted[key] = [[RayTraceLFM.ravel_index((vox[ix][0], vox[ix][1]+micro_lens_offset[0], vox[ix][2]+micro_lens_offset[1]), self.optical_info['volume_shape']) for ix in range(len(vox))] for vox in self.ray_vol_colli_indices]
-        voxels_of_segs = self.vox_indices_ml_shifted[key]
-
-        # Init an array to store the Jones matrices.
-        JM_list = []
+        ell_in_voxels = self.ray_vol_colli_lengths
+        if all_rays_at_once:
+            voxels_of_segs = self.vox_indices_ml_shifted_all
+        else:
+            # Compute the 1D index of each micro-lens.
+            # compute once and store for later.
+            # accessing 1D arrays increases training speed by 25%
+            key = str(micro_lens_offset)
+            if key not in self.vox_indices_ml_shifted.keys():
+                self.vox_indices_ml_shifted[key] = [[RayTraceLFM.ravel_index((vox[ix][0], vox[ix][1]+micro_lens_offset[0], vox[ix][2]+micro_lens_offset[1]), self.optical_info['volume_shape']) for ix in range(len(vox))] for vox in self.ray_vol_colli_indices]
+            voxels_of_segs = self.vox_indices_ml_shifted[key]
 
         assert self.optical_info == volume_in.optical_info, 'Optical info between ray-tracer and volume mismatch. This might cause issues on the border micro-lenses.'
         # Iterate the interactions of all rays with the m-th voxel
@@ -745,7 +802,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # for this step with rays_with_voxels
         for m in range(self.ray_vol_colli_lengths.shape[1]):
             # Check which rays still have voxels to traverse
-            rays_with_voxels = [len(vx)>m for vx in _voxels_of_segs]
+            rays_with_voxels = [len(vx)>m for vx in voxels_of_segs]
             # How many rays at this step
             # n_rays_with_voxels = sum(rays_with_voxels)
             # The lengths these rays traveled through the current voxels
@@ -807,6 +864,32 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                         azim_image[i, j] = self.azimuth(effective_JM)
         return ret_image, azim_image
 
+    def ret_and_azim_images_mla_torch(self, volume_in : BirefringentVolume):
+        '''This function computes the retardance and azimuth images of the precomputed rays going through a volume for all rays at once'''
+
+        # Fetch needed variables
+        pixels_per_mla = self.optical_info['pixels_per_ml'] * self.optical_info['n_micro_lenses']
+        
+        # Calculate Jones Matrices for all rays
+        effective_JM = self.calc_cummulative_JM_of_ray_torch(volume_in, all_rays_at_once=True)
+        # Calculate retardance and azimuth
+        retardance = self.retardance(effective_JM)
+        azimuth = self.azimuth(effective_JM)
+
+        # Create output images
+        ret_image = torch.zeros((pixels_per_mla, pixels_per_mla), dtype=torch.float32, requires_grad=True, device=self.get_device())
+        azim_image = torch.zeros((pixels_per_mla, pixels_per_mla), dtype=torch.float32, requires_grad=True, device=self.get_device())
+        ret_image.requires_grad = False
+        azim_image.requires_grad = False
+
+        # Fill the values in the images
+        ret_image[self.ray_valid_indices_all[0,:],self.ray_valid_indices_all[1,:]] = retardance
+        azim_image[self.ray_valid_indices_all[0,:],self.ray_valid_indices_all[1,:]] = azimuth
+        # Alternative version
+        # ret_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices, values = retardance, size=(pixels_per_ml, pixels_per_ml)).to_dense()
+        # azim_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices, values = azimuth, size=(pixels_per_ml, pixels_per_ml)).to_dense()
+
+        return ret_image, azim_image
 
     def ret_and_azim_images_torch(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         '''This function computes the retardance and azimuth images of the precomputed rays going through a volume'''
@@ -912,7 +995,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             product[rays_with_voxels,...] = product[rays_with_voxels,...] @ JM
         return product
         
-
 
 ###########################################################################################
     # Constructors for different types of elements

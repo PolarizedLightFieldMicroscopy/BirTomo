@@ -17,18 +17,18 @@ backend = BackEnds.PYTORCH
 # Get optical parameters template
 optical_info = BirefringentVolume.get_optical_info_template()
 # Alter some of the optical parameters
-optical_info['volume_shape'] = [11,21,21]
+optical_info['volume_shape'] = [5,201,201]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 15
+optical_info['n_micro_lenses'] = 51
 optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
-    'n_epochs' : 5000,                      # How long to train for
+    'n_epochs' : 51,                      # How long to train for
     'azimuth_weight' : .5,                   # Azimuth loss weight
     'regularization_weight' : 1.0,          # Regularization weight
     'lr' : 1e-3,                            # Learning rate
-    'output_posfix' : '21ml_3ellipsoids_L1lossCosAzim_unit_reg_01azimuth_weight'     # Output file name posfix
+    'output_posfix' : '15ml_bundleX_E_vector_unit_reg'     # Output file name posfix
 }
 
 
@@ -38,7 +38,7 @@ training_params = {
 # for shift in range(-5,6):
 shift_from_center = -1
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-volume_type = '3ellipsoids'
+volume_type = '30ellipsoids'
 # volume_type = 'ellipsoid'
 # volume_type = 'shell'
 # volume_type = 'single_voxel'
@@ -48,7 +48,7 @@ volume_type = '3ellipsoids'
 azimuth_plot_type = 'hsv'
 
 # Create output directory
-output_dir = f'reconstructions/recons_{volume_type}_{optical_info["volume_shape"][0]}' \
+output_dir = f'reconstructions/g_recons_{volume_type}_{optical_info["volume_shape"][0]}' \
                 + f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}__{training_params["output_posfix"]}'
 os.makedirs(output_dir, exist_ok=True)
 torch.save({'optical_info' : optical_info,
@@ -86,11 +86,11 @@ if backend == BackEnds.PYTORCH:
 
 
 # Create a volume
-# my_volume = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
-#                                                     vol_type=volume_type, \
-#                                                     volume_axial_offset=volume_axial_offset)
+volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
+                                                    vol_type=volume_type, \
+                                                    volume_axial_offset=volume_axial_offset)
 
-volume_GT = BirefringentVolume.init_from_file('objects/bundleX.h5', backend, optical_info)
+# volume_GT = BirefringentVolume.init_from_file('objects/bundleX_E.h5', backend, optical_info)
 
 # Move volume to GPU if avaliable
 my_volume = volume_GT.to(device)
@@ -132,7 +132,7 @@ volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_inf
 # Let's rescale the random to initialize the volume
 volume_estimation.Delta_n.requires_grad = False
 volume_estimation.optic_axis.requires_grad = False
-# volume_estimation.Delta_n *= 0.0001
+volume_estimation.Delta_n *= 0.0001
 # And mask out volume that is outside FOV of the microscope
 mask = rays.get_volume_reachable_region()
 volume_estimation.Delta_n[mask.view(-1)==0] = 0
@@ -174,7 +174,7 @@ azimuth_damp_mask = (ret_image_measured / ret_image_measured.max()).detach()
 
 # with torch.autograd.set_detect_anomaly(True):
 # Vector difference GT
-# co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
+co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
 for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     # Reset gradients so we can compute them again
     optimizer.zero_grad()
@@ -182,10 +182,10 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     # Forward project
     ret_image_current, azim_image_current = rays.ray_trace_through_volume(volume_estimation)
     # Vector difference
-    # co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
-
-    data_term = (ret_image_measured - ret_image_current).abs().mean() + \
-        training_params['azimuth_weight'] * torch.cos(azim_image_measured - azim_image_current).abs().mean()
+    co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
+    data_term = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).mean()
+    # data_term = (ret_image_measured - ret_image_current).abs().mean() + \
+    #     training_params['azimuth_weight'] * torch.cos(azim_image_measured - azim_image_current).abs().mean()
         # L1 for angles
         #(2 * (1 - torch.cos(azim_image_measured - azim_image_current)) * azimuth_damp_mask).mean()
 
