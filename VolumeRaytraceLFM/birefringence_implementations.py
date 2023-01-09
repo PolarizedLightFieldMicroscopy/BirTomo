@@ -339,6 +339,7 @@ class BirefringentVolume(BirefringentElement):
                     data=description
                     )
                 vol_shape = self.optical_info['volume_shape']
+                voxel_size_um = self.optical_info['voxel_size_um']
             except:
                 pass
 
@@ -347,6 +348,10 @@ class BirefringentVolume(BirefringentElement):
                     oc_grp.create_dataset('volume_shape',
                         np.array(vol_shape).shape if isinstance(vol_shape, list) else [1],
                         data=vol_shape
+                        )
+                    oc_grp.create_dataset('voxel_size_um',
+                        np.array(voxel_size_um).shape if isinstance(voxel_size_um, list) else [1],
+                        data=voxel_size_um
                         )
                 except:
                     pass

@@ -15,5 +15,5 @@ st.set_page_config(
 
 st.title("Polarization Simulations")
 
-st.markdown("*Click around with the tabs to explore.*")
+st.markdown("*There are tabs on the left. Click around to explore.*")
 
