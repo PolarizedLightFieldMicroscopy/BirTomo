@@ -51,6 +51,7 @@ class OpticalElement(OpticBlock):
                             # Volume information
                             'volume_shape'      : 3*[1],
                             'axial_voxel_size_um'     : 1.0,
+                            'cube_voxels'       : True,
                             # Microlens array information
                             'pixels_per_ml'     : 17,
                             'n_micro_lenses'    : 1,
@@ -75,17 +76,19 @@ class OpticalElement(OpticBlock):
                         {OpticalElement.default_optical_info}'
 
         # Compute voxel size
-        optical_info['voxel_size_um'] = (
-            [optical_info['axial_voxel_size_um'],]
-            + 2*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch']
+        if optical_info['cube_voxels'] == False:
+            optical_info['voxel_size_um'] = (
+                [optical_info['axial_voxel_size_um'],]
+                + 2*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch']
+                / optical_info['M_obj']]
+                )
+        else:
+            # Option to make voxel size uniform
+            optical_info['voxel_size_um'] = (
+            3*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch']
             / optical_info['M_obj']]
             )
-        # Option to make voxel size uniform
-        # optical_info['voxel_size_um'] = (
-        #   3*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch']
-        #   / optical_info['M_obj']]
-        #   )
-        
+
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks
         # compatibility.
         if backend==BackEnds.PYTORCH:

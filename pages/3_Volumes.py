@@ -34,8 +34,8 @@ with columns[1]:
     # optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]', min_value=.1, max_value=10., value = 1.0)
     optical_info['volume_shape'][0] = st.slider('Axial volume dimension', min_value=1, max_value=50, value=15)
     # y will follow x if x is changed. x will not follow y if y is changed
-    optical_info['volume_shape'][1] = st.slider('X volume dimension', min_value=1, max_value=100, value=51)
-    optical_info['volume_shape'][2] = st.slider('Y volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
+    optical_info['volume_shape'][1] = st.slider('Y volume dimension', min_value=1, max_value=100, value=51)
+    optical_info['volume_shape'][2] = st.slider('Z volume dimension', min_value=1, max_value=100, value=optical_info['volume_shape'][1])
 
 def key_investigator(key_home, my_str='', prefix='- '):
     if hasattr(key_home, 'keys'):
@@ -50,22 +50,28 @@ with volume_container: # now that we know backend and shift, we can fill in the 
     if how_get_vol == 'h5 upload':
         h5file = st.file_uploader("Upload Volume h5 Here", type=['h5'])
         if h5file is not None:
-            with h5py.File(h5file) as f:
-                st.markdown('**File Structure:**\n' + key_investigator(f))
+            with h5py.File(h5file) as file:
+                st.markdown('**File Structure:**\n' + key_investigator(file))
                 try:
-                    st.markdown('**Description:** '+str(f['optical_info']['description'][()])[2:-1])
+                    st.markdown('**Description:** '+str(file['optical_info']['description'][()])[2:-1])
                 except KeyError:
-                    st.error('This file does not have a discription where we expected')
+                    st.error('This file does not have a description.')
                 except Exception as e:
                     st.error(e)
                 try:
-                    vol_shape = f['optical_info']['volume_shape'][()]
+                    vol_shape = file['optical_info']['volume_shape'][()]
                     st.markdown(f"**Volume Shape:** {vol_shape}")
                 except KeyError:
-                    st.error('This file does specify the volume shape where we expected')
+                    st.error('This file does specify the volume shape.')
                 except Exception as e:
                     st.error(e)
-                    
+                try:
+                    voxel_size = file['optical_info']['voxel_size_um'][()]
+                    st.markdown(f"**Voxel Size (um):** {voxel_size}")
+                except KeyError:
+                    st.error('This file does specify the voxel size. Voxels are likely to be cubes.')
+                except Exception as e:
+                    st.error(e)
 
             st.session_state['my_volume'] = BirefringentVolume.init_from_file(h5file, backend=backend, \
                                                     optical_info=optical_info)

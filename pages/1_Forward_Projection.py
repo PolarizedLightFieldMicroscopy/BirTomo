@@ -1,5 +1,6 @@
 '''User interface for forward projection using the Streamlit package'''
 import time         # to measure ray tracing time
+import h5py         # for reading h5 volume files
 import streamlit as st
 from plotting_tools import plot_retardance_orientation
 from VolumeRaytraceLFM.abstract_classes import BackEnds
@@ -60,23 +61,18 @@ with columns[0]:
     st.subheader('Other')
     backend_choice = st.radio('Backend', ['numpy', 'torch'])
 
+def key_investigator(key_home, my_str='', prefix='- '):
+    if hasattr(key_home, 'keys'):
+        for my_key in key_home.keys():
+            my_str = my_str + prefix + my_key +'\n'
+            my_str = key_investigator(key_home[my_key], my_str, '\t'+prefix)
+    return my_str
+
 # Second Column
 with columns[1]:
 ############ Volume #################
     st.subheader('Volume')
     volume_container = st.container() # set up a home for other volume selections to go
-    optical_info['volume_shape'][0] = st.slider('Axial volume dimension',
-                                                min_value=1, max_value=50, value=15)
-    # y will follow x if x is changed. x will not follow y if y is changed
-    optical_info['volume_shape'][1] = st.slider('Y volume dimension',
-                                                min_value=1, max_value=100, value=51)
-    optical_info['volume_shape'][2] = st.slider('Z volume dimension',
-                                                min_value=1, max_value=100,
-                                                value=optical_info['volume_shape'][1])
-    shift_from_center = st.slider('Axial shift from center [voxels]',
-                                  min_value = -int(optical_info['volume_shape'][0]/2),
-                                  max_value = int(optical_info['volume_shape'][0]/2),value = 0)
-    volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
 
     if backend_choice == 'torch':
         backend = BackEnds.PYTORCH
@@ -91,14 +87,69 @@ with columns[1]:
         if how_get_vol == 'h5 upload':
             h5file = st.file_uploader("Upload Volume h5 Here", type=['h5'])
             if h5file is not None:
+                with h5py.File(h5file) as file:
+                    try:
+                        vol_shape = file['optical_info']['volume_shape'][()]
+                    except KeyError:
+                        st.error('This file does specify the volume shape.')
+                    except Exception as e:
+                        st.error(e)
+                max_vol_shape = int(max(vol_shape))
+                vol_shape_default = 3 * [max_vol_shape]
+                optical_info['volume_shape'] = vol_shape_default
+                st.markdown(f"Using a cube volume shape with the dimension of the"
+                            + f"maximum of the axes: {vol_shape_default}.")
+
+                display_h5 = st.checkbox("Display h5 file contents")                
+                if display_h5:
+                    with h5py.File(h5file) as file:
+                        st.markdown('**File Structure:**\n' + key_investigator(file))
+                        try:
+                            st.markdown('**Description:** '+str(file['optical_info']['description'][()])[2:-1])
+                        except KeyError:
+                            st.error('This file does not have a description.')
+                        except Exception as e:
+                            st.error(e)
+                        try:
+                            vol_shape = file['optical_info']['volume_shape'][()]
+                            # optical_info['volume_shape'] = vol_shape
+                            st.markdown(f"**Volume Shape:** {vol_shape}")
+                        except KeyError:
+                            st.error('This file does specify the volume shape.')
+                        except Exception as e:
+                            st.error(e)
+                        try:
+                            voxel_size = file['optical_info']['voxel_size_um'][()]
+                            st.markdown(f"**Voxel Size (um):** {voxel_size}")
+                        except KeyError:
+                            st.error('This file does specify the voxel size. Voxels are likely to be cubes.')
+                        except Exception as e:
+                            st.error(e)
+        else:
+            volume_type = st.selectbox('Volume type',
+                                       ['ellipsoid','shell','2ellipsoids','single_voxel'], 1)
+            optical_info['volume_shape'][0] = st.slider('Axial volume dimension',
+                                                        min_value=1, max_value=50, value=15)
+            # y will follow x if x is changed. x will not follow y if y is changed
+            optical_info['volume_shape'][1] = st.slider('Y volume dimension',
+                                                        min_value=1, max_value=100, value=51)
+            optical_info['volume_shape'][2] = st.slider('Z volume dimension',
+                                                        min_value=1, max_value=100,
+                                                        value=optical_info['volume_shape'][1])
+            shift_from_center = st.slider('Axial shift from center [voxels]',
+                                        min_value = -int(optical_info['volume_shape'][0] / 2),
+                                        max_value = int(optical_info['volume_shape'][0] / 2), value = 0)
+            volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
+    # Create the volume based on the selections.
+    with volume_container:
+        if how_get_vol == 'h5 upload':
+            if h5file is not None:
                 st.session_state['my_volume'] = BirefringentVolume.init_from_file(
                                                         h5file,
                                                         backend=backend,
                                                         optical_info=optical_info
                                                         )
         else:
-            volume_type = st.selectbox('Volume type',
-                                       ['ellipsoid','shell','2ellipsoids','single_voxel'], 1)
             st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(
                                                 backend=backend,
                                                 optical_info=optical_info,
