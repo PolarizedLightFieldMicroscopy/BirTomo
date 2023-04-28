@@ -7,7 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Packages needed for siddon algorithm calculations
-from math import floor
 from VolumeRaytraceLFM.my_siddon import (siddon_params, siddon_midpoints,
                                          vox_indices, siddon_lengths, siddon)
 import copy
@@ -18,8 +17,7 @@ import copy
 try:
     import torch
     import torch.nn as nn
-    from waveblocks.blocks.optic_config import *
-    from waveblocks.blocks.optic_block import OpticBlock
+    from VolumeRaytraceLFM.optic_config import *
 except:
     class OpticBlock:  # Dummy function for numpy
         def __init__(

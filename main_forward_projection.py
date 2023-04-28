@@ -21,7 +21,7 @@ backend = BackEnds.PYTORCH
 # backend = BackEnds.NUMPY
 
 if backend == BackEnds.PYTORCH:
-    from waveblocks.utils.misc_utils import *
+    import torch
     torch.set_grad_enabled(False)
 
 

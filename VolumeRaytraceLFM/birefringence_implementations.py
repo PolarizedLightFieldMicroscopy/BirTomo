@@ -2,6 +2,7 @@ from VolumeRaytraceLFM.abstract_classes import *
 import h5py
 from tqdm import tqdm
 import re
+from math import floor
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element, so it has a back-end and optical information'''

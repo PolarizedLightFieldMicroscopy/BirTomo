@@ -5,10 +5,11 @@ import time
 import os
 import torch
 from tqdm import tqdm
-from waveblocks.utils.misc_utils import *
+import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
+from VolumeRaytraceLFM.optic_config import volume_2_projections
 # from N_regularization import N
 
 # Select backend: requires pytorch to calculate gradients
@@ -17,10 +18,10 @@ backend = BackEnds.PYTORCH
 # Get optical parameters template
 optical_info = BirefringentVolume.get_optical_info_template()
 # Alter some of the optical parameters
-optical_info['volume_shape'] = [5,201,201]
+optical_info['volume_shape'] = [5,51,51]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 51
+optical_info['n_micro_lenses'] = 19
 optical_info['n_voxels_per_ml'] = 1
 
 training_params = {

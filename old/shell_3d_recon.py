@@ -4,7 +4,6 @@ import time
 import os
 import torch
 from tqdm import tqdm
-from waveblocks.utils.misc_utils import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import OpticalElement, BirefringentRaytraceLFM
 

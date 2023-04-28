@@ -12,11 +12,7 @@ def explode(data):
 def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to_plot=None, colormap='inferno', use_matplotlib=False):
 
     # is optical_config a Waveblocks object or a dictionary?
-    wave_blocks_found = True
-    try:
-        from waveblocks.blocks.optic_config import OpticConfig
-    except:
-        wave_blocks_found = False
+    wave_blocks_found = False
     if wave_blocks_found and isinstance(optical_config, OpticConfig):
         volume_shape = optical_config.volume_config.volume_shape
         volume_size_um = optical_config.volume_config.volume_size_um
