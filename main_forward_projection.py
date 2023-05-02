@@ -91,7 +91,7 @@ if backend == BackEnds.PYTORCH:
 # Create a volume
 my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info,
                                                    vol_type=volume_type,
-                                                   volume_axial_offset=volume_axial_offset)
+                                                   volume_axial_offset=volume_axial_offset).to(device)
 # Save the volume as a file
 my_description = "Shell created from a section of an ellipsoid with an optic axis normal to the \
                   surface of the shell."

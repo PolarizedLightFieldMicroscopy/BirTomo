@@ -759,7 +759,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             b = (off_diag_sum / diag_sum).imag
             # atan2 with zero entries causes nan in backward, so let's filter them out
             azimuth = torch.zeros_like(a)
-            zero_a_b = torch.isclose(a,torch.zeros([1],dtype=a.dtype)).bitwise_and(torch.isclose(b,torch.zeros([1],dtype=b.dtype)))
+            zero_a_b = torch.isclose(a,torch.zeros([1],dtype=a.dtype, device=a.device)).bitwise_and(torch.isclose(b,torch.zeros([1],dtype=b.dtype, device=a.device)))
             azimuth[~zero_a_b] = torch.arctan2(-b[~zero_a_b], -a[~zero_a_b]) / 2.0 + torch.pi / 2.0
             
 
