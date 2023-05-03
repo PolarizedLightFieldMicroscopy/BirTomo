@@ -158,7 +158,7 @@ class OpticConfig(nn.Module):
 
 
 # Convert volume to single 2D MIP image, input [batch,1,xDim,yDim,zDim]
-def volume_2_projections(vol_in, proj_type=torch.sum, scaling_factors=[1,1,1], depths_in_ch=True, ths=[0.0,1.0], normalize=False, border_thickness=2, add_scale_bars=True, scale_bar_vox_sizes=[40,20]):
+def volume_2_projections(vol_in, proj_type=torch.sum, scaling_factors=[1,1,1], depths_in_ch=True, ths=[0.0,1.0], normalize=False, border_thickness=1, add_scale_bars=True, scale_bar_vox_sizes=[40,20]):
     vol = vol_in.detach().clone().abs()
     # Normalize sets limits from 0 to 1
     if normalize:
