@@ -326,3 +326,69 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
     plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Retardance & Orientation')
     return fig
+
+def plot_iteration_update(
+                vol_meas, ret_meas, azim_meas,
+                vol_current, ret_current, azim_current,
+                losses, data_term_losses, regularization_term_losses,
+                streamlit_purpose=False
+                ):
+    if streamlit_purpose:
+        fig = plt.figure(figsize=(18,9))
+        plt.rcParams['image.origin'] = 'lower'
+    
+    # Plot measurements
+    plt.subplot(2,4,1)
+    plt.imshow(vol_meas)
+    plt.colorbar()
+    plt.title('Ground truth volume (MIP)', weight='bold')
+    plt.subplot(2,4,2)
+    plt.imshow(ret_meas)
+    plt.colorbar()
+    plt.title('Measured retardance')
+    plt.subplot(2,4,3)
+    plt.imshow(azim_meas)
+    plt.colorbar()
+    plt.title('Measured orientation')
+    
+    
+    # Plot predictions
+    plt.subplot(2,4,5)
+    plt.imshow(vol_current)
+    plt.colorbar()
+    plt.title('Predicted volume (MIP)', weight='bold')
+    plt.subplot(2,4,6)
+    plt.imshow(ret_current)
+    plt.colorbar()
+    plt.title('Retardance of predicted volume')
+    plt.subplot(2,4,7)
+    plt.imshow(azim_current)
+    plt.colorbar()
+    plt.title('Orientation of predicted volume')
+
+    # Plot losses
+    plt.subplot(3,4,4)
+    plt.plot(list(range(len(losses))), data_term_losses)
+    plt.gca().yaxis.set_label_position("right")
+    plt.gca().yaxis.tick_right()
+    plt.ylabel('Data term loss')
+    plt.gca().xaxis.set_visible(False)
+
+    plt.subplot(3,4,8)
+    plt.plot(list(range(len(losses))), regularization_term_losses)
+    plt.gca().yaxis.set_label_position("right")
+    plt.gca().yaxis.tick_right()
+    plt.ylabel('Regularization term loss')
+    plt.gca().xaxis.set_visible(False)
+
+    plt.subplot(3,4,12)
+    plt.plot(list(range(len(losses))),losses)
+    plt.gca().yaxis.set_label_position("right")
+    plt.gca().yaxis.tick_right()
+    plt.xlabel('Epoch')
+    plt.ylabel('Total loss')
+    
+    if streamlit_purpose:
+        return fig
+    else:
+        return None

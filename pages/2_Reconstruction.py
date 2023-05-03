@@ -11,11 +11,15 @@ st.write("Let's try to reconstruct a volume based on our images!")
 
 import time
 import os
+import numpy as np
 import torch
+import h5py
 from tqdm import tqdm
-from waveblocks.utils.misc_utils import *
+import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
+from VolumeRaytraceLFM.optic_config import volume_2_projections
+from plotting_tools import plot_iteration_update
 
 st.header("Choose our parameters")
 
@@ -136,20 +140,21 @@ st.write("See Forward Projection page for plotting")
 ######################################################################
 
 st.subheader("Training parameters")
-n_epochs = st.slider('Number of iterations', min_value=1, max_value=30, value=10)
+n_epochs = st.slider('Number of iterations', min_value=1, max_value=100, value=10)
 # want learning rate to be multiple choice
 # lr = st.slider('Learning rate', min_value=1, max_value=5, value=3) 
 filename_message = st.text_input('Message to add to the filename (not currently saving anyway..)')
 training_params = {
-    'n_epochs' : n_epochs,
-    'azimuth_weight' : 1,
-    'lr' : 1e-2,
-    'output_posfix' : '11ml_atan2loss'
+    'n_epochs' : 51,                      # How long to train for
+    'azimuth_weight' : .5,                   # Azimuth loss weight
+    'regularization_weight' : 1.0,          # Regularization weight
+    'lr' : 1e-3,                            # Learning rate
+    'output_posfix' : '15ml_bundleX_E_vector_unit_reg'     # Output file name posfix
 }
 
 
 if st.button("Reconstruct!"):
-    my_volume = st.session_state['my_recon_volume']
+    my_volume = st.session_state['my_volume']
     # output_dir = f'reconstructions/recons_{volume_type}_{optical_info["volume_shape"][0]} \
     #                 x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}__{training_params["output_posfix"]}'
     # os.makedirs(output_dir, exist_ok=True)
@@ -183,104 +188,94 @@ if st.button("Reconstruct!"):
         optic_axis_GT = my_volume.get_optic_axis().detach().clone()
         ret_image_measured = ret_image_measured.detach()
         azim_image_measured = azim_image_measured.detach()
-        azim_comp_measured = torch.arctan2(torch.sin(azim_image_measured), \
-                                torch.cos(azim_image_measured)).detach()
 
 
     ############# 
     # Let's create an optimizer
     # Initial guess
-    my_volume = BirefringentVolume( backend=backend, optical_info=optical_info, \
+    volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_info, \
                                     volume_creation_args = {'init_mode' : 'random'})
-    my_volume.members_to_learn.append('Delta_n')
-    my_volume.members_to_learn.append('optic_axis')
-    my_volume = my_volume.to(device)
 
-    optimizer = torch.optim.Adam(my_volume.get_trainable_variables(), lr=training_params['lr'])
-    loss_function = torch.nn.L1Loss()
+    # Let's rescale the random to initialize the volume
+    volume_estimation.Delta_n.requires_grad = False
+    volume_estimation.optic_axis.requires_grad = False
+    volume_estimation.Delta_n *= 0.0001
+    # And mask out volume that is outside FOV of the microscope
+    mask = rays.get_volume_reachable_region()
+    volume_estimation.Delta_n[mask.view(-1)==0] = 0
+    volume_estimation.Delta_n.requires_grad = True
+    volume_estimation.optic_axis.requires_grad = True
 
+    # Indicate to this object that we are going to optimize Delta_n and optic_axis
+    volume_estimation.members_to_learn.append('Delta_n')
+    volume_estimation.members_to_learn.append('optic_axis')
+    volume_estimation = volume_estimation.to(device)
+
+    trainable_parameters = volume_estimation.get_trainable_variables()
+
+    # Create an optimizer
+    optimizer = torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
+    
     # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
     losses = []
-    plt.ion()
-    figure = plt.figure(figsize=(18,6))
-    plt.rcParams['image.origin'] = 'lower'
+    data_term_losses = []
+    regularization_term_losses = []
+    
+    # Create weight mask for the azimuth
+    # as the azimuth is irrelevant when the retardance is low, lets scale error with a mask
+    azimuth_damp_mask = (ret_image_measured / ret_image_measured.max()).detach()
 
-    st.write("Working on these ", n_epochs, "iterations...")
-    my_bar = st.progress(0)
-    width = st.sidebar.slider("Plot width", 1, 25, 15)
-    height = st.sidebar.slider("Plot height", 1, 25, 8)
+
+    # width = st.sidebar.slider("Plot width", 1, 25, 15)
+    # height = st.sidebar.slider("Plot height", 1, 25, 8)
     co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
 
     my_plot = st.empty() # set up a place holder for the plot
-
+    
+    st.write("Working on these ", n_epochs, "iterations...")
+    my_bar = st.progress(0)
     for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         optimizer.zero_grad()
-        ret_image_current, azim_image_current = rays.ray_trace_through_volume(my_volume)
+        
+        # Forward projection
+        ret_image_current, azim_image_current = rays.ray_trace_through_volume(volume_estimation)
 
-        azim_diff = azim_comp_measured - torch.arctan2(torch.sin(azim_image_current), torch.cos(azim_image_current))
-        L = loss_function(ret_image_measured, ret_image_current) + \
-            training_params['azimuth_weight'] * (2 * (1 - torch.cos(azim_image_measured - azim_image_current))).mean()
-
+        # Vector difference
+        co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
+        data_term = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).mean()
+        regularization_term  = (1-(volume_estimation.optic_axis[0,...]**2+volume_estimation.optic_axis[1,...]**2+volume_estimation.optic_axis[2,...]**2)).abs().mean()
+        L = data_term + training_params['regularization_weight'] * regularization_term
         # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
         L.backward()
+        
         # Apply gradient updates to the volume
         optimizer.step()
+
         # print(f'Ep:{ep} loss: {L.item()}')
         losses.append(L.item())
+        data_term_losses.append(data_term.item())
+        regularization_term_losses.append(regularization_term.item())
+
+        azim_image_out = azim_image_current.detach()
+        azim_image_out[azimuth_damp_mask==0] = 0
 
         percent_complete = int(ep / training_params['n_epochs'] * 100)
         my_bar.progress(percent_complete + 1)
 
-        if ep%4==0:
-            plt.clf()
-            # fig = plt.figure()
+        if ep%2==0:
+            fig = plot_iteration_update(
+                volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0].detach().cpu().numpy(),
+                ret_image_measured.detach().cpu().numpy(),
+                azim_image_measured.detach().cpu().numpy(),
+                volume_2_projections(volume_estimation.get_delta_n().unsqueeze(0))[0,0].detach().cpu().numpy(),
+                ret_image_current.detach().cpu().numpy(),
+                np.rad2deg(azim_image_current.detach().cpu().numpy()),
+                losses,
+                data_term_losses,
+                regularization_term_losses,
+                streamlit_purpose=True
+                )
             
-            fig, ax = plt.subplots(figsize=(width, height))
-            plt.subplot(2,4,1)
-            plt.imshow(ret_image_measured.detach().cpu().numpy())
-            plt.colorbar()
-            plt.title('Initial Retardance')
-            plt.subplot(2,4,2)
-            plt.imshow(azim_image_measured.detach().cpu().numpy())
-            plt.colorbar()
-            plt.title('Initial Orientation')
-            plt.subplot(2,4,3)
-            plt.imshow(volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0] \
-                                            .detach().cpu().numpy())
-            plt.colorbar()
-            plt.title('Initial volume MIP')
-
-            plt.subplot(2,4,5)
-            plt.imshow(ret_image_current.detach().cpu().numpy())
-            plt.colorbar()
-            plt.title('Final Retardance')
-            plt.subplot(2,4,6)
-            plt.imshow(np.rad2deg(azim_image_current.detach().cpu().numpy()))
-            plt.colorbar()
-            plt.title('Final Orientation')
-            plt.subplot(2,4,7)
-            plt.imshow(volume_2_projections(my_volume.get_delta_n().unsqueeze(0))[0,0] \
-                                            .detach().cpu().numpy())
-            plt.colorbar()
-            plt.title('Final Volume MIP')
-            plt.subplot(2,4,8)
-            plt.plot(list(range(len(losses))),losses)
-            plt.gca().yaxis.set_label_position("right")
-            plt.gca().yaxis.tick_right()
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-
-            # figure.canvas.draw()
-            # figure.canvas.flush_events()
-            # time.sleep(0.1)
-            # plt.savefig(f"{output_dir}/Optimization_ep_{'{:02d}'.format(ep)}.pdf")
-            # time.sleep(0.1)
             my_plot.pyplot(fig)
-            # st.image(fig)
-
-    # st.pyplot(fig)
-    # Display
-    # plt.savefig(f"{output_dir}/g_Optimization_final.pdf")
-    # plt.show()
 
     st.success("Done reconstructing! How does it look?", icon="✅")

@@ -3,12 +3,13 @@
 """
 import time
 import os
+import numpy as np
 import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized
+from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized, plot_iteration_update
 from VolumeRaytraceLFM.optic_config import volume_2_projections
 # from N_regularization import N
 
@@ -72,7 +73,7 @@ rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 startTime = time.time()
 rays.compute_rays_geometry()
 executionTime = (time.time() - startTime)
-print('Ray-tracing time in seconds: ' + str(executionTime))
+print(f'Ray-tracing time in seconds: {executionTime}')
 
 # Move ray tracer to GPU
 if backend == BackEnds.PYTORCH:
@@ -157,6 +158,7 @@ trainable_parameters = volume_estimation.get_trainable_variables()
 # #############
 
 # Create optimizer and loss function
+print(f'Creating an optimizer')
 optimizer = torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
 # loss_function = torch.nn.L1Loss()
 
@@ -223,8 +225,6 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     # Apply gradient updates to the volume
     optimizer.step()
 
-
-
     # print(f'Ep:{ep} loss: {L.item()}')
     losses.append(L.item())
     data_term_losses.append(data_term.item())
@@ -235,59 +235,73 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
 
     if ep%10==0:
         plt.clf()
-        plt.subplot(2,4,1)
-        plt.imshow(ret_image_measured.detach().cpu().numpy())
-        plt.colorbar()
-        plt.title('Initial Retardance')
-        plt.subplot(2,4,2)
-        # plt.imshow(azim_image_measured.detach().cpu().numpy())
-        plot_birefringence_colorized(ret_image_measured, azim_image_measured)
-        plt.colorbar()
-        plt.title('Initial Azimuth')
-        plt.subplot(2,4,3)
-        plt.imshow(volume_2_projections((Delta_n_GT.abs()).unsqueeze(0), proj_type=torch.sum, scaling_factors=[1,1,1])[0,0] \
-                                        .detach().cpu().numpy())
-        plt.colorbar()
-        plt.title('Initial volume MIP')
+        plot_iteration_update(
+            volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0].detach().cpu().numpy(),
+            ret_image_measured.detach().cpu().numpy(),
+            azim_image_measured.detach().cpu().numpy(),
+            # plot_birefringence_colorized(ret_image_measured.detach().cpu().numpy(), azim_image_measured.detach().cpu().numpy())
+            volume_2_projections(volume_estimation.get_delta_n().unsqueeze(0))[0,0].detach().cpu().numpy(),
+            ret_image_current.detach().cpu().numpy(),
+            np.rad2deg(azim_image_current.detach().cpu().numpy()),
+            # plot_birefringence_colorized(ret_image_current.detach().cpu().numpy(), azim_image_out.detach().cpu().numpy()),
+            losses,
+            data_term_losses,
+            regularization_term_losses
+            )
+        # plt.clf()
+        # plt.subplot(2,4,1)
+        # plt.imshow(ret_image_measured.detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('Initial Retardance')
+        # plt.subplot(2,4,2)
+        # # plt.imshow(azim_image_measured.detach().cpu().numpy())
+        # plot_birefringence_colorized(ret_image_measured.detach().cpu().numpy(), azim_image_measured.detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('Initial Azimuth')
+        # plt.subplot(2,4,3)
+        # plt.imshow(volume_2_projections((Delta_n_GT.abs()).unsqueeze(0), proj_type=torch.sum, scaling_factors=[1,1,1])[0,0] \
+        #                                 .detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('Initial volume MIP')
 
-        plt.subplot(2,4,5)
-        plt.imshow(ret_image_current.detach().cpu().numpy())
-        plt.colorbar()
-        plt.title('Final Retardance')
-        plt.subplot(2,4,6)
-        # plt.imshow(np.rad2deg(azim_image_out.detach().cpu().numpy()))
-        plot_birefringence_colorized(ret_image_current.detach().cpu().numpy(), azim_image_out.detach().cpu().numpy())
-        plt.colorbar()
-        plt.title('Final Azimuth')
-        plt.subplot(2,4,7)
-        plt.imshow(volume_2_projections((volume_estimation.get_delta_n().abs()).unsqueeze(0), proj_type=torch.sum, scaling_factors=[1,1,1])[0,0] \
-                                        .detach().cpu().numpy())
-        plt.colorbar()
-        plt.title('Final Volume MIP')
+        # plt.subplot(2,4,5)
+        # plt.imshow(ret_image_current.detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('Final Retardance')
+        # plt.subplot(2,4,6)
+        # # plt.imshow(np.rad2deg(azim_image_out.detach().cpu().numpy()))
+        # plot_birefringence_colorized(ret_image_current.detach().cpu().numpy(), azim_image_out.detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('Final Azimuth')
+        # plt.subplot(2,4,7)
+        # plt.imshow(volume_2_projections((volume_estimation.get_delta_n().abs()).unsqueeze(0), proj_type=torch.sum, scaling_factors=[1,1,1])[0,0] \
+        #                                 .detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('Final Volume MIP')
 
-        # Plot losses
-        plt.subplot(3,4,4)
-        plt.plot(list(range(len(losses))), data_term_losses)
-        plt.gca().yaxis.set_label_position("right")
-        plt.gca().yaxis.tick_right()
+        # # Plot losses
+        # plt.subplot(3,4,4)
+        # plt.plot(list(range(len(losses))), data_term_losses)
+        # plt.gca().yaxis.set_label_position("right")
+        # plt.gca().yaxis.tick_right()
+        # # plt.xlabel('Epoch')
+        # plt.ylabel('DataTerm loss')
+        # plt.gca().xaxis.set_visible(False)
+
+        # plt.subplot(3,4,8)
+        # plt.plot(list(range(len(losses))), regularization_term_losses)
+        # plt.gca().yaxis.set_label_position("right")
+        # plt.gca().yaxis.tick_right()
+        # # plt.xlabel('Epoch')
+        # plt.ylabel('Reg loss')
+        # plt.gca().xaxis.set_visible(False)
+
+        # plt.subplot(3,4,12)
+        # plt.plot(list(range(len(losses))),losses)
+        # plt.gca().yaxis.set_label_position("right")
+        # plt.gca().yaxis.tick_right()
         # plt.xlabel('Epoch')
-        plt.ylabel('DataTerm loss')
-        plt.gca().xaxis.set_visible(False)
-
-        plt.subplot(3,4,8)
-        plt.plot(list(range(len(losses))), regularization_term_losses)
-        plt.gca().yaxis.set_label_position("right")
-        plt.gca().yaxis.tick_right()
-        # plt.xlabel('Epoch')
-        plt.ylabel('Reg loss')
-        plt.gca().xaxis.set_visible(False)
-
-        plt.subplot(3,4,12)
-        plt.plot(list(range(len(losses))),losses)
-        plt.gca().yaxis.set_label_position("right")
-        plt.gca().yaxis.tick_right()
-        plt.xlabel('Epoch')
-        plt.ylabel('Total Loss')
+        # plt.ylabel('Total Loss')
 
         figure.canvas.draw()
         figure.canvas.flush_events()
