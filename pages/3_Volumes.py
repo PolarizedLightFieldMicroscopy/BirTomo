@@ -77,7 +77,7 @@ with volume_container: # now that we know backend and shift, we can fill in the 
                                                     optical_info=optical_info)
             
     else:
-        volume_type = st.selectbox('Volume type',['ellipsoid','shell','2ellipsoids','single_voxel'],1)
+        volume_type = st.selectbox('Volume type',['ellipsoid','shell','2ellipsoids','single_voxel'], 2)
         st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
                                     vol_type=volume_type, volume_axial_offset=volume_axial_offset)
 
