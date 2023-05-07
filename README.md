@@ -1,5 +1,5 @@
 ![python version](https://img.shields.io/badge/python-3.10-blue)
-[![GitHub Actions Demo](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/github-actions-demo.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/github-actions-demo.yml)
+[![GitHub Actions Demo](https://github.com/PolarizedLightFieldMicroscopy/forward-model/main/workflows/pytest-action.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/main/workflows/pytest-action.yml)
 # forward-model
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
 
