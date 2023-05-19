@@ -1,5 +1,5 @@
 ![python version](https://img.shields.io/badge/python-3.10-blue)
-[![GitHub Actions Demo](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/github-actions-demo.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/github-actions-demo.yml)
+[![GitHub Actions Demo](https://github.com/PolarizedLightFieldMicroscopy/forward-model/main/workflows/pytest-action.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/main/workflows/pytest-action.yml)
 # forward-model
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
 
@@ -23,7 +23,12 @@ The workflow within that script is the following:
     1. Choose to optimize for the birefringence $\Delta n$ and optic axis $\hat{a}$
     1. Choose an optimization method, such as gradient descent.
 1. Define a loss function to be minimized.
-1. Perform many iterations of the estimated volume being updated from the gradients of the loss function with respect to the estimated volume. 
+1. Perform many iterations of the estimated volume being updated from the gradients of the loss function with respect to the estimated volume.
+
+Open the streamlit page locally with
+```
+streamlit run User_Interface.py
+```
 
 You can also use our streamlit app that runs on the streamlit cloud: https://polarizedlightfieldmicroscopy-forward-mo-user-interface-dc1r85.streamlit.app/
 
@@ -37,13 +42,16 @@ Necessary packages:
 - torch
 - h5py (for reading and saves volumes)
 - plotly (for visualizing volumes)
+- ipykernel (for using jupyter notebooks)
 - os (for saving images)
+- streamlit (for running the streamlit page locally)
+- pytest (for testing code during development)
 
 Run the following code to create a virtual environment will all the necessary and relevant packages:
 ```
 conda create --name model python=3.10 tqdm matplotlib h5py --yes
 conda activate model
-conda install -c conda-forge pytorch --yes
+conda install -c conda-forge pytorch ipykernel --yes
 conda install -c plotly plotly --yes
 pip install streamlit
 conda install -c anaconda pytest --yes
