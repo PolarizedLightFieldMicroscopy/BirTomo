@@ -135,6 +135,18 @@ class BirefringentVolume(BirefringentElement):
         else:
             return self.optic_axis
 
+    def normalize_optic_axis(self):
+        if self.backend == BackEnds.PYTORCH:
+            with torch.no_grad():
+                self.optic_axis.requires_grad = False
+                mags = torch.linalg.norm(self.optic_axis, axis=0)
+                valid_mask = mags>0
+                self.optic_axis[:, valid_mask].data /= mags[valid_mask]
+                self.optic_axis.requires_grad = True
+        elif self.backend == BackEnds.NUMPY:
+            mags = np.linalg.norm(self.optic_axis, axis=0)
+            valid_mask = mags>0
+            self.optic_axis[:, valid_mask] /= mags[valid_mask]
     def __iadd__(self, other):
         ''' Overload the += operator to be able to sum volumes'''
         # Check that shapes are the same
