@@ -66,11 +66,10 @@ with columns[1]:
                         st.error('This file does specify the volume shape.')
                     except Exception as e:
                         st.error(e)
-                max_vol_shape = int(max(vol_shape))
-                vol_shape_default = 3 * [max_vol_shape]
+                vol_shape_default = [int(v) for v in vol_shape]
                 optical_info['volume_shape'] = vol_shape_default
                 st.markdown(f"Using a cube volume shape with the dimension of the"
-                            + f"maximum of the axes: {vol_shape_default}.")
+                            + f"loaded volume: {vol_shape_default}.")
 
                 display_h5 = st.checkbox("Display h5 file contents")                
                 if display_h5:
