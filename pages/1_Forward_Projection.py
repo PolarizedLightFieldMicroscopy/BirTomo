@@ -34,11 +34,11 @@ with columns[0]:
     # Alter some of the optical parameters
     st.subheader('Optical')
     optical_info['n_micro_lenses'] = st.slider('Number of microlenses',
-                                               min_value=1, max_value=25, value=5)
+                                               min_value=1, max_value=51, value=5)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens',
                                               min_value=1, max_value=33, value=17, step=2)
     optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (supersampling)',
-                                                min_value=1, max_value=3, value=1)
+                                                min_value=1, max_value=7, value=1)
     # optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]',
     #                                                 min_value=.1, max_value=10., value = 1.0)
     optical_info['M_obj'] = st.slider('Magnification',

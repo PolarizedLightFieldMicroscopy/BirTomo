@@ -31,9 +31,9 @@ with columns[0]:
     optical_info = BirefringentVolume.get_optical_info_template()
     # Alter some of the optical parameters
     st.subheader('Optical')
-    optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=25, value=5)
+    optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=51, value=5)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
-    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=3, value=1)
+    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=7, value=1)
 
 ############ Other #################
     st.subheader('Other')
@@ -69,7 +69,7 @@ with columns[1]:
                 vol_shape_default = [int(v) for v in vol_shape]
                 optical_info['volume_shape'] = vol_shape_default
                 st.markdown(f"Using a cube volume shape with the dimension of the"
-                            + f"loaded volume: {vol_shape_default}.")
+                            + f" loaded volume: {vol_shape_default}.")
 
                 display_h5 = st.checkbox("Display h5 file contents")                
                 if display_h5:
