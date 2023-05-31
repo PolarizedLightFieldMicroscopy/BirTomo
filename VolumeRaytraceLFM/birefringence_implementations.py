@@ -387,6 +387,8 @@ class BirefringentVolume(BirefringentElement):
             data_grp = f.create_group('data')
             data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n.astype(np.float32))
             data_grp.create_dataset("optic_axis", optic_axis.shape, data=optic_axis.astype(np.float32))
+        
+        return h5_file_path
 
     @staticmethod
     def init_from_file(h5_file_path, backend=BackEnds.NUMPY, optical_info=None):
@@ -532,8 +534,10 @@ class BirefringentVolume(BirefringentElement):
         
         # What's the center of the volume?
         vox_ctr_idx = np.array([optical_info['volume_shape'][0] / 2, optical_info['volume_shape'][1] / 2, optical_info['volume_shape'][2] / 2]).astype(int)
-        if vol_type == "single_voxel":
+        if vol_type == "single_voxel" or vol_type == 'zeros':
             voxel_delta_n = 0.01
+            if vol_type == 'zeros':
+                voxel_delta_n = 0
             # TODO: make numpy version of birefringence axis
             voxel_birefringence_axis = torch.tensor([1,0.0,0])
             voxel_birefringence_axis /= voxel_birefringence_axis.norm()

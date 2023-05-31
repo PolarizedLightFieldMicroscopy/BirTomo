@@ -11,8 +11,11 @@ st.write("Let's try to reconstruct a volume based on our images!")
 
 import time
 import os
+import io
+import json
 import numpy as np
 import torch
+from PIL import Image
 import h5py
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -55,7 +58,7 @@ with columns[1]:
     volume_container = st.container() # set up a home for other volume selections to go
     with volume_container:
         how_get_vol = st.radio("Volume can be created or uploaded as an h5 file",
-                                ['h5 upload', 'Create a new volume'], index=1)
+                                ['h5 upload', 'Create a new volume', 'Upload experimental images'], index=1)
         if how_get_vol == 'h5 upload':
             h5file = st.file_uploader("Upload Volume h5 Here", type=['h5'])
             if h5file is not None:
@@ -96,9 +99,74 @@ with columns[1]:
                             st.error('This file does specify the voxel size. Voxels are likely to be cubes.')
                         except Exception as e:
                             st.error(e)
+        elif how_get_vol == 'Upload experimental images':
+            retardance_path = st.file_uploader("Upload retardance tif", type=['png'])
+            azimuth_path = st.file_uploader("Upload orientation tif", type=['png'])
+            metadata_file = st.file_uploader("Upload metadata from Napari-LF", type=['txt'])
+            plot_cropped_imgs = st.empty() # set up a place holder for the plot
+
+            # Load files
+            if retardance_path is not None:
+                ret_img_raw = torch.from_numpy(np.array(Image.open(retardance_path)).astype(np.float32))
+            if azimuth_path is not None:
+                azim_img_raw = torch.from_numpy(np.array(Image.open(azimuth_path)).astype(np.float32))
+
+            if metadata_file is not None:
+                # Lets load metadata
+                metadata = metadata_file.read()
+                metadata =  json.loads(metadata)
+                # MLA data
+                optical_info['pixels_per_ml'] = metadata['calibrate']['pixels_per_ml'] if 'pixels_per_ml' in metadata['calibrate'].keys() else optical_info['pixels_per_ml']
+                # optical_info['n_micro_lenses']      = 11
+                # optical_info['n_voxels_per_ml']     = 1
+                # optical_info['axial_voxel_size_um'] = 1
+                # Optics data
+                optical_info['M_obj']           = metadata['calibrate']['objective_magnification']
+                optical_info['na_obj']          = metadata['calibrate']['objective_na']
+                optical_info['n_medium']        = metadata['calibrate']['medium_index']
+                optical_info['wavelength']      = metadata['calibrate']['center_wavelength']
+                optical_info['camera_pix_pitch']= metadata['calibrate']['pixel_size']
+            
+            
+            ### Which part to crop from the images?
+
+            if retardance_path and azimuth_path and metadata_file:
+                # Crop data based on n_micro_lenses and n_voxels_per_ml
+                n_mls_y = ret_img_raw.shape[0] // optical_info['pixels_per_ml']
+                n_mls_x = ret_img_raw.shape[1] // optical_info['pixels_per_ml']
+ 
+                crop_pos_y = st.slider('Image region center Y', min_value=1, max_value=n_mls_y, value=55)
+                crop_pos_x = st.slider('Image region center X', min_value=1, max_value=n_mls_x, value=54)
+                start_ml = [crop_pos_y,crop_pos_x]
+                start_coords = [sc * optical_info['pixels_per_ml'] for sc in start_ml]
+                end_coords = [sc + optical_info['n_micro_lenses'] * optical_info['pixels_per_ml'] for sc in start_coords ]
+
+                st.session_state['ret_image_measured'] = ret_img_raw[start_coords[0]:end_coords[0], start_coords[1] : end_coords[1]]
+                st.session_state['azim_image_measured'] = azim_img_raw[start_coords[0]:end_coords[0], start_coords[1] : end_coords[1]]
+
+                # Plot images
+                fig = plt.figure(figsize=(6,3))
+                plt.rcParams['image.origin'] = 'lower'
+                plt.subplot(1,2,1)
+                plt.imshow(st.session_state['ret_image_measured'].numpy(), cmap='gray')
+                plt.subplot(1,2,2)
+                plt.imshow(st.session_state['azim_image_measured'].numpy(), cmap='gray')
+                plot_cropped_imgs.pyplot(fig)
+
+            st.subheader('Volume shape')
+            optical_info['volume_shape'][0] = st.slider('Axial volume dimension',
+                                                        min_value=1, max_value=50, value=15)
+            # y will follow x if x is changed. x will not follow y if y is changed
+            optical_info['volume_shape'][1] = st.slider('Y volume dimension',
+                                                        min_value=1, max_value=100, value=51)
+            optical_info['volume_shape'][2] = st.slider('Z volume dimension',
+                                                        min_value=1, max_value=100,
+                                                        value=optical_info['volume_shape'][1])
+            
         else:
             volume_type = st.selectbox('Volume type',
                                        ['ellipsoid','shell','2ellipsoids','single_voxel'], 1)
+            st.subheader('Volume shape')
             optical_info['volume_shape'][0] = st.slider('Axial volume dimension',
                                                         min_value=1, max_value=50, value=15)
             # y will follow x if x is changed. x will not follow y if y is changed
@@ -120,6 +188,14 @@ with columns[1]:
                                                         backend=backend,
                                                         optical_info=optical_info
                                                         )
+        elif how_get_vol == 'Upload experimental images':
+            with torch.no_grad():
+                st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(
+                                                    backend=backend,
+                                                    optical_info=optical_info,
+                                                    vol_type='zeros',
+                                                    volume_axial_offset=0
+                                                    )
         else:
             st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(
                                                 backend=backend,
@@ -144,7 +220,7 @@ n_epochs = st.slider('Number of iterations', min_value=1, max_value=100, value=1
 # lr = st.slider('Learning rate', min_value=1, max_value=5, value=3) 
 filename_message = st.text_input('Message to add to the filename (not currently saving anyway..)')
 training_params = {
-    'n_epochs' : 51,                      # How long to train for
+    'n_epochs' : n_epochs,                      # How long to train for
     'azimuth_weight' : .5,                   # Azimuth loss weight
     'regularization_weight' : 1.0,          # Regularization weight
     'lr' : 1e-3,                            # Learning rate
@@ -176,11 +252,19 @@ if st.button("Reconstruct!"):
 
 
     with torch.no_grad():
-        # Perform same calculation with torch
-        start_time = time.time()
-        ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(my_volume)
-        execution_time = (time.time() - start_time)
-        print('Warmup time in seconds with Torch: ' + str(execution_time))
+        if how_get_vol == 'Upload experimental images':
+            ret_image_measured  =  st.session_state['ret_image_measured']
+            azim_image_measured =  st.session_state['azim_image_measured']
+            # Normalize data
+            ret_image_measured /= ret_image_measured.max()
+            ret_image_measured *= 0.01
+            azim_image_measured *= torch.pi / azim_image_measured.max()
+        else:
+            # Perform same calculation with torch
+            start_time = time.time()
+            ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(my_volume)
+            execution_time = (time.time() - start_time)
+            print('Warmup time in seconds with Torch: ' + str(execution_time))
 
         # Store GT images
         Delta_n_GT = my_volume.get_delta_n().detach().clone()
@@ -278,3 +362,13 @@ if st.button("Reconstruct!"):
             my_plot.pyplot(fig)
 
     st.success("Done reconstructing! How does it look?", icon="✅")
+
+
+    st.subheader('Download results')
+    # print(ret_image_current.detach().cpu().numpy().shape)
+    # st.download_button('Download estimated retardance', ret_image_current.detach().cpu().numpy().tobytes(), mime="image/jpeg")
+    # st.download_button('Download estimated orientation', azim_image_current.detach().cpu().numpy().tobytes(), mime="image/jpeg")
+
+    # Save volume to h5
+    h5_file = io.BytesIO()
+    st.download_button('Download estimated volume as HDF5 file', volume_estimation.save_as_file(h5_file), mime='application/x-hdf5')
