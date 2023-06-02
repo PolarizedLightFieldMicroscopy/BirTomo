@@ -13,6 +13,7 @@ import time
 import os
 import io
 import json
+import copy
 import numpy as np
 import torch
 from PIL import Image
@@ -61,6 +62,7 @@ with columns[1]:
                                 ['h5 upload', 'Create a new volume', 'Upload experimental images'], index=1)
         if how_get_vol == 'h5 upload':
             h5file = st.file_uploader("Upload Volume h5 Here", type=['h5'])
+            optical_info['n_voxels_per_ml_volume'] = st.slider('Number of voxels per microlens in volume space', min_value=1, max_value=21, value=3)
             if h5file is not None:
                 with h5py.File(h5file) as file:
                     try:
@@ -164,6 +166,7 @@ with columns[1]:
                                                         value=optical_info['volume_shape'][1])
             
         else:
+            optical_info['n_voxels_per_ml_volume'] = st.slider('Number of voxels per microlens in volume space', min_value=1, max_value=21, value=3)
             volume_type = st.selectbox('Volume type',
                                        ['ellipsoid','shell','2ellipsoids','single_voxel'], 1)
             st.subheader('Volume shape')
@@ -183,10 +186,16 @@ with columns[1]:
     with volume_container:
         if how_get_vol == 'h5 upload':
             if h5file is not None:
+                # Lets create a new optical info for volume space, as the sampling might be higher than the reconstruction
+                optical_info_volume = copy.deepcopy(optical_info)
+                optical_info_volume['n_voxels_per_ml'] = optical_info_volume['n_voxels_per_ml_volume']
+                optical_info_volume['volume_shape'][1] = 501
+                optical_info_volume['volume_shape'][2] = 501
+
                 st.session_state['my_volume'] = BirefringentVolume.init_from_file(
                                                         h5file,
                                                         backend=backend,
-                                                        optical_info=optical_info
+                                                        optical_info=optical_info_volume
                                                         )
         elif how_get_vol == 'Upload experimental images':
             with torch.no_grad():
@@ -197,12 +206,18 @@ with columns[1]:
                                                     volume_axial_offset=0
                                                     )
         else:
-            st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(
-                                                backend=backend,
-                                                optical_info=optical_info,
-                                                vol_type=volume_type,
-                                                volume_axial_offset=volume_axial_offset
-                                                )
+            # Lets create a new optical info for volume space, as the sampling might be higher than the reconstruction
+            optical_info_volume = copy.deepcopy(optical_info)
+            optical_info_volume['n_voxels_per_ml'] = optical_info_volume['n_voxels_per_ml_volume']
+            optical_info_volume['volume_shape'][1] = 501
+            optical_info_volume['volume_shape'][2] = 501
+            with torch.no_grad():
+                st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(
+                                                    backend=backend,
+                                                    optical_info=optical_info_volume,
+                                                    vol_type=volume_type,
+                                                    volume_axial_offset=volume_axial_offset
+                                                    )
 
 st.subheader("Volume viewing")
 st.write("See Forward Projection page for plotting")
@@ -260,9 +275,13 @@ if st.button("Reconstruct!"):
             ret_image_measured *= 0.01
             azim_image_measured *= torch.pi / azim_image_measured.max()
         else:
+            # We need a raytracer with different number of voxels per ml for higher sampling measurements
+
+            rays_higher_sampling = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info_volume)
+            rays_higher_sampling.compute_rays_geometry()
             # Perform same calculation with torch
             start_time = time.time()
-            ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(my_volume)
+            ret_image_measured, azim_image_measured = rays_higher_sampling.ray_trace_through_volume(my_volume)
             execution_time = (time.time() - start_time)
             print('Warmup time in seconds with Torch: ' + str(execution_time))
 
