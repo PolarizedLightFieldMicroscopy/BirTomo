@@ -20,10 +20,12 @@ from PIL import Image
 import h5py
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import matplotlib 
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 from VolumeRaytraceLFM.optic_config import volume_2_projections
 from plotting_tools import plot_iteration_update
+from loss_functions import *
 
 st.header("Choose our parameters")
 
@@ -35,16 +37,39 @@ with columns[0]:
     optical_info = BirefringentVolume.get_optical_info_template()
     # Alter some of the optical parameters
     st.subheader('Optical')
-    optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=51, value=5)
+    optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=51, value=11)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
-    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens', min_value=1, max_value=7, value=1)
+    # GT volume simulation
+    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (volume sampling)', min_value=1, max_value=7, value=5)
 
-############ Other #################
-    st.subheader('Other')
-    backend_choice = st.radio('Backend', ['torch'])
-    st.write("Backend needs to be torch for the reconstructions")
+############ Reconstruction settings #################
     backend = BackEnds.PYTORCH
+    st.subheader("Iterative reconstruction parameters")
+    n_epochs = st.slider('Number of iterations', min_value=1, max_value=100, value=10)
+    # See loss_functions.py for more details
+    loss_function = st.selectbox('Loss function',
+                                ['vonMisses', 'vector', 'L1_cos', 'L1all'], 1)
+    regularization_function1 = st.selectbox('Volume regularization function 1',
+                                ['L1', 'L2', 'unit', 'TV', 'none'], 2)
+    regularization_function2 = st.selectbox('Volume regularization function 2',
+                                ['L1', 'L2', 'unit', 'TV', 'none'], 4)
+    reg_weight1 = st.number_input('Regularization weight 1', min_value=0., max_value=0.5, value=0.001)
+    st.write('The current regularization weight 1 is ', reg_weight1)
+    reg_weight2 = st.number_input('Regularization weight 2', min_value=0., max_value=0.5, value=0.001)
+    st.write('The current regularization weight 2 is ', reg_weight2)
+    ret_azim_weight = st.number_input('Retardance-Orientation weight', min_value=0., max_value=1., value=0.5)
+    st.write('The current retardance/orientation weight is ', ret_azim_weight)
 
+    delta_n_init_magnitude = st.number_input('Volume Delta_n initial magnitude', min_value=0., max_value=1., value=0.0001)
+    st.write('The current rVolume Delta_n initial magnitude is ', delta_n_init_magnitude)
+    
+    st.subheader('Learning rate')
+    learning_rate_delta_n = st.number_input('Learning rate Delta_n', min_value=0.00000, max_value=0.500000, value=0.001)
+    st.write('The current LR is ', learning_rate_delta_n)
+    learning_rate_optic_axis = st.number_input('Learning rate Optic_axis', min_value=0.00000, max_value=0.500000, value=0.001)
+    st.write('The current optic axis LR is ', learning_rate_optic_axis)
+
+    
 def key_investigator(key_home, my_str='', prefix='- '):
     if hasattr(key_home, 'keys'):
         for my_key in key_home.keys():
@@ -159,25 +184,22 @@ with columns[1]:
             optical_info['volume_shape'][0] = st.slider('Axial volume dimension',
                                                         min_value=1, max_value=50, value=15)
             # y will follow x if x is changed. x will not follow y if y is changed
-            optical_info['volume_shape'][1] = st.slider('Y volume dimension',
-                                                        min_value=1, max_value=100, value=51)
-            optical_info['volume_shape'][2] = st.slider('Z volume dimension',
-                                                        min_value=1, max_value=100,
-                                                        value=optical_info['volume_shape'][1])
+            optical_info['volume_shape'][1] = st.slider('Y-Z volume dimension',
+                                                        min_value=1, max_value=100, value=99)
+            optical_info['volume_shape'][2] = optical_info['volume_shape'][1]
             
         else:
-            optical_info['n_voxels_per_ml_volume'] = st.slider('Number of voxels per microlens in volume space', min_value=1, max_value=21, value=3)
+            optical_info['n_voxels_per_ml_volume'] = st.slider('Number of voxels per microlens in volume space', min_value=1, max_value=21, value=1)
             volume_type = st.selectbox('Volume type',
                                        ['ellipsoid','shell','2ellipsoids','single_voxel'], 1)
             st.subheader('Volume shape')
             optical_info['volume_shape'][0] = st.slider('Axial volume dimension',
                                                         min_value=1, max_value=50, value=15)
             # y will follow x if x is changed. x will not follow y if y is changed
-            optical_info['volume_shape'][1] = st.slider('Y volume dimension',
-                                                        min_value=1, max_value=100, value=51)
-            optical_info['volume_shape'][2] = st.slider('Z volume dimension',
-                                                        min_value=1, max_value=100,
-                                                        value=optical_info['volume_shape'][1])
+            optical_info['volume_shape'][1] = st.slider('Y-Z volume dimension',
+                                                        min_value=1, max_value=100, value=99)
+            optical_info['volume_shape'][2] = optical_info['volume_shape'][1]
+
             shift_from_center = st.slider('Axial shift from center [voxels]',
                                         min_value = -int(optical_info['volume_shape'][0] / 2),
                                         max_value = int(optical_info['volume_shape'][0] / 2), value = 0)
@@ -219,27 +241,21 @@ with columns[1]:
                                                     volume_axial_offset=volume_axial_offset
                                                     )
 
-st.subheader("Volume viewing")
-st.write("See Forward Projection page for plotting")
-# if st.button("Plot volume!"):
-#     st.write("Scroll over image to zoom in and out.")
-#     with torch.no_grad():
-#         my_fig = st.session_state['my_recon_volume'].plot_volume_plotly(optical_info, 
-#                                 voxels_in=st.session_state['my_recon_volume'].Delta_n, opacity=0.1)
-#     st.plotly_chart(my_fig)
+
 ######################################################################
 
-st.subheader("Training parameters")
-n_epochs = st.slider('Number of iterations', min_value=1, max_value=100, value=10)
 # want learning rate to be multiple choice
 # lr = st.slider('Learning rate', min_value=1, max_value=5, value=3) 
-filename_message = st.text_input('Message to add to the filename (not currently saving anyway..)')
+# filename_message = st.text_input('Message to add to the filename (not currently saving anyway..)')
 training_params = {
-    'n_epochs' : n_epochs,                      # How long to train for
-    'azimuth_weight' : .5,                   # Azimuth loss weight
-    'regularization_weight' : 1.0,          # Regularization weight
-    'lr' : 1e-3,                            # Learning rate
-    'output_posfix' : '15ml_bundleX_E_vector_unit_reg'     # Output file name posfix
+    'n_epochs' : n_epochs,                          # How long to train for
+    'azimuth_weight' : ret_azim_weight,             # Azimuth loss weight
+    'regularization_weight' : [reg_weight1, reg_weight2],           # Regularization weight
+    'lr' : learning_rate_delta_n,                   # Learning rate for delta_n
+    'lr_optic_axis' : learning_rate_optic_axis,     # Learning rate for optic axis
+    'output_posfix' : '',                           # Output file name posfix
+    'loss' : loss_function,                         # Loss function
+    'reg' : [regularization_function1, regularization_function2]                 # Regularization function
 }
 
 
@@ -301,7 +317,7 @@ if st.button("Reconstruct!"):
     # Let's rescale the random to initialize the volume
     volume_estimation.Delta_n.requires_grad = False
     volume_estimation.optic_axis.requires_grad = False
-    volume_estimation.Delta_n *= 0.0001
+    volume_estimation.Delta_n *= delta_n_init_magnitude
     # And mask out volume that is outside FOV of the microscope
     mask = rays.get_volume_reachable_region()
     volume_estimation.Delta_n[mask.view(-1)==0] = 0
@@ -315,8 +331,12 @@ if st.button("Reconstruct!"):
 
     trainable_parameters = volume_estimation.get_trainable_variables()
 
-    # Create an optimizer
-    optimizer = torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
+    # As delta_n has much lower values than optic_axis, we might need 2 different learning rates
+    parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},  # Optic axis
+                {'params': trainable_parameters[1], 'lr': training_params['lr']}]               # Delta_n
+
+    # Create optimizer 
+    optimizer = torch.optim.Adam(parameters, lr=training_params['lr'])
     
     # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
     losses = []
@@ -330,9 +350,9 @@ if st.button("Reconstruct!"):
 
     # width = st.sidebar.slider("Plot width", 1, 25, 15)
     # height = st.sidebar.slider("Plot height", 1, 25, 8)
-    co_gt, ca_gt = ret_image_measured*torch.cos(azim_image_measured), ret_image_measured*torch.sin(azim_image_measured)
 
     my_plot = st.empty() # set up a place holder for the plot
+    my_3D_plot = st.empty() # set up a place holder for the 3D plot
     
     st.write("Working on these ", n_epochs, "iterations...")
     my_bar = st.progress(0)
@@ -342,11 +362,11 @@ if st.button("Reconstruct!"):
         # Forward projection
         ret_image_current, azim_image_current = rays.ray_trace_through_volume(volume_estimation)
 
-        # Vector difference
-        co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
-        data_term = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).mean()
-        regularization_term  = (1-(volume_estimation.optic_axis[0,...]**2+volume_estimation.optic_axis[1,...]**2+volume_estimation.optic_axis[2,...]**2)).abs().mean()
-        L = data_term + training_params['regularization_weight'] * regularization_term
+        # Conpute loss and regularization        
+        L, data_term, regularization_term = apply_loss_function_and_reg(training_params['loss'], training_params['reg'], ret_image_measured, azim_image_measured, 
+                                                ret_image_current, azim_image_current, 
+                                                training_params['azimuth_weight'], volume_estimation, training_params['regularization_weight'])
+
         # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
         L.backward()
         
@@ -365,6 +385,7 @@ if st.button("Reconstruct!"):
         my_bar.progress(percent_complete + 1)
 
         if ep%2==0:
+            matplotlib.pyplot.close()
             fig = plot_iteration_update(
                 volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0].detach().cpu().numpy(),
                 ret_image_measured.detach().cpu().numpy(),
@@ -380,7 +401,17 @@ if st.button("Reconstruct!"):
             
             my_plot.pyplot(fig)
 
+
     st.success("Done reconstructing! How does it look?", icon="✅")
+    
+    st.session_state['my_volume'] = volume_estimation
+    
+    st.write("Scroll over image to zoom in and out.")
+    # Todo: use a slider to filter the volume
+    volume_ths = 0.05 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
+    matplotlib.pyplot.close()
+    my_fig = st.session_state['my_volume'].plot_lines_plotly(delta_n_ths=volume_ths)
+    st.plotly_chart(my_fig, use_container_width=True)
 
 
     st.subheader('Download results')
@@ -391,3 +422,4 @@ if st.button("Reconstruct!"):
     # Save volume to h5
     h5_file = io.BytesIO()
     st.download_button('Download estimated volume as HDF5 file', volume_estimation.save_as_file(h5_file), mime='application/x-hdf5')
+
