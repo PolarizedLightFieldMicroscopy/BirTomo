@@ -171,7 +171,7 @@ class BirefringentVolume(BirefringentElement):
         return self
 
 
-    def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=5, fig=None, draw_spheres=True):
+    def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=5, fig=None, draw_spheres=True, delta_n_ths=0.1):
         
         # Fetch local data
         delta_n = self.get_delta_n() * 1
@@ -187,7 +187,8 @@ class BirefringentVolume(BirefringentElement):
                 pass
         
         delta_n /= np.max(np.abs(delta_n))
-
+        delta_n[delta_n<delta_n_ths] = 0
+        
         from plotly.subplots import make_subplots
         import plotly.graph_objects as go
 
