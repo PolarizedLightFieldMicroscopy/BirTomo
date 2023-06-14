@@ -135,6 +135,18 @@ class BirefringentVolume(BirefringentElement):
         else:
             return self.optic_axis
 
+    def normalize_optic_axis(self):
+        if self.backend == BackEnds.PYTORCH:
+            with torch.no_grad():
+                self.optic_axis.requires_grad = False
+                mags = torch.linalg.norm(self.optic_axis, axis=0)
+                valid_mask = mags>0
+                self.optic_axis[:, valid_mask].data /= mags[valid_mask]
+                self.optic_axis.requires_grad = True
+        elif self.backend == BackEnds.NUMPY:
+            mags = np.linalg.norm(self.optic_axis, axis=0)
+            valid_mask = mags>0
+            self.optic_axis[:, valid_mask] /= mags[valid_mask]
     def __iadd__(self, other):
         ''' Overload the += operator to be able to sum volumes'''
         # Check that shapes are the same
@@ -159,7 +171,7 @@ class BirefringentVolume(BirefringentElement):
         return self
 
 
-    def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=5, fig=None, draw_spheres=True):
+    def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=5, fig=None, draw_spheres=True, delta_n_ths=0.1):
         
         # Fetch local data
         delta_n = self.get_delta_n() * 1
@@ -175,7 +187,8 @@ class BirefringentVolume(BirefringentElement):
                 pass
         
         delta_n /= np.max(np.abs(delta_n))
-
+        delta_n[delta_n<delta_n_ths] = 0
+        
         from plotly.subplots import make_subplots
         import plotly.graph_objects as go
 
@@ -375,6 +388,8 @@ class BirefringentVolume(BirefringentElement):
             data_grp = f.create_group('data')
             data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n.astype(np.float32))
             data_grp.create_dataset("optic_axis", optic_axis.shape, data=optic_axis.astype(np.float32))
+        
+        return h5_file_path
 
     @staticmethod
     def init_from_file(h5_file_path, backend=BackEnds.NUMPY, optical_info=None):
@@ -520,8 +535,10 @@ class BirefringentVolume(BirefringentElement):
         
         # What's the center of the volume?
         vox_ctr_idx = np.array([optical_info['volume_shape'][0] / 2, optical_info['volume_shape'][1] / 2, optical_info['volume_shape'][2] / 2]).astype(int)
-        if vol_type == "single_voxel":
+        if vol_type == "single_voxel" or vol_type == 'zeros':
             voxel_delta_n = 0.01
+            if vol_type == 'zeros':
+                voxel_delta_n = 0
             # TODO: make numpy version of birefringence axis
             voxel_birefringence_axis = torch.tensor([1,0.0,0])
             voxel_birefringence_axis /= voxel_birefringence_axis.norm()

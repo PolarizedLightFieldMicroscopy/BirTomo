@@ -34,11 +34,11 @@ with columns[0]:
     # Alter some of the optical parameters
     st.subheader('Optical')
     optical_info['n_micro_lenses'] = st.slider('Number of microlenses',
-                                               min_value=1, max_value=25, value=5)
+                                               min_value=1, max_value=51, value=5)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens',
                                               min_value=1, max_value=33, value=17, step=2)
     optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (supersampling)',
-                                                min_value=1, max_value=3, value=1)
+                                                min_value=1, max_value=7, value=1)
     # optical_info['axial_voxel_size_um'] = st.slider('Axial voxel size [um]',
     #                                                 min_value=.1, max_value=10., value = 1.0)
     optical_info['M_obj'] = st.slider('Magnification',
@@ -50,7 +50,7 @@ with columns[0]:
     optical_info['camera_pix_pitch'] = st.slider('Camera pixel size [um]',
                                                  min_value=3.0, max_value=12.0, value=6.5, step=0.5)
     medium_option = st.radio('Refractive index of the medium',
-                             ['Water: n = 1.35', 'Oil: n = 1.65'], 0)
+                             ['Water: n = 1.35', 'Oil: n = 1.52'], 0)
     # if medium_option == 'Water: n = 1.35':
     optical_info['n_medium'] = float(medium_option[-4:-1])
 
@@ -94,8 +94,7 @@ with columns[1]:
                         st.error('This file does specify the volume shape.')
                     except Exception as e:
                         st.error(e)
-                max_vol_shape = int(max(vol_shape))
-                vol_shape_default = [int(v) for v in vol_shape] #3 * [max_vol_shape]
+                vol_shape_default = [int(v) for v in vol_shape] 
                 optical_info['volume_shape'] = vol_shape_default
                 st.markdown(f"Using a cube volume shape with the dimension of the"
                             + f"loaded volume: {vol_shape_default}.")
