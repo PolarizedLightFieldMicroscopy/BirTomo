@@ -1,0 +1,20 @@
+
+Notes Reconstruction 15 June 2023
+
+Number of microlenses	9
+Pixels per microlens	17
+Number of voxels per microlens	1 (also called super sample 1 or SS1)
+Number of iterations	50
+Loss function		vector
+Volume regularization function	unit
+Regularization weight	0.00
+The current regularization weight is 0.001
+Retardance-Orientation weight	0.50
+The current retardance/orientation weight is 0.5
+Learning rate Delta_n	0.00
+The current LR is 0.001
+Learning rate Optic_axis	0.00
+The current optic axis LR is	0.001
+
+
+ReconSS1_voxelScanΔn1m2OA100X0Y0Z0.h5
