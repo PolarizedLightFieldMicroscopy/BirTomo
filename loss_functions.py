@@ -24,9 +24,9 @@ class CosineSimilarityLoss(nn.Module):
         return loss.mean()
 
 
-def apply_loss_function_and_reg(loss_type, reg_type, retardance_measurement, orientation_measurement,
+def apply_loss_function_and_reg(loss_type, reg_types, retardance_measurement, orientation_measurement,
                                 retardance_estimate, orientation_estimate, ret_orie_weight=0.5,
-                                volume_estimate=None, regularization_weight=0.5):
+                                volume_estimate=None, regularization_weights=0.01):
         
         if loss_type=='vonMisses':
             retardance_loss = F.mse_loss(retardance_measurement, retardance_estimate)
@@ -49,17 +49,32 @@ def apply_loss_function_and_reg(loss_type, reg_type, retardance_measurement, ori
             (2 * (1 - torch.cos(orientation_measurement - orientation_estimate)) * azimuth_damp_mask).mean()
 
         if volume_estimate is not None:
-            if reg_type=='L1':
-            # L1 or sparsity 
-                regularization_term = volume_estimate.Delta_n.abs().mean()
-            # L2 or sparsity 
-            elif reg_type=='L2':
-                regularization_term = (volume_estimate.Delta_n**2).mean()
-            # Unit length regularizer
-            elif reg_type=='unit':
-                regularization_term  = (1-(volume_estimate.optic_axis[0,...]**2+volume_estimate.optic_axis[1,...]**2+volume_estimate.optic_axis[2,...]**2)).abs().mean()
-            else:
-                regularization_term = torch.zeros([1], device=retardance_measurement.device)
+            if not isinstance(reg_types, list):
+                reg_types = [reg_types]
+            if not isinstance(regularization_weights, list):
+                regularization_weights = len(reg_types) * [regularization_weights]
+
+            regularization_term_total = torch.zeros([1], device=retardance_measurement.device)
+            for reg_type, reg_weight in zip(reg_types, regularization_weights):
+                if reg_type=='L1':
+                # L1 or sparsity 
+                    regularization_term = volume_estimate.Delta_n.abs().mean()
+                # L2 or sparsity 
+                elif reg_type=='L2':
+                    regularization_term = (volume_estimate.Delta_n**2).mean()
+                # Unit length regularizer
+                elif reg_type=='unit':
+                    regularization_term  = (1-(volume_estimate.optic_axis[0,...]**2+volume_estimate.optic_axis[1,...]**2+volume_estimate.optic_axis[2,...]**2)).abs().mean()
+                elif reg_type=='TV':
+                    delta_n = volume_estimate.get_delta_n()
+                    regularization_term =   (delta_n[1:,   ...] - delta_n[:-1, ...  ]).pow(2).sum() + \
+                                            (delta_n[:, 1:,...] - delta_n[:, :-1,...]).pow(2).sum() + \
+                                            (delta_n[:, :,  1:] - delta_n[:, :, :-1 ]).pow(2).sum()
+                else:
+                    regularization_term = torch.zeros([1], device=retardance_measurement.device)
+                
+                regularization_term_total += regularization_term * reg_weight
+
         
-        L = regularization_weight * data_term + (1-regularization_weight) * regularization_term
-        return L, data_term, regularization_term
+        L = data_term + regularization_term_total
+        return L, data_term, regularization_term_total
