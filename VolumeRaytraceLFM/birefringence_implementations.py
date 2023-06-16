@@ -390,6 +390,9 @@ class BirefringentVolume(BirefringentElement):
         
         return h5_file_path
 
+    def crop_to_volume_shape():
+        pass
+
     @staticmethod
     def init_from_file(h5_file_path, backend=BackEnds.NUMPY, optical_info=None):
         ''' Loads a birefringent volume from an h5 file and places it in the center of the volume
@@ -407,26 +410,30 @@ class BirefringentVolume(BirefringentElement):
         optic_axis = np.array(volume_file['data/optic_axis'])
 
         # Compute padding to match optica_info['volume_shape]
-        z_,y_, x_ = delta_n.shape
+        z_, y_, x_ = delta_n.shape
         z, y, x = optical_info['volume_shape']
-        assert z_<=z and y_<=y and x_<=x, f"Input volume is to large ({delta_n.shape}) for optical_info defined volume_shape {optical_info['volume_shape']}"
+        # assert z_<=z and y_<=y and x_<=x, f"Input volume is to large ({delta_n.shape}) for optical_info defined volume_shape {optical_info['volume_shape']}"
+        # TODO: change to strictly less than
+        if not (z_<=z and y_<=y and x_<=x):
+            # TODO: change because the rays are created without calling this volume_shape
+            optical_info['volume_shape'] = z_, y_, x_
+        else:
+            z_pad = abs(z_-z)
+            y_pad = abs(y_-y)
+            x_pad = abs(x_-x)
 
-        z_pad = abs(z_-z)
-        y_pad = abs(y_-y)
-        x_pad = abs(x_-x)
+            # Pad
+            delta_n = np.pad(delta_n,(
+                            (z_pad//2, z_pad//2 + z_pad%2),
+                            (y_pad//2, y_pad//2 + y_pad%2), 
+                            (x_pad//2, x_pad//2 + x_pad%2)),
+                        mode = 'constant').astype(np.float64)
 
-        # Pad
-        delta_n = np.pad(delta_n,(
-                        (z_pad//2, z_pad//2 + z_pad%2),
-                        (y_pad//2, y_pad//2 + y_pad%2), 
-                        (x_pad//2, x_pad//2 + x_pad%2)),
-                    mode = 'constant').astype(np.float64)
-
-        optic_axis = np.pad(optic_axis,((0,0),
-                        (z_pad//2, z_pad//2 + z_pad%2),
-                        (y_pad//2, y_pad//2 + y_pad%2), 
-                        (x_pad//2, x_pad//2 + x_pad%2)),
-                    mode = 'constant', constant_values=np.sqrt(3)).astype(np.float64)
+            optic_axis = np.pad(optic_axis,((0,0),
+                            (z_pad//2, z_pad//2 + z_pad%2),
+                            (y_pad//2, y_pad//2 + y_pad%2), 
+                            (x_pad//2, x_pad//2 + x_pad%2)),
+                        mode = 'constant', constant_values=np.sqrt(3)).astype(np.float64)
 
         # Create volume
         volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
@@ -606,16 +613,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.vox_indices_ml_shifted_all = []
         self.ray_valid_indices_all = None
         self.MLA_volume_geometry_ready = False
+
     def get_volume_reachable_region(self):
         ''' Returns a binary mask where the MLA's can reach into the volume'''
-
+        # TODO: Include the extra distance that the MLA's reach
         n_micro_lenses = self.optical_info['n_micro_lenses']
         n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
         n_ml_half = floor(n_micro_lenses * n_voxels_per_ml / 2.0)
+        self.vox_ctr_idx, _ = RayTraceLFM.find_center(self)
         mask = torch.zeros(self.optical_info['volume_shape'])
+        mask = torch.zeros(self.optical_info['volume_shape'], dtype=torch.bool)
         mask[:, 
             self.vox_ctr_idx[1]-n_ml_half+1 : self.vox_ctr_idx[1]+n_ml_half, 
             self.vox_ctr_idx[2]-n_ml_half+1 : self.vox_ctr_idx[2]+n_ml_half] = 1.0
+        mask[:, 
+            self.vox_ctr_idx[1]-n_ml_half+1 : self.vox_ctr_idx[1]+n_ml_half, 
+            self.vox_ctr_idx[2]-n_ml_half+1 : self.vox_ctr_idx[2]+n_ml_half] = True
         # mask_volume = BirefringentVolume(backend=self.backend, optical_info=self.optical_info, Delta_n=0.01, optic_axis=[0.5,0.5,0])
         # r,a = self.ray_trace_through_volume(mask_volume)
         
@@ -671,6 +684,54 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         self.MLA_volume_geometry_ready = True
         return
+    
+    # def calc_workspace(self, ) #TBD
+    def calc_lateral_ray_reach(self):
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
+        lateral_reach = n_micro_lenses * n_voxels_per_ml + 2 * self.voxel_span_per_ml
+        return lateral_reach
+ 
+    def pad_volume(self, volume_in : BirefringentVolume = None):
+        volume_shape = volume_in.optical_info['volume_shape']
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
+        lateral_range_rays = n_micro_lenses * n_voxels_per_ml + 2 * self.voxel_span_per_ml
+        lateral_diff = lateral_range_rays - volume_shape[1]
+        if lateral_diff > 0:
+            lateral_diff_half = np.ceil(lateral_diff / 2)
+            volume_in.Delta_n = np.pad(volume_in.Delta_n, ((0,0), (lateral_diff_half, lateral_diff_half), (lateral_diff_half, lateral_diff_half)))
+            volume_in.optic_axis = np.pad(volume_in.optic_axis, ((0,0), (0,0), (lateral_diff_half, lateral_diff_half), (lateral_diff_half, lateral_diff_half)))
+            new_Delta_n = np.pad(volume_in.Delta_n, ((0,0), (lateral_diff_half, lateral_diff_half), (lateral_diff_half, lateral_diff_half)))
+            new_optic_axis = np.pad(volume_in.optic_axis, ((0,0), (0,0), (lateral_diff_half, lateral_diff_half), (lateral_diff_half, lateral_diff_half)))
+        return volume_in
+
+    def create_reachable_volume_region(self, volume_in : BirefringentVolume = None):
+        lateral_range = self.calc_lateral_ray_reach()
+        volume_shape = volume_in.optical_info['volume_shape']
+        lateral_diff = lateral_range - volume_shape[1]
+        if lateral_diff > 0:
+            lateral_diff_half = np.ceil(lateral_diff / 2)
+            volume_in.Delta_n = np.pad(volume_in.Delta_n, ((0,0), (lateral_diff_half, lateral_diff_half), (lateral_diff_half, lateral_diff_half)))
+            volume_in.optic_axis = np.pad(volume_in.optic_axis, ((0,0), (0,0), (lateral_diff_half, lateral_diff_half), (lateral_diff_half, lateral_diff_half)))
+        # data_shape = volume_in.Delta_n.shape
+        elif lateral_diff < 0:
+            # lat_half = int(np.ceil(lateral_range / 2))
+            # DEBUG
+            pass
+            lat_half = int(np.ceil(lateral_range / 2))+5
+            vox_ctr_idx = np.array([volume_shape[0] / 2, volume_shape[1] / 2, volume_shape[2] / 2], dtype=int)
+            # vox_ctr_idx = vox_ctr_idx.astype(int)
+            # vox_ctr_idx, _ = RayTraceLFM.find_center(self)
+            volume_in.Delta_n = volume_in.Delta_n[:,
+                                    vox_ctr_idx[1]-lat_half+1 : vox_ctr_idx[1]+lat_half,
+                                    vox_ctr_idx[2]-lat_half+1 : vox_ctr_idx[2]+lat_half]
+            volume_in.optic_axis = volume_in.optic_axis[:,
+                                    :,
+                                vox_ctr_idx[1]-lat_half+1 : vox_ctr_idx[1]+lat_half,
+                                vox_ctr_idx[2]-lat_half+1 : vox_ctr_idx[2]+lat_half]
+        
+        return volume_in
  
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None, all_rays_at_once=True):
         """ This function forward projects a whole volume, by iterating through the volume in front of each micro-lens in the system.

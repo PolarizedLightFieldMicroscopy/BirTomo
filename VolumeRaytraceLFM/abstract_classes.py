@@ -154,7 +154,7 @@ class RayTraceLFM(OpticalElement):
         self.ray_vol_colli_lengths = None
         self.ray_direction_basis = None
 
-    def forward(self, volume_in ):
+    def forward(self, volume_in):
         '''Perform the forward model calculations.'''
         # Check if type of volume is the same as input volume, if one is provided
         # if volume_in is not None:
@@ -401,6 +401,18 @@ class RayTraceLFM(OpticalElement):
         ray_diff = ray_exit - ray_enter
         ray_diff = ray_diff / np.linalg.norm(ray_diff, axis=0)
         return ray_enter, ray_exit, ray_diff
+    
+    @staticmethod
+    def find_center(self):
+        # TODO: add voxel_span_per_ml term
+        valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
+        vol_shape = [self.optical_info['volume_shape'][0],] + 2*[valid_vol_shape]
+        voxel_size_um = self.optical_info['voxel_size_um']
+        # vox_ctr_idx is in index units
+        vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
+        self.vox_ctr_idx = vox_ctr_idx.astype(int)
+        self.volume_ctr_um = vox_ctr_idx * voxel_size_um # in vol units (um)
+        return self.vox_ctr_idx, self.volume_ctr_um
 
     def compute_rays_geometry(self, filename=None):
         '''Computes the ray-voxel collision based on the Siddon algorithm.
@@ -438,6 +450,8 @@ class RayTraceLFM(OpticalElement):
         #     # The valid workspace is defined by the number of micro-lenses
         # valid_vol_shape = self.optical_info['volume_shape'][1]
         # elif self.backend == BackEnds.PYTORCH:
+        # TODO: check if valid_vol_shape should be larger
+        #   misleading but does not matter for the purpose of finding the center voxel
         valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
 
         # Fetch needed variables
@@ -446,6 +460,7 @@ class RayTraceLFM(OpticalElement):
         nMedium = self.optical_info['n_medium']
         vol_shape = [self.optical_info['volume_shape'][0],] + 2*[valid_vol_shape]
         voxel_size_um = self.optical_info['voxel_size_um']
+        # TODO: call function above to get the center positions
         # vox_ctr_idx is in index units
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
         self.vox_ctr_idx = vox_ctr_idx.astype(int)
