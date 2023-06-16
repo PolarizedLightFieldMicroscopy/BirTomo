@@ -20,6 +20,7 @@ from PIL import Image
 import h5py
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import matplotlib 
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 from VolumeRaytraceLFM.optic_config import volume_2_projections
@@ -48,12 +49,19 @@ with columns[0]:
     # See loss_functions.py for more details
     loss_function = st.selectbox('Loss function',
                                 ['vonMisses', 'vector', 'L1_cos', 'L1all'], 1)
-    regularization_function = st.selectbox('Volume regularization function',
-                                ['L1', 'L2', 'unit', 'none'], 2)
-    reg_weight = st.number_input('Regularization weight', min_value=0., max_value=0.5, value=0.001)
-    st.write('The current regularization weight is ', reg_weight)
-    ret_azim_weight = st.number_input('Retardance-Orientation weight', min_value=0., max_value=0.5, value=0.5)
+    regularization_function1 = st.selectbox('Volume regularization function 1',
+                                ['L1', 'L2', 'unit', 'TV', 'none'], 2)
+    regularization_function2 = st.selectbox('Volume regularization function 2',
+                                ['L1', 'L2', 'unit', 'TV', 'none'], 4)
+    reg_weight1 = st.number_input('Regularization weight 1', min_value=0., max_value=0.5, value=0.001)
+    st.write('The current regularization weight 1 is ', reg_weight1)
+    reg_weight2 = st.number_input('Regularization weight 2', min_value=0., max_value=0.5, value=0.001)
+    st.write('The current regularization weight 2 is ', reg_weight2)
+    ret_azim_weight = st.number_input('Retardance-Orientation weight', min_value=0., max_value=1., value=0.5)
     st.write('The current retardance/orientation weight is ', ret_azim_weight)
+
+    delta_n_init_magnitude = st.number_input('Volume Delta_n initial magnitude', min_value=0., max_value=1., value=0.0001)
+    st.write('The current rVolume Delta_n initial magnitude is ', delta_n_init_magnitude)
     
     st.subheader('Learning rate')
     learning_rate_delta_n = st.number_input('Learning rate Delta_n', min_value=0.00000, max_value=0.500000, value=0.001)
@@ -242,12 +250,12 @@ with columns[1]:
 training_params = {
     'n_epochs' : n_epochs,                          # How long to train for
     'azimuth_weight' : ret_azim_weight,             # Azimuth loss weight
-    'regularization_weight' : reg_weight,           # Regularization weight
+    'regularization_weight' : [reg_weight1, reg_weight2],           # Regularization weight
     'lr' : learning_rate_delta_n,                   # Learning rate for delta_n
     'lr_optic_axis' : learning_rate_optic_axis,     # Learning rate for optic axis
     'output_posfix' : '',                           # Output file name posfix
     'loss' : loss_function,                         # Loss function
-    'reg' : regularization_function                 # Regularization function
+    'reg' : [regularization_function1, regularization_function2]                 # Regularization function
 }
 
 
@@ -309,7 +317,7 @@ if st.button("Reconstruct!"):
     # Let's rescale the random to initialize the volume
     volume_estimation.Delta_n.requires_grad = False
     volume_estimation.optic_axis.requires_grad = False
-    volume_estimation.Delta_n *= 0.0001
+    volume_estimation.Delta_n *= delta_n_init_magnitude
     # And mask out volume that is outside FOV of the microscope
     mask = rays.get_volume_reachable_region()
     volume_estimation.Delta_n[mask.view(-1)==0] = 0
@@ -377,6 +385,7 @@ if st.button("Reconstruct!"):
         my_bar.progress(percent_complete + 1)
 
         if ep%2==0:
+            matplotlib.pyplot.close()
             fig = plot_iteration_update(
                 volume_2_projections(Delta_n_GT.unsqueeze(0))[0,0].detach().cpu().numpy(),
                 ret_image_measured.detach().cpu().numpy(),
@@ -399,7 +408,8 @@ if st.button("Reconstruct!"):
     
     st.write("Scroll over image to zoom in and out.")
     # Todo: use a slider to filter the volume
-    volume_ths = 0.0 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
+    volume_ths = 0.05 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
+    matplotlib.pyplot.close()
     my_fig = st.session_state['my_volume'].plot_lines_plotly(delta_n_ths=volume_ths)
     st.plotly_chart(my_fig, use_container_width=True)
 

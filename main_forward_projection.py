@@ -83,8 +83,7 @@ if backend == BackEnds.PYTORCH:
 
 # Create a volume!
 
-# # Load volume from a file
-# # loaded_volume = BirefringentVolume.init_from_file("objects/bundleXY.h5", backend, optical_info)
+# Load volume from a file
 # loaded_volume = BirefringentVolume.init_from_file("objects/single_voxel.h5", backend, optical_info)
 # my_volume = loaded_volume
 

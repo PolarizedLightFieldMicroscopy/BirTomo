@@ -64,7 +64,6 @@ class BirefringentVolume(BirefringentElement):
                         optic_axis[:,n_voxel] /= oa_norm
                 # Set 4D shape again 
                 self.optic_axis = optic_axis.reshape(3, *self.volume_shape)
-                
 
                 self.Delta_n = Delta_n
                 assert len(self.Delta_n.shape) == 3, '3D Delta_n expected, as the optic_axis was provided as a 3D array'
@@ -105,29 +104,29 @@ class BirefringentVolume(BirefringentElement):
                     optic_axis /= norm
                 self.optic_axis = torch.from_numpy(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1) \
                                     .repeat(1, self.volume_shape[0], self.volume_shape[1], self.volume_shape[2])
-
                 self.Delta_n = Delta_n * torch.ones(self.volume_shape)
 
             # Check for not a number, for when the voxel optic_axis is all zeros
             self.Delta_n[torch.isnan(self.Delta_n)] = 0
             self.optic_axis[torch.isnan(self.optic_axis)] = 0
             # Store the data as pytorch parameters
-
             self.optic_axis = nn.Parameter(self.optic_axis.reshape(3,-1)).type(torch.get_default_dtype())
-            self.Delta_n = nn.Parameter(self.Delta_n.flatten() ).type(torch.get_default_dtype())
-
+            self.Delta_n = nn.Parameter(self.Delta_n.flatten()).type(torch.get_default_dtype())
 
         # Check if a volume creation was requested
         if volume_creation_args is not None:
-            self.init_volume(volume_creation_args['init_mode'], volume_creation_args['init_args'] if 'init_args' in volume_creation_args.keys() else {})
+            self.init_volume(volume_creation_args['init_mode'],
+                             volume_creation_args['init_args'] if 'init_args' in volume_creation_args.keys() else {})
 
     def get_delta_n(self):
+        '''Retrieves the birefringence as a 3D array'''
         if self.backend == BackEnds.PYTORCH:
             return self.Delta_n.view(self.optical_info['volume_shape'])
         else:
             return self.Delta_n
 
     def get_optic_axis(self):
+        '''Retrieves the optic axis as a 4D array'''
         if self.backend == BackEnds.PYTORCH:
             return self.optic_axis.view(3, self.optical_info['volume_shape'][0],
                                             self.optical_info['volume_shape'][1],
@@ -159,7 +158,7 @@ class BirefringentVolume(BirefringentElement):
             has_grads = True
             self.Delta_n.requires_grad = False
             self.optic_axis.requires_grad = False
-        
+
         self.Delta_n += other.Delta_n
         self.optic_axis += other.optic_axis
         # Maybe normalize axis again?
@@ -172,7 +171,8 @@ class BirefringentVolume(BirefringentElement):
 
 
     def plot_lines_plotly(self, opacity=0.5, mode='lines', colormap='Bluered_r', size_scaler=5, fig=None, draw_spheres=True, delta_n_ths=0.1):
-        
+        '''Plots the optic axis as lines and the birefringence as sphere at the ends of the lines.'''
+
         # Fetch local data
         delta_n = self.get_delta_n() * 1
         optic_axis = self.get_optic_axis() * 1
@@ -244,6 +244,11 @@ class BirefringentVolume(BirefringentElement):
 
         all_color[np.isnan(all_color)] = 0
 
+        err = ("The BirefringentVolume is expected to have non-zeros values. If the " +
+            "BirefringentVolume was cropped to fit into a region, the non-zero values " +
+            "may no longer be included.")
+        assert any(all_color != 0), err
+
         all_color[all_color!=0] -= all_color[all_color!=0].min()
         all_color += 0.5
         all_color /= all_color.max()
@@ -282,7 +287,8 @@ class BirefringentVolume(BirefringentElement):
 
     @staticmethod
     def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray', fig=None):
-        
+        '''Plots a 3D array with the non-zero voxels shaded.'''
+
         voxels = voxels_in * 1.0
         
         # Check if this is a torch tensor
@@ -293,6 +299,10 @@ class BirefringentVolume(BirefringentElement):
             except:
                 pass
         voxels = np.abs(voxels)
+        err = ("The set of voxels are expected to have non-zeros values. If the " +
+            "BirefringentVolume was cropped to fit into a region, the non-zero values " +
+            "may no longer be included.")
+        assert voxels.any(), err
                 
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
@@ -392,6 +402,57 @@ class BirefringentVolume(BirefringentElement):
         return h5_file_path
 
     @staticmethod
+    def crop_to_region_shape(delta_n, optic_axis, volume_shape, region_shape):
+        '''
+        Parameters:
+            delta_n (np.array): 3D array with dimension volume_shape
+            optic_axis (np.array): 4D array with dimension (3, *volume_shape)
+            volume_shape (np.array): dimensions of object volume
+            region_shape (np.array): dimensions of the region fitting the object,
+                                        values must be greater than volume_shape
+        Returns:
+            cropped_delta_n (np.array): 3D array with dimension region_shape
+            cropped_optic_axis (np.array): 4D array with dimension (3, *region_shape)
+        '''
+        assert (volume_shape >= region_shape).all(), "Error: volume_shape must be greater than region_shape"
+        crop_start = (volume_shape - region_shape) // 2
+        crop_end = crop_start + region_shape
+        cropped_delta_n = delta_n[crop_start[0]:crop_end[0], crop_start[1]:crop_end[1], crop_start[2]:crop_end[2]]
+        cropped_optic_axis = optic_axis[:, crop_start[0]:crop_end[0], crop_start[1]:crop_end[1], crop_start[2]:crop_end[2]]
+        return cropped_delta_n, cropped_optic_axis
+
+    @staticmethod
+    def pad_to_region_shape(delta_n, optic_axis, volume_shape, region_shape):
+        '''
+        Parameters:
+            delta_n (np.array): 3D array with dimension volume_shape
+            optic_axis (np.array): 4D array with dimension (3, *volume_shape)
+            volume_shape (np.array): dimensions of object volume
+            region_shape (np.array): dimensions of the region fitting the object,
+                                        values must be less than volume_shape
+        Returns:
+            padded_delta_n (np.array): 3D array with dimension region_shape
+            padded_optic_axis (np.array): 4D array with dimension (3, *region_shape)
+        '''
+        assert (volume_shape <= region_shape).all(), "Error: volume_shape must be less than region_shape"
+        z_,y_, x_ = region_shape
+        z, y, x = volume_shape
+        z_pad = abs(z_-z)
+        y_pad = abs(y_-y)
+        x_pad = abs(x_-x)
+        padded_delta_n = np.pad(delta_n,(
+                        (z_pad//2, z_pad//2 + z_pad%2),
+                        (y_pad//2, y_pad//2 + y_pad%2), 
+                        (x_pad//2, x_pad//2 + x_pad%2)),
+                    mode = 'constant').astype(np.float64)
+        padded_optic_axis = np.pad(optic_axis,((0,0),
+                    (z_pad//2, z_pad//2 + z_pad%2),
+                    (y_pad//2, y_pad//2 + y_pad%2), 
+                    (x_pad//2, x_pad//2 + x_pad%2)),
+                mode = 'constant', constant_values=np.sqrt(3)).astype(np.float64)
+        return padded_delta_n, padded_optic_axis
+
+    @staticmethod
     def init_from_file(h5_file_path, backend=BackEnds.NUMPY, optical_info=None):
         ''' Loads a birefringent volume from an h5 file and places it in the center of the volume
             It requires to have:
@@ -407,28 +468,17 @@ class BirefringentVolume(BirefringentElement):
         # Fetch optic_axis
         optic_axis = np.array(volume_file['data/optic_axis'])
 
-        # Compute padding to match optica_info['volume_shape]
-        z_,y_, x_ = delta_n.shape
-        z, y, x = optical_info['volume_shape']
-        assert z_<=z and y_<=y and x_<=x, f"Input volume is to large ({delta_n.shape}) for optical_info defined volume_shape {optical_info['volume_shape']}"
-
-        z_pad = abs(z_-z)
-        y_pad = abs(y_-y)
-        x_pad = abs(x_-x)
-
-        # Pad
-        delta_n = np.pad(delta_n,(
-                        (z_pad//2, z_pad//2 + z_pad%2),
-                        (y_pad//2, y_pad//2 + y_pad%2), 
-                        (x_pad//2, x_pad//2 + x_pad%2)),
-                    mode = 'constant').astype(np.float64)
-
-        optic_axis = np.pad(optic_axis,((0,0),
-                        (z_pad//2, z_pad//2 + z_pad%2),
-                        (y_pad//2, y_pad//2 + y_pad%2), 
-                        (x_pad//2, x_pad//2 + x_pad%2)),
-                    mode = 'constant', constant_values=np.sqrt(3)).astype(np.float64)
-
+        region_shape = np.array(optical_info['volume_shape'])
+        if (delta_n.shape == region_shape).all():
+            pass
+        elif (delta_n.shape >= region_shape).all():
+            delta_n, optic_axis = BirefringentVolume.crop_to_region_shape(delta_n, optic_axis, delta_n.shape, region_shape)
+        elif (delta_n.shape <= region_shape).all():
+            delta_n, optic_axis = BirefringentVolume.pad_to_region_shape(delta_n, optic_axis, delta_n.shape, region_shape)
+        else:
+            err = (f"BirefringentVolume has dimensions ({delta_n.shape}) that are not all greater " +
+                    f"than or less than the volume region dimensions ({region_shape}) set for the microscope")
+            raise ValueError(err)
         # Create volume
         volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
 
@@ -491,7 +541,6 @@ class BirefringentVolume(BirefringentElement):
         random_data = BirefringentVolume.generate_random_volume([n_planes])
         for z_ix in range(0,n_planes):
             vol[:,z_ranges[z_ix*2] : z_ranges[z_ix*2+1]] = np.expand_dims(random_data[:,z_ix],[1,2,3]).repeat(1,1).repeat(volume_shape[1],2).repeat(volume_shape[2],3)
-        
         return vol
     
     @staticmethod
@@ -607,6 +656,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.vox_indices_ml_shifted_all = []
         self.ray_valid_indices_all = None
         self.MLA_volume_geometry_ready = False
+
     def get_volume_reachable_region(self):
         ''' Returns a binary mask where the MLA's can reach into the volume'''
 
