@@ -57,7 +57,7 @@ class BirefringentVolume(BirefringentElement):
             if isinstance(optic_axis, np.ndarray) and len(optic_axis.shape) == 4:
                 self.volume_shape = optic_axis.shape[1:]
                 # flatten all the voxels in order to normalize them
-                optic_axis = optic_axis.reshape(3, self.volume_shape[0]* self.volume_shape[1]* self.volume_shape[2])
+                optic_axis = optic_axis.reshape(3, self.volume_shape[0]* self.volume_shape[1]* self.volume_shape[2]).astype(np.float64)
                 for n_voxel in range(len(optic_axis[0,...])):
                     oa_norm = np.linalg.norm(optic_axis[:,n_voxel]) 
                     if oa_norm > 0:
