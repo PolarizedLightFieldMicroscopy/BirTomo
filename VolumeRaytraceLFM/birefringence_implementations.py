@@ -595,6 +595,8 @@ class BirefringentVolume(BirefringentElement):
             # Create empty volume
             volume = BirefringentVolume(backend=backend, optical_info=optical_info, volume_creation_args={'init_mode' : 'zeros'})
             # Set delta_n
+            volume.Delta_n.requires_grad = False
+            volume.optic_axis.requires_grad = False
             volume.get_delta_n()[volume_axial_offset,
                                             vox_ctr_idx[1],
                                             vox_ctr_idx[2]] = voxel_delta_n
@@ -603,6 +605,8 @@ class BirefringentVolume(BirefringentElement):
                                     vox_ctr_idx[1],
                                     vox_ctr_idx[2]] \
                                     = voxel_birefringence_axis
+            volume.Delta_n.requires_grad = True
+            volume.optic_axis.requires_grad = True
 
         elif vol_type in ["ellipsoid", "shell"]:    # whole plane
             ellipsoid_args = {  'radius' : [5.5, 9.5, 5.5],

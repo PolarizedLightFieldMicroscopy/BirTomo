@@ -37,15 +37,15 @@ with columns[0]:
     optical_info = BirefringentVolume.get_optical_info_template()
     # Alter some of the optical parameters
     st.subheader('Optical')
-    optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=51, value=11)
+    optical_info['n_micro_lenses'] = st.slider('Number of microlenses', min_value=1, max_value=51, value=9)
     optical_info['pixels_per_ml'] = st.slider('Pixels per microlens', min_value=1, max_value=33, value=17, step=2)
     # GT volume simulation
-    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (volume sampling)', min_value=1, max_value=7, value=5)
+    optical_info['n_voxels_per_ml'] = st.slider('Number of voxels per microlens (volume sampling)', min_value=1, max_value=7, value=1)
 
 ############ Reconstruction settings #################
     backend = BackEnds.PYTORCH
     st.subheader("Iterative reconstruction parameters")
-    n_epochs = st.slider('Number of iterations', min_value=1, max_value=100, value=10)
+    n_epochs = st.slider('Number of iterations', min_value=1, max_value=500, value=500)
     # See loss_functions.py for more details
     loss_function = st.selectbox('Loss function',
                                 ['vonMisses', 'vector', 'L1_cos', 'L1all'], 1)
@@ -53,20 +53,25 @@ with columns[0]:
                                 ['L1', 'L2', 'unit', 'TV', 'none'], 2)
     regularization_function2 = st.selectbox('Volume regularization function 2',
                                 ['L1', 'L2', 'unit', 'TV', 'none'], 4)
-    reg_weight1 = st.number_input('Regularization weight 1', min_value=0., max_value=0.5, value=0.001)
+    reg_weight1 = st.number_input('Regularization weight 1', min_value=0., max_value=0.5, value=0.5)
     st.write('The current regularization weight 1 is ', reg_weight1)
-    reg_weight2 = st.number_input('Regularization weight 2', min_value=0., max_value=0.5, value=0.001)
+    reg_weight2 = st.number_input('Regularization weight 2', min_value=0., max_value=0.5, value=0.5)
     st.write('The current regularization weight 2 is ', reg_weight2)
     ret_azim_weight = st.number_input('Retardance-Orientation weight', min_value=0., max_value=1., value=0.5)
     st.write('The current retardance/orientation weight is ', ret_azim_weight)
 
-    delta_n_init_magnitude = st.number_input('Volume Delta_n initial magnitude', min_value=0., max_value=1., value=0.0001)
-    st.write('The current rVolume Delta_n initial magnitude is ', delta_n_init_magnitude)
+    volume_init_type = st.selectbox('Initial volume type',
+                                       ['random', 'upload'], 0)
+    if volume_init_type == 'upload':
+        h5file_init = st.file_uploader("Upload the initial volume h5 Here", type=['h5'])        
+    else:
+        delta_n_init_magnitude = st.number_input('Volume Delta_n initial magnitude', min_value=0., max_value=1., value=0.0001)
+        st.write('The current rVolume Delta_n initial magnitude is ', delta_n_init_magnitude)
     
     st.subheader('Learning rate')
-    learning_rate_delta_n = st.number_input('Learning rate Delta_n', min_value=0.00000, max_value=0.500000, value=0.001)
+    learning_rate_delta_n = st.number_input('Learning rate Delta_n', min_value=0.0, max_value=10.0, value=0.001)
     st.write('The current LR is ', learning_rate_delta_n)
-    learning_rate_optic_axis = st.number_input('Learning rate Optic_axis', min_value=0.00000, max_value=0.500000, value=0.001)
+    learning_rate_optic_axis = st.number_input('Learning rate Optic_axis', min_value=0.0, max_value=10.0, value=0.001)
     st.write('The current optic axis LR is ', learning_rate_optic_axis)
 
     
@@ -87,7 +92,7 @@ with columns[1]:
                                 ['h5 upload', 'Create a new volume', 'Upload experimental images'], index=1)
         if how_get_vol == 'h5 upload':
             h5file = st.file_uploader("Upload Volume h5 Here", type=['h5'])
-            optical_info['n_voxels_per_ml_volume'] = st.slider('Number of voxels per microlens in volume space', min_value=1, max_value=21, value=3)
+            optical_info['n_voxels_per_ml_volume'] = st.slider('Number of voxels per microlens in volume', min_value=1, max_value=21, value=1)
             if h5file is not None:
                 with h5py.File(h5file) as file:
                     try:
@@ -185,24 +190,24 @@ with columns[1]:
                                                         min_value=1, max_value=50, value=15)
             # y will follow x if x is changed. x will not follow y if y is changed
             optical_info['volume_shape'][1] = st.slider('Y-Z volume dimension',
-                                                        min_value=1, max_value=100, value=99)
+                                                        min_value=1, max_value=100, value=51)
             optical_info['volume_shape'][2] = optical_info['volume_shape'][1]
             
         else:
             optical_info['n_voxels_per_ml_volume'] = st.slider('Number of voxels per microlens in volume space', min_value=1, max_value=21, value=1)
             volume_type = st.selectbox('Volume type',
-                                       ['ellipsoid','shell','2ellipsoids','single_voxel'], 1)
+                                       ['ellipsoid','shell','2ellipsoids','single_voxel'], 3)
             st.subheader('Volume shape')
             optical_info['volume_shape'][0] = st.slider('Axial volume dimension',
-                                                        min_value=1, max_value=50, value=15)
+                                                        min_value=1, max_value=50, value=5)
             # y will follow x if x is changed. x will not follow y if y is changed
             optical_info['volume_shape'][1] = st.slider('Y-Z volume dimension',
-                                                        min_value=1, max_value=100, value=99)
+                                                        min_value=1, max_value=100, value=51)
             optical_info['volume_shape'][2] = optical_info['volume_shape'][1]
 
             shift_from_center = st.slider('Axial shift from center [voxels]',
                                         min_value = -int(optical_info['volume_shape'][0] / 2),
-                                        max_value = int(optical_info['volume_shape'][0] / 2), value = 0)
+                                        max_value = int(optical_info['volume_shape'][0] / 2), value = -2)
             volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
     # Create the volume based on the selections.
     with volume_container:
@@ -211,8 +216,8 @@ with columns[1]:
                 # Lets create a new optical info for volume space, as the sampling might be higher than the reconstruction
                 optical_info_volume = copy.deepcopy(optical_info)
                 optical_info_volume['n_voxels_per_ml'] = optical_info_volume['n_voxels_per_ml_volume']
-                optical_info_volume['volume_shape'][1] = 501
-                optical_info_volume['volume_shape'][2] = 501
+                # optical_info_volume['volume_shape'][1] = 501
+                # optical_info_volume['volume_shape'][2] = 501
 
                 st.session_state['my_volume'] = BirefringentVolume.init_from_file(
                                                         h5file,
@@ -231,8 +236,8 @@ with columns[1]:
             # Lets create a new optical info for volume space, as the sampling might be higher than the reconstruction
             optical_info_volume = copy.deepcopy(optical_info)
             optical_info_volume['n_voxels_per_ml'] = optical_info_volume['n_voxels_per_ml_volume']
-            optical_info_volume['volume_shape'][1] = 501
-            optical_info_volume['volume_shape'][2] = 501
+            # optical_info_volume['volume_shape'][1] = 501
+            # optical_info_volume['volume_shape'][2] = 501
             with torch.no_grad():
                 st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(
                                                     backend=backend,
@@ -311,18 +316,25 @@ if st.button("Reconstruct!"):
     ############# 
     # Let's create an optimizer
     # Initial guess
-    volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_info, \
-                                    volume_creation_args = {'init_mode' : 'random'})
+    if volume_init_type == 'upload' and h5file_init is not None:
+        volume_estimation = BirefringentVolume.init_from_file(
+                                        h5file_init,
+                                        backend=backend,
+                                        optical_info=optical_info
+                                        )
+    else:
+        volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_info, \
+                                        volume_creation_args = {'init_mode' : 'random'})
 
-    # Let's rescale the random to initialize the volume
-    volume_estimation.Delta_n.requires_grad = False
-    volume_estimation.optic_axis.requires_grad = False
-    volume_estimation.Delta_n *= delta_n_init_magnitude
-    # And mask out volume that is outside FOV of the microscope
-    mask = rays.get_volume_reachable_region()
-    volume_estimation.Delta_n[mask.view(-1)==0] = 0
-    volume_estimation.Delta_n.requires_grad = True
-    volume_estimation.optic_axis.requires_grad = True
+        # Let's rescale the random to initialize the volume
+        volume_estimation.Delta_n.requires_grad = False
+        volume_estimation.optic_axis.requires_grad = False
+        volume_estimation.Delta_n *= delta_n_init_magnitude
+        # And mask out volume that is outside FOV of the microscope
+        mask = rays.get_volume_reachable_region()
+        volume_estimation.Delta_n[mask.view(-1)==0] = 0
+        volume_estimation.Delta_n.requires_grad = True
+        volume_estimation.optic_axis.requires_grad = True
 
     # Indicate to this object that we are going to optimize Delta_n and optic_axis
     volume_estimation.members_to_learn.append('Delta_n')

@@ -31,7 +31,7 @@ def apply_loss_function_and_reg(loss_type, reg_types, retardance_measurement, or
         if loss_type=='vonMisses':
             retardance_loss = F.mse_loss(retardance_measurement, retardance_estimate)
             angular_loss = (1 - F.cosine_similarity(orientation_measurement, orientation_estimate)).mean()
-            data_term = ret_orie_weight * retardance_loss + (1 - ret_orie_weight) * angular_loss
+            data_term = (1 - ret_orie_weight) * retardance_loss + ret_orie_weight * angular_loss
         
         # Vector difference
         if loss_type=='vector':
@@ -40,8 +40,9 @@ def apply_loss_function_and_reg(loss_type, reg_types, retardance_measurement, or
             data_term = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).mean()
         
         elif loss_type=='L1_cos':
-            data_term = orientation_estimate * (retardance_measurement - retardance_estimate).abs().mean() + \
-                (1-ret_orie_weight) * torch.cos(orientation_measurement - orientation_estimate).abs().mean()
+            data_term = (1 - ret_orie_weight) * F.l1_loss(retardance_measurement, retardance_estimate) + \
+                ret_orie_weight * torch.cos(orientation_measurement - orientation_estimate).abs().mean()
+            
             
         elif loss_type=='L1all':
             azimuth_damp_mask = (retardance_measurement / retardance_measurement.max()).detach()
