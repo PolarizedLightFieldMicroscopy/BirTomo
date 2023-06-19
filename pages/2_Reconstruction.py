@@ -207,7 +207,7 @@ with columns[1]:
 
             shift_from_center = st.slider('Axial shift from center [voxels]',
                                         min_value = -int(optical_info['volume_shape'][0] / 2),
-                                        max_value = int(optical_info['volume_shape'][0] / 2), value = -2)
+                                        max_value = int(optical_info['volume_shape'][0] / 2), value = -1)
             volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
     # Create the volume based on the selections.
     with volume_container:
