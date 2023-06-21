@@ -17,8 +17,8 @@ from VolumeRaytraceLFM.birefringence_implementations import  (
 )
 
 # Select backend method
-backend = BackEnds.PYTORCH
-# backend = BackEnds.NUMPY
+# backend = BackEnds.PYTORCH
+backend = BackEnds.NUMPY
 
 if backend == BackEnds.PYTORCH:
     import torch
@@ -32,12 +32,12 @@ optical_info['volume_shape'] = [15, 51, 51]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['cube_voxels'] = True
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 5
+optical_info['n_micro_lenses'] = 1
 optical_info['n_voxels_per_ml'] = 1
 # Create non-identity polarizers and analyzers
 # LC-PolScope setup
-# optical_info['polarizer'] = JonesMatrixGenerators.polscope_analyzer()
-# optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator_modes(setting=0, swing=0)
+optical_info['polarizer'] = JonesMatrixGenerators.universal_compensator_modes(setting=2, swing=0.03)
+# optical_info['analyzer'] = JonesMatrixGenerators.polscope_analyzer()
 
 
 # Volume type
@@ -92,9 +92,9 @@ my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info
                                                    vol_type=volume_type,
                                                    volume_axial_offset=volume_axial_offset)
 # Save the volume as a file
-my_description = "Shell created from a section of an ellipsoid with an optic axis normal to the \
-                  surface of the shell."
-my_volume.save_as_file('objects/shell_rect_voxels.h5', description=my_description)
+# my_description = "Shell created from a section of an ellipsoid with an optic axis normal to the \
+                #   surface of the shell."
+# my_volume.save_as_file('objects/shell_rect_voxels.h5', description=my_description)
 
 
 # # Plot ray geometry

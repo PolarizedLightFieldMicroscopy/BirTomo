@@ -585,6 +585,8 @@ class BirefringentVolume(BirefringentElement):
         # What's the center of the volume?
         vox_ctr_idx = np.array([optical_info['volume_shape'][0] / 2, optical_info['volume_shape'][1] / 2, optical_info['volume_shape'][2] / 2]).astype(int)
         if vol_type == "single_voxel" or vol_type == 'zeros':
+            if backend == BackEnds.NUMPY:
+                raise NotImplementedError("There is not a NUMPY single_voxel or zeros volume method implemented. Use PYTORCH instead.")
             voxel_delta_n = 0.01
             if vol_type == 'zeros':
                 voxel_delta_n = 0
@@ -842,6 +844,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         else:
             raise NotImplementedError
         return azimuth
+
+    def intensity_JM(self, JM):
+        '''Intensity of the output light assuming unpolarized input light'''
+        if self.backend == BackEnds.NUMPY:
+            # TODO: verify that the summing axis is correct
+            E_out = np.sum(JM, axis=1)
+            intensity = np.linalg.norm(E_out) ** 2
+        else:
+            raise NotImplementedError
+        return intensity
 
     def calc_cummulative_JM_of_ray(self, volume_in : BirefringentVolume, micro_lens_offset=[0,0]):
         if self.backend==BackEnds.NUMPY:
