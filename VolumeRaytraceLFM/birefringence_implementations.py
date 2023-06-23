@@ -1097,11 +1097,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 full_img_a = full_img_row_a
             else:
                 if self.backend == BackEnds.NUMPY:
-                    full_img_list = [np.concatenate((img0, img1), 0) for img0, img1 in zip(full_img_list, full_img_row_list)]
+                    full_img_list = [np.concatenate((img0, img1), 1) for img0, img1 in zip(full_img_list, full_img_row_list)]
                     full_img_r = np.concatenate((full_img_r, full_img_row_r), 1)
                     full_img_a = np.concatenate((full_img_a, full_img_row_a), 1)
                 elif self.backend == BackEnds.PYTORCH:
-                    full_img_list = [torch.cat((img0, img1), 0) for img0, img1 in zip(full_img_list, full_img_row_list)]
+                    full_img_list = [torch.cat((img0, img1), 1) for img0, img1 in zip(full_img_list, full_img_row_list)]
                     full_img_r = torch.cat((full_img_r, full_img_row_r), 1)
                     full_img_a = torch.cat((full_img_a, full_img_row_a), 1)
         return full_img_list
@@ -1151,7 +1151,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         pixels_per_ml = self.optical_info['pixels_per_ml']
         lenslet_JM = self.calc_cummulative_JM_lenslet_numpy(volume_in, micro_lens_offset)
         intensity_image_list = [np.zeros((pixels_per_ml, pixels_per_ml))] * 5
-        for setting in range(4):
+        for setting in range(5):
             polarizer = JonesMatrixGenerators.universal_compensator_modes(setting=setting, swing=swing)
             E_out = analyzer @ lenslet_JM @ polarizer @ JonesVectorGenerators.horizonal()
             intensity = np.linalg.norm(E_out, axis=2) ** 2

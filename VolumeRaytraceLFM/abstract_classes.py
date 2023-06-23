@@ -62,7 +62,9 @@ class OpticalElement(OpticBlock):
                             'camera_pix_pitch'  : 6.5,
                             # Polarization information
                             'polarizer'         : np.array([[1, 0], [0, 1]]),
-                            'analyzer'          : np.array([[1, 0], [0, 1]])}
+                            'analyzer'          : np.array([[1, 0], [0, 1]]),
+                            'polarizer_swing'   : 0.03,
+                            }
 
     def __init__(self, backend : BackEnds = BackEnds.NUMPY, torch_args={},
                 optical_info={}):

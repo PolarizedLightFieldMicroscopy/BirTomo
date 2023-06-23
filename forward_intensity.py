@@ -25,14 +25,14 @@ optical_info['volume_shape'] = [15, 51, 51]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['cube_voxels'] = True
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 1
+optical_info['n_micro_lenses'] = 3
 optical_info['n_voxels_per_ml'] = 1
 # Create non-identity polarizers and analyzers
 # LC-PolScope setup
 # optical_info['polarizer'] = JonesMatrixGenerators.universal_compensator_modes(setting=2, swing=0.03)
 # optical_info['analyzer'] = JonesMatrixGenerators.polscope_analyzer()
 optical_info['analyzer'] = JonesMatrixGenerators.left_circular_polarizer()
-optical_info['polarizer_swing'] = 0.3
+optical_info['polarizer_swing'] = 0.03
 
 
 # number is the shift from the end of the volume, change it as you wish,
