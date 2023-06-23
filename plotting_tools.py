@@ -313,7 +313,7 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
     plt.subplot(1,3,1)
     plt.imshow(ret_image,cmap=colormap)
     plt.colorbar(fraction=0.046, pad=0.04)
-    plt.title(F'Retardance')
+    plt.title('Retardance')
     plt.subplot(1,3,2)
     plt.imshow(np.rad2deg(azim_image), cmap=colormap)
     plt.colorbar(fraction=0.046, pad=0.04)
@@ -325,6 +325,51 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
         plot_birefringence_colorized(ret_image, azim_image)
     plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Retardance & Orientation')
+    return fig
+
+def plot_images(image_list):
+    num_images = len(image_list)
+
+    # Calculate the number of rows and columns for the subplots
+    rows = int(np.sqrt(num_images))
+    cols = int(np.ceil(num_images / rows))
+
+    # Create a figure and subplots
+    fig, axes = plt.subplots(rows, cols)
+
+    # Flatten the axes if necessary
+    if num_images == 1:
+        axes = np.array([axes])
+
+    # Iterate over the image list and plot each image
+    for i, image in enumerate(image_list):
+        ax = axes.flatten()[i]
+        ax.imshow(image, cmap='gray')
+        ax.axis('off')
+
+    # Adjust the layout of subplots
+    fig.tight_layout()
+    return fig
+
+def plot_intensity_images(image_list):
+    num_images = len(image_list)
+    fig, axes = plt.subplots(1, num_images, figsize=(12, 2.5))
+
+    # Flatten the axes if necessary
+    if num_images == 1:
+        axes = np.array([axes])
+
+    # Iterate over the image list and plot each image
+    for i, image in enumerate(image_list):
+        ax = axes.flatten()[i]
+        im = ax.imshow(image, cmap='gray')
+        ax.axis('off')
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        ax.set_title(f'$\Sigma_{i}$')
+    plt.suptitle('Intensity images at various polarizer settings')
+
+    # Adjust the layout of subplots
+    fig.tight_layout()
     return fig
 
 def plot_iteration_update(
@@ -350,8 +395,7 @@ def plot_iteration_update(
     plt.imshow(azim_meas)
     plt.colorbar()
     plt.title('Measured orientation')
-    
-    
+
     # Plot predictions
     plt.subplot(2,4,5)
     plt.imshow(vol_current)
