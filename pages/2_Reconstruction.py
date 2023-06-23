@@ -263,7 +263,6 @@ training_params = {
     'reg' : [regularization_function1, regularization_function2]                 # Regularization function
 }
 
-
 if st.button("Reconstruct!"):
     my_volume = st.session_state['my_volume']
     # output_dir = f'reconstructions/recons_{volume_type}_{optical_info["volume_shape"][0]} \
@@ -272,7 +271,6 @@ if st.button("Reconstruct!"):
     # torch.save({'optical_info' : optical_info,
     #             'training_params' : training_params,
     #             'volume_type' : volume_type}, f'{output_dir}/parameters.pt')
-
 
     # Create a Birefringent Raytracer
     rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
@@ -286,7 +284,6 @@ if st.button("Reconstruct!"):
         print(f'Using computing device: {device}')
         rays = rays.to(device)
 
-
     with torch.no_grad():
         if how_get_vol == 'Upload experimental images':
             ret_image_measured  =  st.session_state['ret_image_measured']
@@ -297,12 +294,11 @@ if st.button("Reconstruct!"):
             azim_image_measured *= torch.pi / azim_image_measured.max()
         else:
             # We need a raytracer with different number of voxels per ml for higher sampling measurements
-
             rays_higher_sampling = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info_volume)
             rays_higher_sampling.compute_rays_geometry()
             # Perform same calculation with torch
             start_time = time.time()
-            ret_image_measured, azim_image_measured = rays_higher_sampling.ray_trace_through_volume(my_volume)
+            [ret_image_measured, azim_image_measured] = rays_higher_sampling.ray_trace_through_volume(my_volume)
             execution_time = (time.time() - start_time)
             print('Warmup time in seconds with Torch: ' + str(execution_time))
 
@@ -372,7 +368,7 @@ if st.button("Reconstruct!"):
         optimizer.zero_grad()
         
         # Forward projection
-        ret_image_current, azim_image_current = rays.ray_trace_through_volume(volume_estimation)
+        [ret_image_current, azim_image_current] = rays.ray_trace_through_volume(volume_estimation)
 
         # Conpute loss and regularization        
         L, data_term, regularization_term = apply_loss_function_and_reg(training_params['loss'], training_params['reg'], ret_image_measured, azim_image_measured, 

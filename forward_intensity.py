@@ -48,15 +48,15 @@ rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 #   get stored/loaded from a file
 startTime = time.time()
 rays.compute_rays_geometry()
-executionTime = (time.time() - startTime)
+executionTime = time.time() - startTime
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
 # Load volume from a file
 loaded_volume = BirefringentVolume.init_from_file("objects/single_voxel.h5", backend, optical_info)
 my_volume = loaded_volume
 
-image_list = rays.ray_trace_through_volume_intensity(my_volume)
-executionTime = (time.time() - startTime)
+image_list = rays.ray_trace_through_volume(my_volume, intensity=True)
+executionTime = time.time() - startTime
 print(f'Execution time in seconds with backend {backend}: ' + str(executionTime))
 
 my_fig = plot_intensity_images(image_list)

@@ -253,8 +253,8 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
                                     Delta_n=delta_n, optic_axis=optic_axis)
     
     # Compute retardance and azimuth images with both methods
-    ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ret_and_azim_images(voxel_numpy)
-    ret_img_torch, azi_img_torch = BF_raytrace_torch.ret_and_azim_images(voxel_torch)
+    [ret_img_numpy, azi_img_numpy] = BF_raytrace_numpy.ret_and_azim_images(voxel_numpy)
+    [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ret_and_azim_images(voxel_torch)
     # Use this in debug console to visualize errors
     # plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
@@ -311,8 +311,8 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     assert BF_raytrace_torch.optical_info == voxel_torch_random.optical_info, 'Mismatch on RayTracer and volume optical_info torch'
     
     with np.errstate(divide='raise'):
-        ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
-    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
+        [ret_img_numpy, azi_img_numpy] = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
+    [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
     
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
@@ -368,9 +368,9 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     assert BF_raytrace_torch.optical_info == voxel_torch_random.optical_info, 'Mismatch on RayTracer and volume optical_info torch'
     
     with np.errstate(divide='raise'):
-        ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
-    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
-    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
+        [ret_img_numpy, azi_img_numpy] = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
+    [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
+    [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
     
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
@@ -425,9 +425,9 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
     assert BF_raytrace_torch.optical_info == voxel_torch_random.optical_info, 'Mismatch on RayTracer and volume optical_info torch'
     
     with np.errstate(divide='raise'):
-        ret_img_numpy, azi_img_numpy = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
-    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
-    ret_img_torch, azi_img_torch = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
+        [ret_img_numpy, azi_img_numpy] = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
+    [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
+    [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
     
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
@@ -475,7 +475,7 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
 
 
     # Compute a forward projection
-    ret_image, azim_image = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
+    [ret_image, azim_image] = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
     # Calculate a loss, for example minimizing the mean of both images
     L = ret_image.mean() + azim_image.mean()
 
@@ -535,12 +535,12 @@ def speed_speed(global_data, volume_init_mode):
     # Set all gradients to zero
     optimizer.zero_grad()
 
-    ret_image, azim_image = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
+    [ret_image, azim_image] = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
 
     import torch.autograd.profiler as profiler
     with profiler.profile(with_stack=True, profile_memory=True) as prof:
         # Compute a forward projection
-        ret_image, azim_image = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
+        [ret_image, azim_image] = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
         # Calculate a loss, for example minimizing the mean of both images
         # L = ret_image.mean() + azim_image.mean()
 

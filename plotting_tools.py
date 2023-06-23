@@ -10,7 +10,6 @@ def explode(data):
     return data_e
 
 def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to_plot=None, colormap='inferno', use_matplotlib=False):
-
     # is optical_config a Waveblocks object or a dictionary?
     wave_blocks_found = False
     if wave_blocks_found and isinstance(optical_config, OpticConfig):
@@ -38,7 +37,7 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
 
     # Define grid 
     z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
-    
+
     x_coords += 0.5
     y_coords += 0.5
     z_coords += 0.5
@@ -50,7 +49,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
 
     # Fast rendering with matplotlib
     if use_matplotlib:
-        
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
         ax.scatter((z_indices+offset)*dxy,(y_indices+offset)*dxy,(x_indices+offset)*dxy, s=dxy)
@@ -73,11 +71,7 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
         # plt.savefig('output.png')
         plt.show()
     else:
-
-        
         import plotly.graph_objects as go
-        
-
         # Draw entry and exit point
         fig = go.Figure(data=go.Scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2],
             marker=dict(
@@ -90,7 +84,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
             color='blue',  # set color to an array/list of desired values
             colorscale='Viridis',   # choose a colorscale
             )))
-
         # Draw the whole volume span
         fig.add_mesh3d(
                 # 8 vertices of a cube
@@ -107,11 +100,9 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
                 j = [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                 k = [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
             )
-        
         # Draw all the voxels
         cmap = matplotlib.cm.get_cmap(colormap)
         for vix in range(len(z_indices)):
-            
             voxel_color = 0.5 / len(z_indices)
             opacity = data_to_plot[vix] / max(data_to_plot)
             if data_to_plot is not None:
@@ -129,8 +120,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
                 alphahull=5,
                 opacity=opacity/2,
                 color=voxel_color)
-        
-        
         fig.update_layout(
         scene = dict(
                     xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
@@ -145,7 +134,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
         fig.update_coloraxes(showscale=False)
         fig.update(layout_coloraxis_showscale=False)
     fig.show()
-
 
 def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=None, use_matplotlib=False):
 
@@ -256,8 +244,6 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
 
         fig.show()
 
-
-
 def plot_birefringence_lines(retardance_img, azimuth_img, origin='lower', upscale=1, cmap='Wistia_r', line_color='blue', ax=None):
     # TODO: don't plot if retardance is zero
     # Get pixel coords
@@ -287,7 +273,6 @@ def plot_birefringence_lines(retardance_img, azimuth_img, origin='lower', upscal
     ax.autoscale()
     ax.margins(0.1)
     return im
-
 
 def plot_birefringence_colorized(retardance_img, azimuth_img):
     # Get pixel coords

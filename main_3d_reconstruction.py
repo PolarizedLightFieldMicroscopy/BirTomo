@@ -109,7 +109,7 @@ my_volume = volume_GT.to(device)
 with torch.no_grad():
     # Perform same calculation with torch
     startTime = time.time()
-    ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(volume_GT)
+    [ret_image_measured, azim_image_measured] = rays.ray_trace_through_volume(volume_GT)
     executionTime = (time.time() - startTime)
     print('Warmup time in seconds with Torch: ' + str(executionTime))
 
@@ -183,7 +183,7 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     optimizer.zero_grad()
 
     # Forward project
-    ret_image_current, azim_image_current = rays.ray_trace_through_volume(volume_estimation)
+    [ret_image_current, azim_image_current] = rays.ray_trace_through_volume(volume_estimation)
     # Vector difference
     co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
     data_term = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).mean()
