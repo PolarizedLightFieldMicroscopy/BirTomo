@@ -1,4 +1,3 @@
 import streamlit as st
 
-st.write("Test words on the About.py page")
-
+st.write("You found the About.py page")

@@ -32,7 +32,7 @@ optical_info['volume_shape'] = [15, 51, 51]
 optical_info['axial_voxel_size_um'] = 1.0
 optical_info['cube_voxels'] = True
 optical_info['pixels_per_ml'] = 17
-optical_info['n_micro_lenses'] = 5
+optical_info['n_micro_lenses'] = 3
 optical_info['n_voxels_per_ml'] = 1
 # Create non-identity polarizers and analyzers
 # LC-PolScope setup
@@ -69,7 +69,7 @@ rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 #   get stored/loaded from a file
 startTime = time.time()
 rays.compute_rays_geometry()
-executionTime = (time.time() - startTime)
+executionTime = time.time() - startTime
 print('Ray-tracing time in seconds: ' + str(executionTime))
 
 # Move ray tracer to GPU
@@ -90,7 +90,7 @@ if backend == BackEnds.PYTORCH:
 # Create a volume
 my_volume = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info,
                                                    vol_type=volume_type,
-                                                   volume_axial_offset=volume_axial_offset).to(device)
+                                                   volume_axial_offset=volume_axial_offset)
 # Save the volume as a file
 my_description = "Shell created from a section of an ellipsoid with an optic axis normal to the \
                   surface of the shell."
@@ -108,8 +108,8 @@ my_volume.save_as_file('objects/shell_rect_voxels.h5', description=my_descriptio
 # plotly_figure.show()
 
 startTime = time.time()
-ret_image, azim_image = rays.ray_trace_through_volume(my_volume)
-executionTime = (time.time() - startTime)
+[ret_image, azim_image] = rays.ray_trace_through_volume(my_volume)
+executionTime = time.time() - startTime
 print(f'Execution time in seconds with backend {backend}: ' + str(executionTime))
 
 if backend == BackEnds.PYTORCH:

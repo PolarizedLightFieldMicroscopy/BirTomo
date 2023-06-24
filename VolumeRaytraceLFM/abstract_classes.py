@@ -3,17 +3,16 @@
 from enum import Enum
 import pickle
 from os.path import exists
+import copy
 import numpy as np
 import matplotlib.pyplot as plt
 
 # Packages needed for siddon algorithm calculations
 from VolumeRaytraceLFM.my_siddon import (siddon_params, siddon_midpoints,
-                                         vox_indices, siddon_lengths, siddon)
-import copy
+                                         vox_indices, siddon_lengths)
 
-# Optional imports: as the classes here depend on Waveblocks Opticblock.
-# We create a dummy class for the case where either Waveblocks is not installed
-# Or the user just don't wan to use it
+# Optional imports: as the classes here depend on OpticBlock, we create a dummy
+#   that will work with only numpy
 try:
     import torch
     import torch.nn as nn
@@ -35,16 +34,13 @@ class SimulType(Enum):
     # DIPOLES         = 4     # Voxels add light depending on their angle with respect to the dipole
     # etc. attenuators and di-attenuators (polarization dependent)
 
-
 class BackEnds(Enum):
     ''' Defines type of backend (numpy,pytorch,etc)'''
     NUMPY       = 1     # Use numpy back-end
     PYTORCH     = 2     # Use Pytorch, with auto-differentiation and GPU support.
 
-
 class OpticalElement(OpticBlock):
     ''' Abstract class defining a elements, with a back-end ans some optical information'''
-
     default_optical_info = {
                             # Volume information
                             'volume_shape'      : 3*[1],
@@ -62,7 +58,9 @@ class OpticalElement(OpticBlock):
                             'camera_pix_pitch'  : 6.5,
                             # Polarization information
                             'polarizer'         : np.array([[1, 0], [0, 1]]),
-                            'analyzer'          : np.array([[1, 0], [0, 1]])}
+                            'analyzer'          : np.array([[1, 0], [0, 1]]),
+                            'polarizer_swing'   : 0.03,
+                            }
 
     def __init__(self, backend : BackEnds = BackEnds.NUMPY, torch_args={},
                 optical_info={}):
@@ -72,9 +70,8 @@ class OpticalElement(OpticBlock):
         assert len(optical_info) > 0, f'Optical info (optical_info) dictionary needed: \
                         use OpticalElement.default_optical_info as reference \
                         {OpticalElement.default_optical_info}'
-
         # Compute voxel size
-        if optical_info['cube_voxels'] == False:
+        if optical_info['cube_voxels'] is False:
             optical_info['voxel_size_um'] = (
                 [optical_info['axial_voxel_size_um'],]
                 + 2*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch']
@@ -86,7 +83,6 @@ class OpticalElement(OpticBlock):
             3*[optical_info['pixels_per_ml'] * optical_info['camera_pix_pitch']
             / optical_info['M_obj']]
             )
-
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks
         # compatibility.
         if backend==BackEnds.PYTORCH:
@@ -111,13 +107,11 @@ class OpticalElement(OpticBlock):
                     new_torch_args['optic_config'].pol_config.analyzer = optical_info['analyzer']
                 except:
                     print('Error: Polarizer and Analyzer not found in optical_info')
-
             super(OpticalElement, self).__init__(
                     optic_config=new_torch_args['optic_config'],
                     members_to_learn=new_torch_args['members_to_learn']
                         if 'members_to_learn' in new_torch_args.keys() else []
                     )
-
         # Store variables
         self.backend = backend
         self.simul_type = SimulType.NOT_SPECIFIED
@@ -166,7 +160,6 @@ class RayTraceLFM(OpticalElement):
 
 ###########################################################################################
     # Helper functions
-
     @staticmethod
     def ravel_index(x, dims):
         '''Method used for debugging'''
@@ -264,7 +257,6 @@ class RayTraceLFM(OpticalElement):
                 )
             )
         return normal_vec
-
 
     @staticmethod
     def calc_ray_direction(ray):
@@ -505,7 +497,6 @@ class RayTraceLFM(OpticalElement):
                     voxels_of_segs = []
                     seg_mids = []
                     voxel_intersection_lengths = []
-
                 else:
                     siddon_list = siddon_params(start, stop, voxel_size_um, vol_shape)
                     seg_mids = siddon_midpoints(start, stop, siddon_list)

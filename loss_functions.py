@@ -11,8 +11,6 @@ class VonMisesLoss(nn.Module):
         diff = orientation_pred - orientation_gt
         loss = 1 - torch.exp(self.kappa * torch.cos(diff))
         return loss.mean()
-    
-
 
 class CosineSimilarityLoss(nn.Module):
     def __init__(self):
@@ -23,27 +21,21 @@ class CosineSimilarityLoss(nn.Module):
         loss = 1 - cos_sim
         return loss.mean()
 
-
 def apply_loss_function_and_reg(loss_type, reg_types, retardance_measurement, orientation_measurement,
                                 retardance_estimate, orientation_estimate, ret_orie_weight=0.5,
                                 volume_estimate=None, regularization_weights=0.01):
-        
         if loss_type=='vonMisses':
             retardance_loss = F.mse_loss(retardance_measurement, retardance_estimate)
             angular_loss = (1 - F.cosine_similarity(orientation_measurement, orientation_estimate)).mean()
             data_term = (1 - ret_orie_weight) * retardance_loss + ret_orie_weight * angular_loss
-        
         # Vector difference
         if loss_type=='vector':
             co_gt, ca_gt = retardance_measurement*torch.cos(orientation_measurement), retardance_measurement*torch.sin(orientation_measurement)
             co_pred, ca_pred = retardance_estimate*torch.cos(orientation_estimate), retardance_estimate*torch.sin(orientation_estimate)
             data_term = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).mean()
-        
         elif loss_type=='L1_cos':
             data_term = (1 - ret_orie_weight) * F.l1_loss(retardance_measurement, retardance_estimate) + \
                 ret_orie_weight * torch.cos(orientation_measurement - orientation_estimate).abs().mean()
-            
-            
         elif loss_type=='L1all':
             azimuth_damp_mask = (retardance_measurement / retardance_measurement.max()).detach()
             data_term = (retardance_measurement - retardance_estimate).abs().mean() + \
@@ -73,9 +65,7 @@ def apply_loss_function_and_reg(loss_type, reg_types, retardance_measurement, or
                                             (delta_n[:, :,  1:] - delta_n[:, :, :-1 ]).pow(2).sum()
                 else:
                     regularization_term = torch.zeros([1], device=retardance_measurement.device)
-                
                 regularization_term_total += regularization_term * reg_weight
 
-        
         L = data_term + regularization_term_total
         return L, data_term, regularization_term_total

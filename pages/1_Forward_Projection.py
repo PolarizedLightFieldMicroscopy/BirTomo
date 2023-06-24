@@ -194,7 +194,7 @@ def forward_propagate():
             rays = rays.to(device)
 
         start_time = time.time()
-        ret_image, azim_image = rays.ray_trace_through_volume(st.session_state['my_volume'])
+        [ret_image, azim_image] = rays.ray_trace_through_volume(st.session_state['my_volume'])
         execution_time = (time.time() - start_time)
         st.text(f'Execution time in seconds with backend {backend}: ' + str(execution_time))
 
