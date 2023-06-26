@@ -1,11 +1,15 @@
 '''User interface for forward projection using the Streamlit package'''
 import time         # to measure ray tracing time
+from datetime import datetime
+import os
 import h5py         # for reading h5 volume files
 import streamlit as st
-from plotting_tools import plot_retardance_orientation
+import matplotlib.pyplot as plt
+from VolumeRaytraceLFM.util import save_as_tif
+from plotting_tools import plot_retardance_orientation, plot_intensity_images
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
-    BirefringentVolume, BirefringentRaytraceLFM
+    BirefringentVolume, BirefringentRaytraceLFM, JonesMatrixGenerators
 )
 try:
     import torch
@@ -27,9 +31,8 @@ st.session_state['optical_info'] = BirefringentVolume.get_optical_info_template(
 optical_info = st.session_state['optical_info']
 # st.write(optical_info)
 
-columns = st.columns(2)
-# First Column
-with columns[0]:
+column1, column2 = st.columns(2)
+with column1:
 ############ Optical Params #################
     # Alter some of the optical parameters
     st.subheader('Optical')
@@ -68,8 +71,7 @@ def key_investigator(key_home, my_str='', prefix='- '):
             my_str = key_investigator(key_home[my_key], my_str, '\t'+prefix)
     return my_str
 
-# Second Column
-with columns[1]:
+with column2:
 ############ Volume #################
     st.subheader('Volume')
     volume_container = st.container() # set up a home for other volume selections to go
@@ -96,7 +98,7 @@ with columns[1]:
                         st.error(e)
                 vol_shape_default = [int(v) for v in vol_shape] 
                 optical_info['volume_shape'] = vol_shape_default
-                st.markdown(f"Using a cube volume shape with the dimension of the"
+                st.markdown("Using a cube volume shape with the dimension of the"
                             + f"loaded volume: {vol_shape_default}.")
 
                 display_h5 = st.checkbox("Display h5 file contents")                
@@ -104,7 +106,8 @@ with columns[1]:
                     with h5py.File(h5file) as file:
                         st.markdown('**File Structure:**\n' + key_investigator(file))
                         try:
-                            st.markdown('**Description:** '+str(file['optical_info']['description'][()])[2:-1])
+                            st.markdown('**Description:** '
+                                        +str(file['optical_info']['description'][()])[2:-1])
                         except KeyError:
                             st.error('This file does not have a description.')
                         except Exception as e:
@@ -182,7 +185,7 @@ def forward_propagate():
         rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
         start_time = time.time()
         rays.compute_rays_geometry()
-        execution_time = (time.time() - start_time)
+        execution_time = time.time() - start_time
         st.text('Ray-tracing time in seconds: ' + str(execution_time))
 
         # Move ray tracer to GPU
@@ -195,7 +198,7 @@ def forward_propagate():
 
         start_time = time.time()
         [ret_image, azim_image] = rays.ray_trace_through_volume(st.session_state['my_volume'])
-        execution_time = (time.time() - start_time)
+        execution_time = time.time() - start_time
         st.text(f'Execution time in seconds with backend {backend}: ' + str(execution_time))
 
         if backend == BackEnds.PYTORCH:
@@ -208,12 +211,54 @@ def forward_propagate():
     except KeyError:
         st.error('Please chose a volume first!')
     return None
+
+def forward_propagate_intensity():
+    '''Ray trace through the volume'''
+    try:
+        rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
+        start_time = time.time()
+        rays.compute_rays_geometry()
+        execution_time = time.time() - start_time
+        st.text('Ray-tracing time in seconds: ' + str(execution_time))
+
+        # Move ray tracer to GPU
+        if backend == BackEnds.PYTORCH:
+            # Disable gradients
+            torch.set_grad_enabled(False)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            st.text(f'Using computing device: {device}')
+            rays = rays.to(device)
+
+        start_time = time.time()
+        my_image_list = rays.ray_trace_through_volume(st.session_state['my_volume'],
+                                                    intensity=True)
+        execution_time = time.time() - start_time
+        st.text(f'Execution time in seconds with backend {backend}: ' + str(execution_time))
+
+        if backend == BackEnds.PYTORCH:
+            my_image_list = [img.numpy() for img in my_image_list]
+
+        st.session_state['image_list'] = my_image_list
+
+        st.success("Geometric ray tracing was successful!", icon="✅")
+    except KeyError:
+        st.error('Please chose a volume first!')
+    return None
+
+def filter_practical_variables(variables):
+    '''Reduce to basically just the user defined variables.'''
+    practical_vars = {}
+    for var_name, var_value in variables.items():
+        # Filter based on criteria
+        u_var = var_name.startswith('_')
+        if isinstance(var_value, (int, float, str, list, tuple)) and not u_var:
+            practical_vars[var_name] = var_value
+    return practical_vars
 ########################################################################
 # Now we calculate based on the selected inputs
 st.header("Retardance and orientation images")
 
-# st.write(st.session_state)
-if st.button('Calculate!'):
+if st.button('Calculate!', key='calc1'):
     forward_propagate()
 
 if "ret_image" in st.session_state:
@@ -223,5 +268,69 @@ if "ret_image" in st.session_state:
     output_azim_image = st.session_state['azim_image']
     my_fig = plot_retardance_orientation(output_ret_image, output_azim_image, azimuth_plot_type)
     st.pyplot(my_fig)
-
     st.success("Images were successfully created!", icon="✅")
+
+# Save images locally
+current_date = datetime.now().strftime("%Y-%m-%d")
+default_directory = os.path.join("forward_results", current_date)
+save_directory = st.text_input("Enter the directory path to save the images",
+                               value=default_directory)
+
+if st.button("Save images as PNGs", use_container_width=True):
+    os.makedirs(save_directory, exist_ok=True)
+    file_path = os.path.join(save_directory, "retardance.png")
+    plt.imsave(file_path, output_ret_image, cmap='gray')
+    st.success(f"Figure saved at {file_path}")
+    file_path = os.path.join(save_directory, "orientation.png")
+    plt.imsave(file_path, output_azim_image, cmap='gray')
+    st.success(f"Figure saved at {file_path}")
+    file_path = os.path.join(save_directory, "collection.png")
+    my_fig.savefig(file_path)
+    st.success(f"Figure saved at {file_path}")
+
+st.markdown("Provide information to save with the images as part of the **TIF metadata**. " + \
+            "The optical info and variables selected above will also be saved.")
+practical_variables = filter_practical_variables(locals())
+default_metadata = {
+    'Description': '',
+    'Comments': '',
+    'Optical info': optical_info,
+    'Streamlit parameters': practical_variables
+}
+metadata = default_metadata
+metadata['Description'] = st.text_area("Description", default_metadata['Description'])
+metadata['Comments'] = st.text_area("Comments", default_metadata['Comments'])
+if st.button("Save images as TIFs", use_container_width=True):
+    file_path = os.path.join(save_directory, "retardance.tiff")
+    save_as_tif(file_path, output_ret_image, metadata)
+    st.success(f"Figure saved at {file_path}")
+    file_path = os.path.join(save_directory, "orientation.tiff")
+    save_as_tif(file_path, output_azim_image, metadata)
+    st.success(f"Figure saved at {file_path}")
+
+st.subheader("Intensity images")
+if backend == BackEnds.PYTORCH:
+    st.error("Use the numpy backend for the intensity images. " + \
+             "The pytorch backend is not fully implemented yet.")
+else:
+    optical_info['polarizer_swing'] = st.slider('Swing retardance',
+                                    min_value=0.01, max_value=0.1, value=0.03)
+    if st.button('Calculate!', key='calc2'):
+        optical_info['analyzer'] = JonesMatrixGenerators.left_circular_polarizer()
+        forward_propagate_intensity()
+if 'image_list' in st.session_state:
+    image_list = st.session_state['image_list']
+    intensity_fig = plot_intensity_images(image_list)
+    st.pyplot(intensity_fig)
+    st.success("Images were successfully created!", icon="✅")
+
+if st.button("Save image as PNG", use_container_width=True):
+    os.makedirs(save_directory, exist_ok=True)
+    file_path = os.path.join(save_directory, "intensity_frames.png")
+    intensity_fig.savefig(file_path)
+    st.success(f"Figure saved at {file_path}")
+
+if st.button("Save image as TIF", use_container_width=True):
+    file_path = os.path.join(save_directory, "intensity_frames.tiff")
+    save_as_tif(file_path, image_list, metadata)
+    st.success(f"Figure saved at {file_path}")

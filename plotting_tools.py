@@ -350,9 +350,12 @@ def plot_intensity_images(image_list):
         im = ax.imshow(image, cmap='gray')
         ax.axis('off')
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        ax.set_title(f'$\Sigma_{i}$')
+        ax.set_title(fr'$\Sigma_{i}$', usetex = True)
     plt.suptitle('Intensity images at various polarizer settings')
-
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "Helvetica"
+    })
     # Adjust the layout of subplots
     fig.tight_layout()
     return fig
