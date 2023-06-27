@@ -26,7 +26,7 @@ optical_info['n_micro_lenses'] = 19
 optical_info['n_voxels_per_ml'] = 1
 
 training_params = {
-    'n_epochs' : 51,                      # How long to train for
+    'n_epochs' : 501,                      # How long to train for
     'azimuth_weight' : .5,                   # Azimuth loss weight
     'regularization_weight' : 1.0,          # Regularization weight
     'lr' : 1e-3,                            # Learning rate
@@ -43,14 +43,14 @@ volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center #
 volume_type = '30ellipsoids'
 # volume_type = 'ellipsoid'
 # volume_type = 'shell'
-# volume_type = 'single_voxel'
+volume_type = 'single_voxel'
 
 # Plot azimuth
 # azimuth_plot_type = 'lines'
 azimuth_plot_type = 'hsv'
 
 # Create output directory
-output_dir = f'reconstructions/g_recons_{volume_type}_{optical_info["volume_shape"][0]}' \
+output_dir = f'reconstructions/2023_recons_{volume_type}_{optical_info["volume_shape"][0]}' \
                 + f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}__{training_params["output_posfix"]}'
 os.makedirs(output_dir, exist_ok=True)
 torch.save({'optical_info' : optical_info,
@@ -58,7 +58,7 @@ torch.save({'optical_info' : optical_info,
             'volume_type' : volume_type}, f'{output_dir}/parameters.pt')
 
 if volume_type == 'single_voxel':
-    optical_info['n_micro_lenses'] = 1
+    optical_info['n_micro_lenses'] = 3
     azimuth_plot_type = 'lines'
 
 
@@ -92,24 +92,24 @@ volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_inf
                                                     vol_type=volume_type, \
                                                     volume_axial_offset=volume_axial_offset)
 
-# volume_GT = BirefringentVolume.init_from_file('objects/bundleX_E.h5', backend, optical_info)
+volume_GT = BirefringentVolume.init_from_file('objects/SingleVoxelScans/voxelScanVolH5Files/voxelScanΔn1m2OA100X1Y0Z0.h5', backend, optical_info)
 
 # Move volume to GPU if avaliable
 my_volume = volume_GT.to(device)
 # Plot volume
-with torch.no_grad():
-    # Plot the optic axis and birefringence within the volume
-    plotly_figure = volume_GT.plot_lines_plotly()
-    # Append volumes to plot
-    plotly_figure = volume_GT.plot_volume_plotly(optical_info, voxels_in=volume_GT.get_delta_n(), opacity=0.02, fig=plotly_figure)
-    plotly_figure.show()
+# with torch.no_grad():
+#     # Plot the optic axis and birefringence within the volume
+#     plotly_figure = volume_GT.plot_lines_plotly()
+#     # Append volumes to plot
+#     plotly_figure = volume_GT.plot_volume_plotly(optical_info, voxels_in=volume_GT.get_delta_n(), opacity=0.02, fig=plotly_figure)
+#     plotly_figure.show()
 
 
 # Forward project the GT volume and store the measurments
 with torch.no_grad():
     # Perform same calculation with torch
     startTime = time.time()
-    ret_image_measured, azim_image_measured = rays.ray_trace_through_volume(volume_GT)
+    [ret_image_measured, azim_image_measured] = rays.ray_trace_through_volume(volume_GT)
     executionTime = (time.time() - startTime)
     print('Warmup time in seconds with Torch: ' + str(executionTime))
 
@@ -134,7 +134,7 @@ volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_inf
 # Let's rescale the random to initialize the volume
 volume_estimation.Delta_n.requires_grad = False
 volume_estimation.optic_axis.requires_grad = False
-volume_estimation.Delta_n *= 0.0001
+volume_estimation.Delta_n *= 0.01
 # And mask out volume that is outside FOV of the microscope
 mask = rays.get_volume_reachable_region()
 volume_estimation.Delta_n[mask.view(-1)==0] = 0
@@ -183,7 +183,7 @@ for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
     optimizer.zero_grad()
 
     # Forward project
-    ret_image_current, azim_image_current = rays.ray_trace_through_volume(volume_estimation)
+    [ret_image_current, azim_image_current] = rays.ray_trace_through_volume(volume_estimation)
     # Vector difference
     co_pred, ca_pred = ret_image_current*torch.cos(azim_image_current), ret_image_current*torch.sin(azim_image_current)
     data_term = ((co_gt-co_pred)**2 + (ca_gt-ca_pred)**2).mean()

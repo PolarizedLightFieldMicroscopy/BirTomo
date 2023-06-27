@@ -10,7 +10,6 @@ def explode(data):
     return data_e
 
 def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to_plot=None, colormap='inferno', use_matplotlib=False):
-
     # is optical_config a Waveblocks object or a dictionary?
     wave_blocks_found = False
     if wave_blocks_found and isinstance(optical_config, OpticConfig):
@@ -38,7 +37,7 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
 
     # Define grid 
     z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
-    
+
     x_coords += 0.5
     y_coords += 0.5
     z_coords += 0.5
@@ -50,7 +49,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
 
     # Fast rendering with matplotlib
     if use_matplotlib:
-        
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
         ax.scatter((z_indices+offset)*dxy,(y_indices+offset)*dxy,(x_indices+offset)*dxy, s=dxy)
@@ -73,11 +71,7 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
         # plt.savefig('output.png')
         plt.show()
     else:
-
-        
         import plotly.graph_objects as go
-        
-
         # Draw entry and exit point
         fig = go.Figure(data=go.Scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2],
             marker=dict(
@@ -90,7 +84,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
             color='blue',  # set color to an array/list of desired values
             colorscale='Viridis',   # choose a colorscale
             )))
-
         # Draw the whole volume span
         fig.add_mesh3d(
                 # 8 vertices of a cube
@@ -107,11 +100,9 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
                 j = [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                 k = [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
             )
-        
         # Draw all the voxels
         cmap = matplotlib.cm.get_cmap(colormap)
         for vix in range(len(z_indices)):
-            
             voxel_color = 0.5 / len(z_indices)
             opacity = data_to_plot[vix] / max(data_to_plot)
             if data_to_plot is not None:
@@ -129,8 +120,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
                 alphahull=5,
                 opacity=opacity/2,
                 color=voxel_color)
-        
-        
         fig.update_layout(
         scene = dict(
                     xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
@@ -145,7 +134,6 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
         fig.update_coloraxes(showscale=False)
         fig.update(layout_coloraxis_showscale=False)
     fig.show()
-
 
 def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=None, use_matplotlib=False):
 
@@ -256,8 +244,6 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
 
         fig.show()
 
-
-
 def plot_birefringence_lines(retardance_img, azimuth_img, origin='lower', upscale=1, cmap='Wistia_r', line_color='blue', ax=None):
     # TODO: don't plot if retardance is zero
     # Get pixel coords
@@ -288,7 +274,6 @@ def plot_birefringence_lines(retardance_img, azimuth_img, origin='lower', upscal
     ax.margins(0.1)
     return im
 
-
 def plot_birefringence_colorized(retardance_img, azimuth_img):
     # Get pixel coords
     colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[0], 3])
@@ -313,7 +298,7 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
     plt.subplot(1,3,1)
     plt.imshow(ret_image,cmap=colormap)
     plt.colorbar(fraction=0.046, pad=0.04)
-    plt.title(F'Retardance')
+    plt.title('Retardance')
     plt.subplot(1,3,2)
     plt.imshow(np.rad2deg(azim_image), cmap=colormap)
     plt.colorbar(fraction=0.046, pad=0.04)
@@ -325,6 +310,58 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
         plot_birefringence_colorized(ret_image, azim_image)
     plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Retardance & Orientation')
+    plt.rcParams.update({
+        "text.usetex": False,
+        "font.family": "sans-serif"
+    })
+    return fig
+
+def plot_images(image_list):
+    num_images = len(image_list)
+
+    # Calculate the number of rows and columns for the subplots
+    rows = int(np.sqrt(num_images))
+    cols = int(np.ceil(num_images / rows))
+
+    # Create a figure and subplots
+    fig, axes = plt.subplots(rows, cols)
+
+    # Flatten the axes if necessary
+    if num_images == 1:
+        axes = np.array([axes])
+
+    # Iterate over the image list and plot each image
+    for i, image in enumerate(image_list):
+        ax = axes.flatten()[i]
+        ax.imshow(image, cmap='gray')
+        ax.axis('off')
+
+    # Adjust the layout of subplots
+    fig.tight_layout()
+    return fig
+
+def plot_intensity_images(image_list):
+    num_images = len(image_list)
+    fig, axes = plt.subplots(1, num_images, figsize=(12, 2.5))
+
+    # Flatten the axes if necessary
+    if num_images == 1:
+        axes = np.array([axes])
+
+    # Iterate over the image list and plot each image
+    for i, image in enumerate(image_list):
+        ax = axes.flatten()[i]
+        im = ax.imshow(image, cmap='gray')
+        ax.axis('off')
+        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        ax.set_title(fr'$\Sigma_{i}$', usetex = True)
+    plt.suptitle('Intensity images at various polarizer settings')
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "sans-serif"
+    })
+    # Adjust the layout of subplots
+    fig.tight_layout()
     return fig
 
 def plot_iteration_update(
@@ -350,8 +387,7 @@ def plot_iteration_update(
     plt.imshow(azim_meas)
     plt.colorbar()
     plt.title('Measured orientation')
-    
-    
+
     # Plot predictions
     plt.subplot(2,4,5)
     plt.imshow(vol_current)

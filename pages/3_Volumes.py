@@ -27,7 +27,6 @@ with columns[0]:
                                     min_value = -20, \
                                     max_value = 20,value = 0)
     volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-    
     backend = BackEnds.NUMPY
 
 with columns[1]:
@@ -75,7 +74,7 @@ with volume_container: # now that we know backend and shift, we can fill in the 
 
             st.session_state['my_volume'] = BirefringentVolume.init_from_file(h5file, backend=backend, \
                                                     optical_info=optical_info)
-            
+
     else:
         volume_type = st.selectbox('Volume type',['ellipsoid','shell','2ellipsoids','single_voxel'], 2)
         st.session_state['my_volume'] = BirefringentVolume.create_dummy_volume(backend=backend, optical_info=optical_info, \
