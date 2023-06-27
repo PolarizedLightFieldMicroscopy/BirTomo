@@ -55,7 +55,7 @@ with column1:
     medium_option = st.radio('Refractive index of the medium',
                              ['Water: n = 1.35', 'Oil: n = 1.52'], 0)
     # if medium_option == 'Water: n = 1.35':
-    optical_info['n_medium'] = float(medium_option[-4:-1])
+    optical_info['n_medium'] = float(medium_option[-4:])
 
     # st.write("Computed voxel size [um]:", optical_info['voxel_size_um'])
 
@@ -270,6 +270,10 @@ if "ret_image" in st.session_state:
     st.pyplot(my_fig)
     st.success("Images were successfully created!", icon="✅")
 
+####### saving the same way as script ##########
+# file_path = os.path.join(save_directory, "retardance_immediate.tiff")
+# save_as_tif(file_path, ret_image, metadata)
+
 # Save images locally
 current_date = datetime.now().strftime("%Y-%m-%d")
 default_directory = os.path.join("forward_results", current_date)
@@ -301,6 +305,7 @@ metadata = default_metadata
 metadata['Description'] = st.text_area("Description", default_metadata['Description'])
 metadata['Comments'] = st.text_area("Comments", default_metadata['Comments'])
 if st.button("Save images as TIFs", use_container_width=True):
+    os.makedirs(save_directory, exist_ok=True)
     file_path = os.path.join(save_directory, "retardance.tiff")
     save_as_tif(file_path, output_ret_image, metadata)
     st.success(f"Figure saved at {file_path}")

@@ -310,6 +310,10 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
         plot_birefringence_colorized(ret_image, azim_image)
     plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Retardance & Orientation')
+    plt.rcParams.update({
+        "text.usetex": False,
+        "font.family": "sans-serif"
+    })
     return fig
 
 def plot_images(image_list):
@@ -354,7 +358,7 @@ def plot_intensity_images(image_list):
     plt.suptitle('Intensity images at various polarizer settings')
     plt.rcParams.update({
         "text.usetex": True,
-        "font.family": "Helvetica"
+        "font.family": "sans-serif"
     })
     # Adjust the layout of subplots
     fig.tight_layout()
