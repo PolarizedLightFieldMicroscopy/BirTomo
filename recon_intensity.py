@@ -62,8 +62,6 @@ if volume_type == 'single_voxel':
     optical_info['n_micro_lenses'] = 3
     azimuth_plot_type = 'lines'
 
-
-
 # Create a Birefringent Raytracer
 rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
 
@@ -86,8 +84,6 @@ if backend == BackEnds.PYTORCH:
     print(f'Using computing device: {device}')
     rays = rays.to(device)
 
-
-
 # Create a volume
 volume_GT = BirefringentVolume.create_dummy_volume( backend=backend, optical_info=optical_info, \
                                                     vol_type=volume_type, \
@@ -106,12 +102,14 @@ my_volume = volume_GT.to(device)
 #     plotly_figure = volume_GT.plot_volume_plotly(optical_info, voxels_in=volume_GT.get_delta_n(), opacity=0.02, fig=plotly_figure)
 #     plotly_figure.show()
 
-
 # Forward project the GT volume and store the measurments
 with torch.no_grad():
     # Perform same calculation with torch
     startTime = time.time()
-    [ret_image_measured, azim_image_measured] = rays.ray_trace_through_volume(volume_GT)
+    if intensity:
+        image_list = rays.ray_trace_through_volume(volume_GT, intensity=True)
+    else:
+        [ret_image_measured, azim_image_measured] = rays.ray_trace_through_volume(volume_GT)
     executionTime = (time.time() - startTime)
     print('Warmup time in seconds with Torch: ' + str(executionTime))
 
@@ -119,12 +117,10 @@ with torch.no_grad():
     # Detach from the Pytorch graph
     Delta_n_GT = volume_GT.get_delta_n().detach().clone()
     optic_axis_GT = volume_GT.get_optic_axis().detach().clone()
-    ret_image_measured = ret_image_measured.detach()
-    azim_image_measured = azim_image_measured.detach()
+    image_list = [img.detach() for img in image_list]
     
     # Save volume to disk
     volume_GT.save_as_file(f'{output_dir}/volume_gt.h5')
-
 
 ############# 
 # Let's create an optimizer
@@ -151,15 +147,6 @@ volume_estimation = volume_estimation.to(device)
 
 trainable_parameters = volume_estimation.get_trainable_variables()
 
-
-#############
-# Create regularization network
-# reg_net = N()
-
-# for name, param in reg_net.named_parameters():
-#     trainable_parameters.append(param)
-# #############
-
 # Create optimizer and loss function
 print(f'Creating an optimizer')
 optimizer = torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
@@ -172,7 +159,6 @@ regularization_term_losses = []
 plt.ion()
 figure = plt.figure(figsize=(18,9))
 plt.rcParams['image.origin'] = 'lower'
-
 
 # Create weight mask for the azimuth
 # as the azimuth is irrelevant when the retardance is low, lets scale error with a mask

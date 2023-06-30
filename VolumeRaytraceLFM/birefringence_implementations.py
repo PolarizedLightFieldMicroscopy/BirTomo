@@ -1184,8 +1184,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return effective_JM
 
     @staticmethod
-    def ret_and_azim_from_intensity(image_list):
-        raise NotImplementedError
+    def ret_and_azim_from_intensity(imgs, swing):
+        '''Note: this function is still in development.'''
+        if len(imgs) != 5:
+            raise NotImplementedError
+        # using arctan vs arctan2 does not seem to make a difference
+        A = (imgs[1] - imgs[2]) / (imgs[1] + imgs[2] - 2 * imgs[0]) * np.arctan(swing / 2)
+        B = (imgs[4] - imgs[3]) / (imgs[4] + imgs[3] - 2 * imgs[0]) * np.arctan(swing / 2)
+        ret = np.arctan(np.sqrt(A ** 2, B ** 2))
+        test_value = imgs[1] + imgs[2] - 2 * imgs[0]
+        indices = np.where(test_value < 0)
+        ret[indices] = 2 * np.pi - ret[indices]
+        azim = 0.5 * np.arctan2(A, B)
+        # azim = 0.5 * np.arctan2(A, B) + np.pi / 2
+        return [ret, azim]
 
 ###########################################################################################
     # Constructors for different types of elements
