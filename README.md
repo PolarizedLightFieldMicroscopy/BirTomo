@@ -50,7 +50,7 @@ Run the following code to create a virtual environment will all the necessary an
 ```
 conda create --name model python=3.10 tqdm matplotlib h5py --yes
 conda activate model
-conda install -c conda-forge pytorch ipykernel --yes
+conda install -c conda-forge pytorch ipykernel tifffile --yes
 conda install -c plotly plotly --yes
 pip install streamlit
 conda install -c anaconda pytest --yes
