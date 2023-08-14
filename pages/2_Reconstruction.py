@@ -54,25 +54,28 @@ with columns[0]:
     regularization_function2 = st.selectbox('Volume regularization function 2',
                                 ['L1', 'L2', 'unit', 'TV', 'none'], 4)
     reg_weight1 = st.number_input('Regularization weight 1', min_value=0., max_value=0.5, value=0.5)
-    st.write('The current regularization weight 1 is ', reg_weight1)
+    # st.write('The current regularization weight 1 is ', reg_weight1)
     reg_weight2 = st.number_input('Regularization weight 2', min_value=0., max_value=0.5, value=0.5)
-    st.write('The current regularization weight 2 is ', reg_weight2)
+    # st.write('The current regularization weight 2 is ', reg_weight2)
     ret_azim_weight = st.number_input('Retardance-Orientation weight', min_value=0., max_value=1., value=0.5)
-    st.write('The current retardance/orientation weight is ', ret_azim_weight)
-
+    # st.write('The current retardance/orientation weight is ', ret_azim_weight)
+    st.subheader("Initial estimated volume")
     volume_init_type = st.selectbox('Initial volume type',
                                        ['random', 'upload'], 0)
     if volume_init_type == 'upload':
-        h5file_init = st.file_uploader("Upload the initial volume h5 Here", type=['h5'])        
+        h5file_init = st.file_uploader("Upload the initial volume h5 Here", type=['h5'])  
+        delta_n_init_magnitude = 1
+        mask_bool = False      
     else:
-        delta_n_init_magnitude = st.number_input('Volume Delta_n initial magnitude', min_value=0., max_value=1., value=0.0001)
-        st.write('The current rVolume Delta_n initial magnitude is ', delta_n_init_magnitude)
+        mask_bool = st.checkbox('Mask out area unreachable by light rays')
+        delta_n_init_magnitude = st.number_input('Volume Delta_n initial magnitude', min_value=0., max_value=1., value=0.0001, format="%0.5f")
+        # st.write('The current Volume Delta_n initial magnitude is ', delta_n_init_magnitude)
     
     st.subheader('Learning rate')
-    learning_rate_delta_n = st.number_input('Learning rate Delta_n', min_value=0.0, max_value=10.0, value=0.001)
-    st.write('The current LR is ', learning_rate_delta_n)
-    learning_rate_optic_axis = st.number_input('Learning rate Optic_axis', min_value=0.0, max_value=10.0, value=0.001)
-    st.write('The current optic axis LR is ', learning_rate_optic_axis)
+    learning_rate_delta_n = st.number_input('Learning rate for Delta_n', min_value=0.0, max_value=10.0, value=0.001, format="%0.5f")
+    # st.write('The current LR is ', learning_rate_delta_n)
+    learning_rate_optic_axis = st.number_input('Learning rate for optic_axis', min_value=0.0, max_value=10.0, value=0.001, format="%0.5f")
+    # st.write('The current optic axis LR is ', learning_rate_optic_axis)
 
     
 def key_investigator(key_home, my_str='', prefix='- '):
@@ -85,7 +88,7 @@ def key_investigator(key_home, my_str='', prefix='- '):
 # Second Column
 with columns[1]:
 ############ Volume #################
-    st.subheader('Volume')
+    st.subheader('Ground truth volume')
     volume_container = st.container() # set up a home for other volume selections to go
     with volume_container:
         how_get_vol = st.radio("Volume can be created or uploaded as an h5 file",
@@ -321,14 +324,14 @@ if st.button("Reconstruct!"):
     else:
         volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_info, \
                                         volume_creation_args = {'init_mode' : 'random'})
-
         # Let's rescale the random to initialize the volume
         volume_estimation.Delta_n.requires_grad = False
         volume_estimation.optic_axis.requires_grad = False
         volume_estimation.Delta_n *= delta_n_init_magnitude
-        # And mask out volume that is outside FOV of the microscope
-        mask = rays.get_volume_reachable_region()
-        volume_estimation.Delta_n[mask.view(-1)==0] = 0
+        if mask_bool:
+            # And mask out volume that is outside FOV of the microscope
+            mask = rays.get_volume_reachable_region()
+            volume_estimation.Delta_n[mask.view(-1)==0] = 0
         volume_estimation.Delta_n.requires_grad = True
         volume_estimation.optic_axis.requires_grad = True
 
@@ -400,7 +403,7 @@ if st.button("Reconstruct!"):
                 azim_image_measured.detach().cpu().numpy(),
                 volume_2_projections(volume_estimation.get_delta_n().unsqueeze(0))[0,0].detach().cpu().numpy(),
                 ret_image_current.detach().cpu().numpy(),
-                np.rad2deg(azim_image_current.detach().cpu().numpy()),
+                azim_image_current.detach().cpu().numpy(),
                 losses,
                 data_term_losses,
                 regularization_term_losses,
