@@ -341,6 +341,7 @@ def plot_images(image_list):
     return fig
 
 def plot_intensity_images(image_list):
+    latex_installed = False
     num_images = len(image_list)
     fig, axes = plt.subplots(1, num_images, figsize=(12, 2.5))
 
@@ -354,10 +355,11 @@ def plot_intensity_images(image_list):
         im = ax.imshow(image, cmap='gray')
         ax.axis('off')
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        ax.set_title(fr'$\Sigma_{i}$', usetex = True)
+        if latex_installed is True:
+            ax.set_title(fr'$\Sigma_{i}$', usetex = True)
     plt.suptitle('Intensity images at various polarizer settings')
     plt.rcParams.update({
-        "text.usetex": True,
+        "text.usetex": latex_installed,
         "font.family": "sans-serif"
     })
     # Adjust the layout of subplots

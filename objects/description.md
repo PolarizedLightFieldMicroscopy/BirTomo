@@ -1,5 +1,5 @@
 # Description
-This directory (objects) contains h5 files of objects/volumes that can be used in the forward model.
+The object directory contains h5 files of objects/volumes that can be used in the forward model.
 
 27 Dec 2022:  
 ### Bundle objects by Rudolf:
