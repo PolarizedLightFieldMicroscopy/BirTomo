@@ -311,7 +311,6 @@ if st.button("Reconstruct!"):
         ret_image_measured = ret_image_measured.detach()
         azim_image_measured = azim_image_measured.detach()
 
-
     ############# 
     # Let's create an optimizer
     # Initial guess
@@ -348,12 +347,12 @@ if st.button("Reconstruct!"):
 
     # Create optimizer 
     optimizer = torch.optim.Adam(parameters, lr=training_params['lr'])
-    
+
     # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
     losses = []
     data_term_losses = []
     regularization_term_losses = []
-    
+
     # Create weight mask for the azimuth
     # as the azimuth is irrelevant when the retardance is low, lets scale error with a mask
     azimuth_damp_mask = (ret_image_measured / ret_image_measured.max()).detach()
@@ -364,12 +363,12 @@ if st.button("Reconstruct!"):
 
     my_plot = st.empty() # set up a place holder for the plot
     my_3D_plot = st.empty() # set up a place holder for the 3D plot
-    
+
     st.write("Working on these ", n_epochs, "iterations...")
     my_bar = st.progress(0)
     for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         optimizer.zero_grad()
-        
+
         # Forward projection
         [ret_image_current, azim_image_current] = rays.ray_trace_through_volume(volume_estimation)
 
@@ -380,10 +379,16 @@ if st.button("Reconstruct!"):
 
         # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
         L.backward()
-        
+
         # Apply gradient updates to the volume
         optimizer.step()
-
+        with torch.no_grad():
+            num_nan_vecs = torch.sum(torch.isnan(volume_estimation.optic_axis[0, :]))
+            replacement_vecs = torch.nn.functional.normalize(torch.rand(3, int(num_nan_vecs)), p=2, dim=0)
+            volume_estimation.optic_axis[:, torch.isnan(volume_estimation.optic_axis[0, :])] = replacement_vecs
+            if ep == 0 and num_nan_vecs != 0:
+                st.write(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors, " +
+                         "likely on every iteration.")
         # print(f'Ep:{ep} loss: {L.item()}')
         losses.append(L.item())
         data_term_losses.append(data_term.item())
@@ -409,21 +414,17 @@ if st.button("Reconstruct!"):
                 regularization_term_losses,
                 streamlit_purpose=True
                 )
-            
+
             my_plot.pyplot(fig)
 
-
     st.success("Done reconstructing! How does it look?", icon="✅")
-    
     st.session_state['my_volume'] = volume_estimation
-    
     st.write("Scroll over image to zoom in and out.")
     # Todo: use a slider to filter the volume
     volume_ths = 0.05 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
     matplotlib.pyplot.close()
     my_fig = st.session_state['my_volume'].plot_lines_plotly(delta_n_ths=volume_ths)
     st.plotly_chart(my_fig, use_container_width=True)
-
 
     st.subheader('Download results')
     # print(ret_image_current.detach().cpu().numpy().shape)
@@ -433,4 +434,3 @@ if st.button("Reconstruct!"):
     # Save volume to h5
     h5_file = io.BytesIO()
     st.download_button('Download estimated volume as HDF5 file', volume_estimation.save_as_file(h5_file), mime='application/x-hdf5')
-
