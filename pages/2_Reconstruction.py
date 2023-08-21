@@ -135,8 +135,8 @@ with columns[1]:
                         except Exception as e:
                             st.error(e)
         elif how_get_vol == 'Upload experimental images':
-            retardance_path = st.file_uploader("Upload retardance tif", type=['png'])
-            azimuth_path = st.file_uploader("Upload orientation tif", type=['png'])
+            retardance_path = st.file_uploader("Upload retardance tif", type=['png', 'tif', 'tiff'])
+            azimuth_path = st.file_uploader("Upload orientation tif", type=['png', 'tif', 'tiff'])
             metadata_file = st.file_uploader("Upload metadata from Napari-LF", type=['txt'])
             plot_cropped_imgs = st.empty() # set up a place holder for the plot
 
