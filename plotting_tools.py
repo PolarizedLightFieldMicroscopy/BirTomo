@@ -300,7 +300,7 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
     plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Retardance')
     plt.subplot(1,3,2)
-    plt.imshow(np.rad2deg(azim_image), cmap=colormap)
+    plt.imshow(azim_image, cmap=colormap)
     plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Orientation')
     ax = plt.subplot(1,3,3)
@@ -425,6 +425,45 @@ def plot_iteration_update(
     plt.gca().yaxis.tick_right()
     plt.xlabel('Epoch')
     plt.ylabel('Total loss')
+    
+    if streamlit_purpose:
+        return fig
+    else:
+        return None
+
+def plot_est_iteration_update(
+                vol_current, ret_current, azim_current,
+                losses, data_term_losses, regularization_term_losses,
+                streamlit_purpose=False
+                ):
+    if streamlit_purpose:
+        fig = plt.figure(figsize=(18,9))
+        plt.rcParams['image.origin'] = 'lower'
+
+    # Plot predictions
+    plt.subplot(2,4,5)
+    plt.imshow(vol_current)
+    plt.colorbar()
+    plt.title('Predicted volume (MIP)', weight='bold')
+    plt.subplot(2,4,6)
+    plt.imshow(ret_current)
+    plt.colorbar()
+    plt.title('Retardance of predicted volume')
+    plt.subplot(2,4,7)
+    plt.imshow(azim_current)
+    plt.colorbar()
+    plt.title('Orientation of predicted volume')
+
+    plt.subplot(3,4,12)
+    plt.title('Loss')
+    plt.plot(list(range(len(losses))), losses, color='green', label='total loss')
+    plt.plot(list(range(len(losses))), data_term_losses, color='red', label='data fidelity')
+    plt.plot(list(range(len(losses))), regularization_term_losses, color='blue', label='regularization')
+    plt.gca().yaxis.set_label_position("right")
+    plt.gca().yaxis.tick_right()
+    plt.xlabel('Iterations')
+    plt.ylabel('Total loss')
+    plt.legend()
     
     if streamlit_purpose:
         return fig

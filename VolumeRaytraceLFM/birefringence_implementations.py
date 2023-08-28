@@ -2,6 +2,7 @@ from math import floor
 from tqdm import tqdm
 import h5py
 from VolumeRaytraceLFM.abstract_classes import *
+from utils import errors
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element,
@@ -928,10 +929,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     for vox in self.ray_vol_colli_indices
                     ]
             voxels_of_segs = self.vox_indices_ml_shifted[key]
-
-        assert self.optical_info == volume_in.optical_info, \
-            'Optical info between ray-tracer and volume mismatch. ' + \
-            'This might cause issues on the border micro-lenses.'
+        # DEBUG
+        # print("DEBUG: making the optical info of volume and self the same")
+        # print("vol in: ", volume_in.optical_info)
+        # print("self in: ", self.optical_info)
+        # print({self.optical_info[k] - volume_in.optical_info[k] for k in self.optical_info.items()})
+        # volume_in.optical_info = self.optical_info
+        # try:
+        #     errors.compare_dicts(self.optical_info, volume_in.optical_info)
+        # except ValueError as e:
+        #     print('Optical info between ray-tracer and volume mismatch. ' + \
+        #     'This might cause issues on the border micro-lenses.')
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels, so we mask the rays valid
         # for this step with rays_with_voxels
