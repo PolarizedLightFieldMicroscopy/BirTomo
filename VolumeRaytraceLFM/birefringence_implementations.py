@@ -1101,6 +1101,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     # TODO: these are re-implemented in abstract_classes in OpticalElement
     def voxRayJM(self, Delta_n, opticAxis, rayDir, ell, wavelength):
         '''Compute Jones matrix associated with a particular ray and voxel combination'''
+        # nromAxis = np.norm(optixAxis)
+        # small_value = 1e-10
+        # normAxis[normAxis == 0] = small_value
+
+        # result = opticAxis / normAxis
         if self.backend == BackEnds.NUMPY:
             # Azimuth is the angle of the slow axis of retardance.
             azim = np.arctan2(np.dot(opticAxis, rayDir[1]), np.dot(opticAxis, rayDir[2]))
@@ -1110,6 +1115,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 azim = azim + np.pi / 2
             # print(f"Azimuth angle of index ellipsoid is
             #   {np.around(np.rad2deg(azim), decimals=0)} degrees.")
+            normAxis = np.linalg.norm(opticAxis)
+            proj_along_ray = np.dot(opticAxis, rayDir[0])
+            # np.divide(my_arr, my_arr1, out=np.ones_like(my_arr, dtype=np.float32), where=my_arr1 != 0)
             ret = abs(Delta_n) * (1 - np.dot(opticAxis, rayDir[0]) ** 2) * 2 * np.pi * ell / wavelength
             # print(f"Accumulated retardance from index ellipsoid is
             #   {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
@@ -1128,10 +1136,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
             # Dot product of optical axis and 3 ray-direction vectors
             OA_dot_rayDir = torch.linalg.vecdot(opticAxis, rayDir)
-
+            # long version of OA_dot_rayDir[0,:][normAxis == 0] = 1
+            normAxis = torch.linalg.norm(opticAxis, axis=1)
+            # proj_along_ray = OA_dot_rayDir[0,:]
+            # proj_along_ray[normAxis == 0] = 1
+            proj_along_ray = torch.full_like(OA_dot_rayDir[0,:], fill_value=1)
+            proj_along_ray[normAxis != 0] = OA_dot_rayDir[0,:][normAxis != 0] / normAxis[normAxis != 0]
+            # OA_dot_rayDir[0,:][normAxis == 0] = 1
             # Azimuth is the angle of the sloq axis of retardance.
             azim = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
-            ret = abs(Delta_n) * (1 - OA_dot_rayDir[0,:] ** 2) * torch.pi * ell / wavelength
+            ret = abs(Delta_n) * (1 - proj_along_ray ** 2) * torch.pi * ell / wavelength
 
             # The following series of operations is an equivalent, but more efficient method as
             #   JM = JonesMatrixGenerators.linear_retarder(ret, azim, self.backend)
@@ -1144,6 +1158,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             JM[:,0,1] = offdiag
             JM[:,1,0] = offdiag
             JM[:,1,1] = diag2
+            try:
+                import error_handling
+                error_handling.check_for_inf_or_nan(JM)
+            except ValueError as e:
+                print(f"Error: {e}")
+            assert not torch.isnan(JM).any(), "A Jones matrix contains NaN values."
         return JM
 
     @staticmethod
