@@ -23,7 +23,13 @@ from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 from loss_functions import *
 import pandas as pd
-from utils.parameters import forward_propagate, dataframe_to_dict, extract_scalar_params, get_vol_shape_from_h5, display_h5_metadata
+from utils.parameters import (
+        forward_propagate,
+        dataframe_to_dict,
+        extract_scalar_params,
+        get_vol_shape_from_h5,
+        display_h5_metadata
+    )
 from plotting_tools import plot_retardance_orientation
 
 # st.sidebar.selectbox('Side bar variable', options=['Rudolf', 'Grant'], index=0)
@@ -53,53 +59,49 @@ optical_info.update(values_from_df)
 
 ############## Optimization parameters ###################
 tabs[1].subheader("Iterative reconstruction parameters")
-if True:
-    n_epochs = tabs[1].slider('Number of iterations', min_value=1, max_value=500, value=500)
-    optim_cols = tabs[1].columns(2)
-    # See loss_functions.py for more details
-    optim_cols[0].markdown('**Loss function**')
-    loss_function = optim_cols[0].selectbox('Loss function',
-                                ['vonMisses', 'vector', 'L1_cos', 'L1all'], 1)
-    regularization_function1 = optim_cols[0].selectbox('Volume regularization function 1',
-                                ['L1', 'L2', 'unit', 'TV', 'none'], 2)
-    regularization_function2 = optim_cols[0].selectbox('Volume regularization function 2',
-                                ['L1', 'L2', 'unit', 'TV', 'none'], 4)
-    reg_weight1 = optim_cols[0].number_input('Regularization weight 1', min_value=0., max_value=0.5, value=0.5)
-    # tabs[1].write('The current regularization weight 1 is ', reg_weight1)
-    reg_weight2 = optim_cols[0].number_input('Regularization weight 2', min_value=0., max_value=0.5, value=0.5)
-    # tabs[1].write('The current regularization weight 2 is ', reg_weight2)
-    ret_azim_weight = optim_cols[0].number_input('Retardance-Orientation weight', min_value=0., max_value=1., value=0.5)
-    # tabs[1].write('The current retardance/orientation weight is ', ret_azim_weight)
-    optim_cols[1].markdown('**Learning rate**')
-    learning_rate_delta_n = optim_cols[1].number_input('Learning rate for the birefringence $\Delta n$', min_value=0.0, max_value=10.0, value=0.001, format="%0.5f")
-    # tabs[1].write('The current LR is ', learning_rate_delta_n)
-    learning_rate_optic_axis = optim_cols[1].number_input('Learning rate for optic axis $\mathbf{a}$', min_value=0.0, max_value=10.0, value=0.001, format="%0.5f")
-    # tabs[1].write('The current optic axis LR is ', learning_rate_optic_axis)
+n_epochs = tabs[1].slider('Number of iterations', min_value=1, max_value=500, value=200)
+optim_cols = tabs[1].columns(2)
+# See loss_functions.py for more details
+optim_cols[0].markdown('**Loss function**')
+loss_function = optim_cols[0].selectbox('Loss function',
+                            ['vonMisses', 'vector', 'L1_cos', 'L1all'], 1)
+regularization_function1 = optim_cols[0].selectbox('Volume regularization function 1',
+                            ['L1', 'L2', 'unit', 'TV', 'none'], 2)
+regularization_function2 = optim_cols[0].selectbox('Volume regularization function 2',
+                            ['L1', 'L2', 'unit', 'TV', 'none'], 4)
+reg_weight1 = optim_cols[0].number_input('Regularization weight 1', min_value=0., max_value=0.5, value=0.5)
+reg_weight2 = optim_cols[0].number_input('Regularization weight 2', min_value=0., max_value=0.5, value=0.5)
+ret_azim_weight = optim_cols[0].number_input('Retardance-Orientation weight', min_value=0., max_value=1., value=0.5)
+optim_cols[1].markdown('**Learning rate**')
+learning_rate_delta_n = optim_cols[1].number_input('Learning rate for the birefringence $\Delta n$', min_value=0.0, max_value=10.0, value=0.001, format="%0.5f")
+learning_rate_optic_axis = optim_cols[1].number_input('Learning rate for optic axis $\mathbf{a}$', min_value=0.0, max_value=10.0, value=0.001, format="%0.5f")
 
-    optim_cols[1].markdown('**Initial estimated volume**')
-    est_volume_init_type = optim_cols[1].selectbox('Initial volume type',
-                                        ['random', 'upload'], 0)
-    if est_volume_init_type == 'upload':
-        est_h5file_init = optim_cols[1].file_uploader("Upload the initial volume h5 Here", type=['h5'])  
-        delta_n_init_magnitude = 1
-        mask_bool = False      
-        optim_cols[1].write('TODO: add volume shape')
-    else:
-        # Force the volume shape to be smaller for the reconstructed volume
-        optim_cols[1].write('Estimated volume shape')
-        # estimated_volume_shape = optical_info['volume_shape'].copy()
-        est_vol_shape = np.array([0, 0, 0])
-        est_vol_shape[0] = optim_cols[1].slider('Axial volume dimension',
-                                                    min_value=1, max_value=50, value=5)
-        # y will follow x if x is changed. x will not follow y if y is changed
-        est_vol_shape[1] = optim_cols[1].slider('Y-Z volume dimension',
-                                                    min_value=1, max_value=100, value=31)
-        est_vol_shape[2] = est_vol_shape[1]
-        # optical_info['volume_shape'] = estimated_volume_shape
-        mask_bool = optim_cols[1].checkbox('Mask out area unreachable by light rays')
-        delta_n_init_magnitude = optim_cols[1].number_input('Volume $$\Delta n$$ initial magnitude', min_value=0., max_value=1., value=0.0001, format="%0.5f")
-        # st.write('The current Volume Delta_n initial magnitude is ', delta_n_init_magnitude)
-
+optim_cols[1].markdown('**Initial estimated volume**')
+est_volume_init_type = optim_cols[1].selectbox('Initial volume type',
+                                    ['random', 'upload'], 0)
+if est_volume_init_type == 'upload':
+    est_h5file_init = optim_cols[1].file_uploader(
+            "Upload the initial volume h5 Here", type=['h5']
+        )
+    delta_n_init_magnitude = 1
+    mask_bool = False
+    optim_cols[1].write('TODO: add volume shape')
+else:
+    # Force the volume shape to be smaller for the reconstructed volume
+    optim_cols[1].write('Estimated volume shape')
+    # estimated_volume_shape = optical_info['volume_shape'].copy()
+    est_vol_shape = np.array([0, 0, 0])
+    est_vol_shape[0] = optim_cols[1].slider('Axial volume dimension',
+                                                min_value=1, max_value=50, value=5)
+    # y will follow x if x is changed. x will not follow y if y is changed
+    est_vol_shape[1] = optim_cols[1].slider('Y-Z volume dimension',
+                                                min_value=1, max_value=100, value=31)
+    est_vol_shape[2] = est_vol_shape[1]
+    mask_bool = optim_cols[1].checkbox('Mask out area unreachable by light rays')
+    delta_n_init_magnitude = optim_cols[1].number_input(
+            'Volume $$\Delta n$$ initial magnitude',
+            min_value=0., max_value=1., value=0.0001, format="%0.5f"
+        )
 
 st.markdown("""---""")
 st.subheader('Capture microscopy images')
@@ -114,7 +116,11 @@ backend = BackEnds.PYTORCH
 # st.subheader('Ground truth volume')
 volume_container = st.container()
 with volume_container:
-    how_acquire = forw_cols[0].radio("**Method of acquiring images**", ['External: experimental or synthetical', 'Internal'], index=1)
+    how_acquire = forw_cols[0].radio(
+            "**Method of acquiring images**",
+            ['External: experimental or synthetical', 'Internal'],
+            index=1
+        )
     how_synthetic = how_acquire
     if how_acquire == 'External: experimental or synthetical':
         forw_cols[1].write('Check back later :)')
@@ -202,20 +208,76 @@ training_params = {
     'reg' : [regularization_function1, regularization_function2]                 # Regularization function
 }
 
+def forward_one_iter(rays, volume):
+    # Forward projection
+    [ret_image_current, azim_image_current] = rays.ray_trace_through_volume(volume)
+    return ret_image_current, azim_image_current
+
+def loss_one_iter():
+    # Conpute loss and regularization        
+    L, data_term, regularization_term = apply_loss_function_and_reg(
+            training_params['loss'],
+            training_params['reg'],
+            ret_image_measured,
+            azim_image_measured,
+            ret_image_current,
+            azim_image_current,
+            training_params['azimuth_weight'],
+            volume_estimation,
+            training_params['regularization_weight']
+        )
+
+    return L, data_term, regularization_term
+
+def generate_random_vol(mask=False):
+    '''Generate a random initial estimated volume.'''
+    volume = BirefringentVolume(backend=backend, optical_info=optical_info, \
+                                    volume_creation_args = {'init_mode' : 'random'})
+    # Let's rescale the random to initialize the volume
+    volume.Delta_n.requires_grad = False
+    volume.optic_axis.requires_grad = False
+    volume.Delta_n *= delta_n_init_magnitude
+    if mask:
+        # And mask out volume that is outside FOV of the microscope
+        mask = rays_est.get_volume_reachable_region()
+        volume.Delta_n[mask.view(-1)==0] = 0
+    volume.Delta_n.requires_grad = True
+    volume.optic_axis.requires_grad = True
+
+    return volume
+
+def create_optimizer(volume):
+    '''Create optimizer for the variables that we want to estimate.'''
+    trainable_parameters = volume.get_trainable_variables()
+
+    # As delta_n has much lower values than optic_axis, we might need 2 different learning rates
+    parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},  # Optic axis
+                {'params': trainable_parameters[1], 'lr': training_params['lr']}]               # Delta_n
+
+    # Create optimizer
+    optim = torch.optim.Adam(parameters, lr=training_params['lr'])
+
+    return optim
+
 if st.button("**Reconstruct birefringent volume!**"):
     assert backend == BackEnds.PYTORCH, 'backend must be torch'
-    st.write("requiring ground truth for plotting purposes")
-    my_volume = st.session_state.GT
-    Delta_n_GT = my_volume.get_delta_n().detach().clone()
-    optic_axis_GT = my_volume.get_optic_axis().detach().clone()
-    ret_image_measured = torch.tensor(output_ret_image, requires_grad=True)
-    azim_image_measured = torch.tensor(output_azim_image, requires_grad=True)
-    ret_image_measured = ret_image_measured.detach()
-    azim_image_measured = azim_image_measured.detach()
+    if 'ret_image' not in st.session_state:
+        st.error("We need images before we can reconstruct a volume.")
+    try:
+        my_volume = st.session_state.GT
+        Delta_n_GT = my_volume.get_delta_n().detach().clone()
+        optic_axis_GT = my_volume.get_optic_axis().detach().clone()
+    except NameError:
+        st.error("Ground truth volume is unknown.")
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ret_image_measured = torch.tensor(output_ret_image, device=device)
+    azim_image_measured = torch.tensor(output_azim_image, device=device)
     optical_info['volume_shape'] = list(est_vol_shape)
+    # Compute ray geometry
     rays_est = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
     rays_est.compute_rays_geometry()
+
     # Initial guess
     if est_volume_init_type == 'upload' and est_h5file_init is not None:
         volume_estimation = BirefringentVolume.init_from_file(
@@ -224,35 +286,18 @@ if st.button("**Reconstruct birefringent volume!**"):
                                         optical_info=optical_info
                                         )
     else:
-        volume_estimation = BirefringentVolume(backend=backend, optical_info=optical_info, \
-                                        volume_creation_args = {'init_mode' : 'random'})
-        # Let's rescale the random to initialize the volume
-        volume_estimation.Delta_n.requires_grad = False
-        volume_estimation.optic_axis.requires_grad = False
-        volume_estimation.Delta_n *= delta_n_init_magnitude
-        if mask_bool:
-            # And mask out volume that is outside FOV of the microscope
-            mask = rays_est.get_volume_reachable_region()
-            volume_estimation.Delta_n[mask.view(-1)==0] = 0
-        volume_estimation.Delta_n.requires_grad = True
-        volume_estimation.optic_axis.requires_grad = True
+        volume_estimation = generate_random_vol(mask=mask_bool)
+
+    # Move variables to the gpu if available
+    volume_estimation = volume_estimation.to(device)
+    my_volume = my_volume.to(device)
+    rays_est = rays_est.to(device)
 
     # Indicate to this object that we are going to optimize Delta_n and optic_axis
     volume_estimation.members_to_learn.append('Delta_n')
     volume_estimation.members_to_learn.append('optic_axis')
-    device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
-    volume_estimation = volume_estimation.to(device)
 
-    trainable_parameters = volume_estimation.get_trainable_variables()
-
-    # As delta_n has much lower values than optic_axis, we might need 2 different learning rates
-    parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},  # Optic axis
-                {'params': trainable_parameters[1], 'lr': training_params['lr']}]               # Delta_n
-
-    # Create optimizer 
-    optimizer = torch.optim.Adam(parameters, lr=training_params['lr'])
+    optimizer = create_optimizer(volume_estimation)
 
     # To test differentiability let's define a loss function L = |ret_image_torch|, and minimize it
     losses = []
@@ -263,9 +308,6 @@ if st.button("**Reconstruct birefringent volume!**"):
     # as the azimuth is irrelevant when the retardance is low, lets scale error with a mask
     azimuth_damp_mask = (ret_image_measured / ret_image_measured.max()).detach()
 
-    # width = st.sidebar.slider("Plot width", 1, 25, 15)
-    # height = st.sidebar.slider("Plot height", 1, 25, 8)
-
     my_recon_img_plot = st.empty()
     my_loss = st.empty()
     my_plot = st.empty() # set up a place holder for the plot
@@ -275,23 +317,15 @@ if st.button("**Reconstruct birefringent volume!**"):
     my_bar = st.progress(0)
     for ep in tqdm(range(training_params['n_epochs']), "Minimizing"):
         optimizer.zero_grad()
-
-        # Forward projection
-        [ret_image_current, azim_image_current] = rays_est.ray_trace_through_volume(volume_estimation)
-
-        # Conpute loss and regularization        
-        L, data_term, regularization_term = apply_loss_function_and_reg(training_params['loss'], training_params['reg'], ret_image_measured, azim_image_measured, 
-                                                ret_image_current, azim_image_current, 
-                                                training_params['azimuth_weight'], volume_estimation, training_params['regularization_weight'])
-
+        ret_image_current, azim_image_current = forward_one_iter(rays_est, volume_estimation)
+        L, data_term, regularization_term = loss_one_iter()
         # Calculate update of the my_volume (Compute gradients of the L with respect to my_volume)
         L.backward()
-
         # Apply gradient updates to the volume
         optimizer.step()
         with torch.no_grad():
             num_nan_vecs = torch.sum(torch.isnan(volume_estimation.optic_axis[0, :]))
-            replacement_vecs = torch.nn.functional.normalize(torch.rand(3, int(num_nan_vecs)), p=2, dim=0)
+            replacement_vecs = torch.nn.functional.normalize(torch.rand(3, int(num_nan_vecs)), p=2, dim=0).to(device)
             volume_estimation.optic_axis[:, torch.isnan(volume_estimation.optic_axis[0, :])] = replacement_vecs
             if ep == 0 and num_nan_vecs != 0:
                 st.write(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors, " +
@@ -314,7 +348,6 @@ if st.button("**Reconstruct birefringent volume!**"):
                     azim_image_current.detach().cpu().numpy(),
                     'hsv'
                 )
-            # st.pyplot(recon_img_fig)
             my_recon_img_plot.pyplot(recon_img_fig)
             df_loss = pd.DataFrame(
                     {'Total loss': losses,
@@ -323,24 +356,49 @@ if st.button("**Reconstruct birefringent volume!**"):
                     })
             my_loss.line_chart(df_loss)
 
-    st.success("Done reconstructing! How does it look?", icon="✅")
-    st.session_state['my_volume'] = volume_estimation
-    st.write("Scroll over image to zoom in and out.")
-    # Todo: use a slider to filter the volume
-    volume_ths = 0.05 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
     matplotlib.pyplot.close()
-    my_fig = st.session_state['my_volume'].plot_lines_plotly(delta_n_ths=volume_ths)
-    st.plotly_chart(my_fig, use_container_width=True)
+    st.success("Done reconstructing! How does it look?", icon="✅")
+    st.session_state['vol_est'] = volume_estimation
+    st.session_state['ret_est'] = ret_image_current.detach().cpu().numpy()
+    st.session_state['azim_est'] = azim_image_current.detach().cpu().numpy()
+
+st.markdown("""---""")
+
+if 'vol_est' in st.session_state:
+    st.subheader("Analyze reconstructed volume")
+    # st.session_state['vol_threshold'] = 0.1
+    st.session_state['vol_threshold'] = st.slider(
+        'Display optic axis vectors for the voxel where the birefringence is above the threshold:',
+        min_value=0., max_value=1., value=0.1
+        )
+    st.session_state['fig_est'] = st.session_state['vol_est'].plot_lines_plotly(delta_n_ths=st.session_state['vol_threshold'])
+    # starts off more pan'ed in than desired
+    st.write(":blue[Scroll over image to zoom in and out.]")
+    st.plotly_chart(st.session_state['fig_est'], use_container_width=True)
+
 
     st.subheader('Download results')
-    # print(ret_image_current.detach().cpu().numpy().shape)
-    # st.download_button('Download estimated retardance', ret_image_current.detach().cpu().numpy().tobytes(), mime="image/jpeg")
-    # st.download_button('Download estimated orientation', azim_image_current.detach().cpu().numpy().tobytes(), mime="image/jpeg")
-
-    # Save volume to h5
+    # Save retardance and orientation images of estimated volume
+    st.write("Downloaded estimated retardance and orientation images may not be \
+             saved in a way that another program can read the images.")
+    st.download_button('Download estimated retardance',
+                       st.session_state['ret_est'].tobytes(),
+                       mime="image/jpeg",
+                       file_name='retardance_estimated.jpeg',
+                       )
+    st.download_button('Download estimated orientation',
+                       st.session_state['azim_est'].tobytes(),
+                       mime="image/jpeg",
+                       file_name='azimuth_estimated.jpeg',
+                       )
+    # Save estimated volume to h5
     h5_file = io.BytesIO()
-    st.download_button('Download estimated volume as HDF5 file', volume_estimation.save_as_file(h5_file), mime='application/x-hdf5')
-
+    st.download_button(
+            'Download estimated volume as HDF5 file',
+            st.session_state['vol_est'].save_as_file(h5_file),
+            mime='application/x-hdf5',
+            file_name='volume_estimated.h5',
+        )
 
 # st.subheader("Volume viewing")
 # if st.button("Plot volume!"):

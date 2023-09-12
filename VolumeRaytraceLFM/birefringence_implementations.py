@@ -186,11 +186,12 @@ class BirefringentVolume(BirefringentElement):
         return self
 
     def plot_lines_plotly(self, colormap='Bluered_r', size_scaler=5,
-                          fig=None, draw_spheres=True, delta_n_ths=0.001):
+                          fig=None, draw_spheres=True, delta_n_ths=0.001, 
+                          use_ticks=False
+                          ):
         '''Plots the optic axis as lines and the birefringence as sphere
         at the ends of the lines. Other parameters could be opacity=0.5 or mode='lines'
         '''
-
         # Fetch local data
         delta_n = self.get_delta_n() * 1
         optic_axis = self.get_optic_axis() * 1
@@ -211,6 +212,24 @@ class BirefringentVolume(BirefringentElement):
         volume_shape = optical_info['volume_shape']
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
+
+        # Sometimes the volume_shape is causing an error when being used as the nticks parameter
+        if use_ticks:
+            scene_dict = dict(
+                xaxis = {"nticks": volume_shape[0], "range": [0, volume_size_um[0]]},
+                yaxis = {"nticks": volume_shape[1], "range": [0, volume_size_um[1]]},
+                zaxis = {"nticks": volume_shape[2], "range": [0, volume_size_um[2]]},
+                xaxis_title = 'Axial dimension',
+                aspectratio = {"x": volume_size_um[0], "y": volume_size_um[1], "z": volume_size_um[2]},
+                aspectmode = 'manual'
+                )
+        else:
+            scene_dict = dict(
+                xaxis_title = 'Axial dimension',
+                aspectratio = {"x": volume_size_um[0], "y": volume_size_um[1], "z": volume_size_um[2]},
+                aspectmode = 'manual'
+                )
+
         # Define grid
         coords = np.indices(np.array(delta_n.shape)).astype(float)
 
@@ -281,16 +300,10 @@ class BirefringentVolume(BirefringentElement):
                 mode='markers')
         camera = {'eye': {'x': 50, 'y': 0, 'z': 0}}
         fig.update_layout(
-            scene=dict(
-                xaxis = {"nticks": volume_shape[0], "range": [0, volume_size_um[0]]},
-                yaxis = {"nticks": volume_shape[1], "range": [0, volume_size_um[1]]},
-                zaxis = {"nticks": volume_shape[2], "range": [0, volume_size_um[2]]},
-                xaxis_title = 'Axial dimension',
-                aspectratio = {"x": volume_size_um[0], "y": volume_size_um[1], "z": volume_size_um[2]},
-                aspectmode = 'manual'
-                ),
+            scene=scene_dict,
             scene_camera=camera,
             margin={'r': 0, 'l': 0, 'b': 0, 't': 0},
+            showlegend=False,
             )
         # fig.data = fig.data[::-1]
         # fig.show()

@@ -90,7 +90,7 @@ def display_h5_metadata(h5file):
             voxel_size = file['optical_info']['voxel_size_um'][()]
             st.markdown(f"**Voxel Size (um):** {voxel_size}")
         except KeyError:
-            st.error('This file does specify the voxel size. We are assuming voxels are cubes.')
+            st.write('This file does not specify the voxel size. We are assuming voxels are cubes.')
         except Exception as e:
             st.error(e)
     return
@@ -112,6 +112,7 @@ def forward_propagate(rays, volume):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             # st.text(f'Using computing device: {device}')
             rays = rays.to(device)
+            volume = volume.to(device)
 
         start_time = time.time()
         [ret_image, azim_image] = rays.ray_trace_through_volume(volume)
@@ -119,7 +120,7 @@ def forward_propagate(rays, volume):
         # st.text(f'Execution time in seconds with backend {backend}: ' + str(execution_time))
 
         if rays.backend == BackEnds.PYTORCH:
-            ret_image, azim_image = ret_image.numpy(), azim_image.numpy()
+            ret_image, azim_image = ret_image.cpu().numpy(), azim_image.cpu().numpy()
 
         # st.session_state['ret_image'] = ret_image
         # st.session_state['azim_image'] = azim_image
