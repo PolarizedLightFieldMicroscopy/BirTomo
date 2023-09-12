@@ -169,12 +169,13 @@ with volume_container:
 
 
 if st.button('**Calculate retardance and orientation images!**', key='calc1'):
-    rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
-    [ret_image, azim_image], execution_time = forward_propagate(rays, st.session_state.GT)
-    # st.text(f'Execution time in seconds with backend {backend}: ' + str(execution_time))
-    st.success(f"Geometric ray tracing was successful in {execution_time:.2f} secs!", icon="✅")
-    st.session_state['ret_image'] = ret_image
-    st.session_state['azim_image'] = azim_image
+    with torch.no_grad():
+        rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
+        [ret_image, azim_image], execution_time = forward_propagate(rays, st.session_state.GT)
+        # st.text(f'Execution time in seconds with backend {backend}: ' + str(execution_time))
+        st.success(f"Geometric ray tracing was successful in {execution_time:.2f} secs!", icon="✅")
+        st.session_state['ret_image'] = ret_image
+        st.session_state['azim_image'] = azim_image
   
 if "ret_image" in st.session_state:
     # Plot with streamlit
@@ -328,8 +329,8 @@ if st.button("**Reconstruct birefringent volume!**"):
     # Todo: use a slider to filter the volume
     volume_ths = 0.05 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
     matplotlib.pyplot.close()
-    # my_fig = st.session_state['my_volume'].plot_lines_plotly(delta_n_ths=volume_ths)
-    # st.plotly_chart(my_fig, use_container_width=True)
+    my_fig = st.session_state['my_volume'].plot_lines_plotly(delta_n_ths=volume_ths)
+    st.plotly_chart(my_fig, use_container_width=True)
 
     st.subheader('Download results')
     # print(ret_image_current.detach().cpu().numpy().shape)
@@ -339,3 +340,24 @@ if st.button("**Reconstruct birefringent volume!**"):
     # Save volume to h5
     h5_file = io.BytesIO()
     st.download_button('Download estimated volume as HDF5 file', volume_estimation.save_as_file(h5_file), mime='application/x-hdf5')
+
+
+# st.subheader("Volume viewing")
+# if st.button("Plot volume!"):
+#     st.markdown("Scroll over image to zoom in and out.")
+#     my_fig = st.session_state['my_volume'].plot_volume_plotly(
+#                 optical_info,
+#                 voxels_in=st.session_state['my_volume'].Delta_n,
+#                 opacity=0.1
+#                 )
+#     st.plotly_chart(my_fig)
+
+# if st.button("Plot volume with optic axis!"):
+#     st.write("Scroll over image to zoom in and out.")
+#     my_fig = st.session_state['my_volume'].plot_lines_plotly()
+#     st.session_state['my_volume'].plot_volume_plotly(
+#                 optical_info,
+#                 voxels_in=st.session_state['my_volume'].Delta_n,
+#                 opacity=0.1
+#                 )
+#     st.plotly_chart(my_fig, use_container_width=True)
