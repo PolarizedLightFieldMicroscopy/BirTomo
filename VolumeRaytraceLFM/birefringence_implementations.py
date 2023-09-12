@@ -2,6 +2,8 @@ from math import floor
 from tqdm import tqdm
 import h5py
 from VolumeRaytraceLFM.abstract_classes import *
+from utils import errors
+from tifffile import imsave
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element,
@@ -175,13 +177,16 @@ class BirefringentVolume(BirefringentElement):
         # Maybe normalize axis again?
 
         if has_grads:
+            self.optic_axis = self.optic_axis / nn.Parameter(torch.linalg.norm(self.optic_axis, axis=0))
             torch.set_grad_enabled(has_grads)
             self.Delta_n.requires_grad = True
             self.optic_axis.requires_grad = True
+        else:
+            self.optic_axis = self.optic_axis / np.linalg.norm(self.optic_axis)
         return self
 
     def plot_lines_plotly(self, colormap='Bluered_r', size_scaler=5,
-                          fig=None, draw_spheres=True, delta_n_ths=0.1):
+                          fig=None, draw_spheres=True, delta_n_ths=0.001):
         '''Plots the optic axis as lines and the birefringence as sphere
         at the ends of the lines. Other parameters could be opacity=0.5 or mode='lines'
         '''
@@ -200,7 +205,7 @@ class BirefringentVolume(BirefringentElement):
                 pass
 
         delta_n /= np.max(np.abs(delta_n))
-        delta_n[delta_n<delta_n_ths] = 0
+        delta_n[np.abs(delta_n)<delta_n_ths] = 0
 
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
@@ -568,6 +573,9 @@ class BirefringentVolume(BirefringentElement):
         jj = floor(center[1]*volume_shape[1]) - jj.astype(float)
         ii = floor(center[2]*volume_shape[2]) - ii.astype(float)
 
+        # DEBUG: checking the indicies
+        # np.argwhere(ellipsoid_border == np.min(ellipsoid_border))
+        # plt.imshow(ellipsoid_border_mask[int(volume_shape[0] / 2),:,:])
         ellipsoid_border = (kk**2) / (radius[0]**2) + (jj**2) / (radius[1]**2) + (ii**2) / (radius[2]**2)
         ellipsoid_border_mask = np.abs(ellipsoid_border-alpha) <= 1
         vol[0,...] = ellipsoid_border_mask.astype(float)
@@ -656,10 +664,93 @@ class BirefringentVolume(BirefringentElement):
                     volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : ellipsoid_args}
                     )
                 volume += new_vol
+        elif vol_type == 'ellipsoids_random':
+            n_ellipsoids = np.random.randint(1, 5)
+            volume = BirefringentVolume(backend=backend,
+                                        optical_info=optical_info,
+                                        volume_creation_args={'init_mode' : 'zeros'})
+            for _ in range(n_ellipsoids):
+                ellipsoid_args = {
+                    'radius' : np.random.uniform(.5, 3.5, [3]) * 10,
+                    'center' : [np.random.uniform(0.35, 0.65),] + list(np.random.uniform(0.3, 0.70, [2])),
+                    'delta_n' : np.random.uniform(-0.01, -0.001),
+                    'border_thickness' : 0.1 * 3
+                    }
+                new_vol = BirefringentVolume(
+                    backend=backend,
+                    optical_info=optical_info,
+                    volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : ellipsoid_args}
+                    )
+                volume += new_vol
+        elif vol_type == 'sphere':
+            sphere_args = {
+                'radius' : [np.random.uniform(3, 6)] * 3,
+                'center' : [np.random.uniform(0.35, 0.65),] + list(np.random.uniform(0.3, 0.70, [2])),
+                'delta_n' : -0.01,
+                'border_thickness' : 1
+                }
+            volume = BirefringentVolume(
+                backend=backend,
+                optical_info=optical_info,
+                volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : sphere_args}
+                )
+        elif vol_type == 'small_sphere':
+            sphere_args = {
+                'radius' : [3] * 3,
+                'center' : [0.5] * 3,
+                'delta_n' : -0.01,
+                'border_thickness' : 2
+                }
+            volume = BirefringentVolume(
+                backend=backend,
+                optical_info=optical_info,
+                volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : sphere_args}
+                )   
+        elif vol_type == 'small_sphere_pos':
+            min_x = 0.5 - 0.125
+            max_x = 0.5 + 0.124
+            sphere_args = {
+                'radius' : [np.random.uniform(1, 2)] * 3,
+                'center' : [np.random.uniform(min_x, max_x),] + list(np.random.uniform(0.42, 0.55, [2])),
+                'delta_n' : 0.01,
+                'border_thickness' : 2
+                }
+            volume = BirefringentVolume(
+                backend=backend,
+                optical_info=optical_info,
+                volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : sphere_args}
+                ) 
+        elif vol_type == 'small_sphere_rand_bir':
+            min_x = 0.5 - 0.125
+            max_x = 0.5 + 0.124
+            sphere_args = {
+                'radius' : [np.random.uniform(1, 2)] * 3,
+                'center' : [np.random.uniform(min_x, max_x),] + list(np.random.uniform(0.42, 0.55, [2])),
+                'delta_n' : np.random.uniform(0.005, 0.015),
+                'border_thickness' : 2
+                }
+            volume = BirefringentVolume(
+                backend=backend,
+                optical_info=optical_info,
+                volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : sphere_args}
+                )   
         # elif 'my_volume:' # Feel free to add new volumes here
         else:
             raise NotImplementedError
         return volume
+
+    def save_as_tiff(self, filename):
+        '''Store this volume into a tiff file'''
+        print(f'Saving volume to file: {filename}')
+        delta_n = self.get_delta_n()
+        optic_axis = self.get_optic_axis()
+        combined_data = np.stack([delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0, dtype=np.float32)
+        if self.backend == BackEnds.PYTORCH:
+            delta_n = delta_n.detach().cpu().numpy()
+            optic_axis = optic_axis.detach().cpu().numpy()
+        imsave(filename, combined_data)
+        return filename
+
 
 ############ Implementations
 class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
@@ -928,10 +1019,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     for vox in self.ray_vol_colli_indices
                     ]
             voxels_of_segs = self.vox_indices_ml_shifted[key]
-
-        assert self.optical_info == volume_in.optical_info, \
-            'Optical info between ray-tracer and volume mismatch. ' + \
-            'This might cause issues on the border micro-lenses.'
+        # DEBUG
+        # print("DEBUG: making the optical info of volume and self the same")
+        # print("vol in: ", volume_in.optical_info)
+        # print("self in: ", self.optical_info)
+        # print({self.optical_info[k] - volume_in.optical_info[k] for k in self.optical_info.items()})
+        # volume_in.optical_info = self.optical_info
+        # try:
+        #     errors.compare_dicts(self.optical_info, volume_in.optical_info)
+        # except ValueError as e:
+        #     print('Optical info between ray-tracer and volume mismatch. ' + \
+        #     'This might cause issues on the border micro-lenses.')
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels, so we mask the rays valid
         # for this step with rays_with_voxels
