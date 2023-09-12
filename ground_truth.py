@@ -173,22 +173,16 @@ def single_small_sphere(rays, i):
     combined_data = np.stack([ret_image, azim_image], axis=0, dtype=np.float32)
     imsave(f'small_sphere/images/{i}_sphere.tiff', combined_data)
 
-
-# rays = create_rays(11, 3)
-# for i in range(1):
-#     single_ellipse(rays, i)
-
-
-# vol_shape = [4, 8, 8]
-# rays = create_rays(4, 8, 1, vol_shape)
-# for i in range(1):
-#     single_small_sphere(rays, i)
-
-read_plot_vol_tiff('raw/objects/6_ell.tiff')
-
-read_plot_img_tiff('raw/images/6_ell.tiff')
-
-x=5
-
 if __name__ == "__main__":
-    pass
+    # rays = create_rays(11, 3)
+    # for i in range(1):
+    #     single_ellipse(rays, i)
+
+
+    # vol_shape = [4, 8, 8]
+    # rays = create_rays(4, 8, 1, vol_shape)
+    # for i in range(1):
+    #     single_small_sphere(rays, i)
+
+    read_plot_vol_tiff('raw/objects/6_ell.tiff')
+    read_plot_img_tiff('raw/images/6_ell.tiff')
