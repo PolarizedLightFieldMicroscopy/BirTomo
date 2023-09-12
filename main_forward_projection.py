@@ -107,6 +107,10 @@ my_volume.save_as_file('objects/shell_rect_voxels.h5', description=my_descriptio
 #                                               opacity=0.01, fig=plotly_figure)
 # plotly_figure.show()
 
+# Move volume to GPU if avaliable
+my_volume = my_volume.to(device)
+
+# Ray trace through the volume
 startTime = time.time()
 [ret_image, azim_image] = rays.ray_trace_through_volume(my_volume)
 executionTime = time.time() - startTime
