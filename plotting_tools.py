@@ -274,6 +274,26 @@ def plot_birefringence_lines(retardance_img, azimuth_img, origin='lower', upscal
     ax.margins(0.1)
     return im
 
+def hue_map(img):
+    '''Replaces greyscale with rbg
+    Args:
+        img (np.array): 2D image
+    Returns:
+        rgb (np.array): 3D image with RGB meaning
+    '''
+    # Get pixel coords
+    colors = np.zeros([img.shape[0], img.shape[0], 3])
+    A = img * 1
+    # A = np.fmod(A,np.pi)
+    colors[:,:,0] = A / A.max()
+    colors[:,:,1] = 0.5
+    colors[:,:,2] = 1
+    colors[np.isnan(colors)] = 0
+
+    from matplotlib.colors import hsv_to_rgb
+    rgb = hsv_to_rgb(colors)
+    return rgb
+
 def plot_birefringence_colorized(retardance_img, azimuth_img):
     # Get pixel coords
     colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[0], 3])
@@ -290,26 +310,80 @@ def plot_birefringence_colorized(retardance_img, azimuth_img):
     
     plt.imshow(rgb, cmap='hsv')
 
-def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv'):
+def plot_hue_map(retardance_img, azimuth_img, ax=None):
+    '''Plots the overlay of the retardance and orientation images with colorbars.'''
+    # Note: may want to use interpolation="nearest" to avoid aliasing affects
+    # Get pixel coords
+    colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[0], 3])
+    A = azimuth_img * 1
+    colors[:,:,0] = A / A.max()
+    colors[:,:,1] = 0.5
+    colors[:,:,2] = retardance_img / retardance_img.max()
+    colors[np.isnan(colors)] = 0
+    from matplotlib.colors import hsv_to_rgb, LinearSegmentedColormap
+    rgb = hsv_to_rgb(colors)
+    if ax == None:
+        fig, ax = plt.subplots()
+    im = ax.imshow(rgb, cmap='hsv')
+    # Add colorbar for hue (azimuth)
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    axins1 = inset_axes(ax,
+                        width="5%",  # width = 5% of parent_bbox width
+                        height="45%",  # height : 50%
+                        loc='lower left',
+                        bbox_to_anchor=(1.05, 0., 1, 1),
+                        bbox_transform=ax.transAxes,
+                        borderpad=0,
+                        )
+    cmap_hue = plt.get_cmap('hsv')
+    cb1 = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap_hue), cax=axins1, orientation="vertical")
+    cb1.set_label('Orientation', rotation=270, labelpad=15)
+    cb1.set_ticks([0, 0.5, 1])  # Assuming the data for azimuth ranges from 0 to pi, we normalize this range to 0-1 for the colorbar.
+    cb1.set_ticklabels(['0', r'$\pi/2$', r'$\pi$'])
+    axins1.set_title("Hue", fontsize=8)
+    # Add colorbar for saturation (retardance)
+    axins2 = inset_axes(ax,
+                        width="5%",  # width = 5% of parent_bbox width
+                        height="45%",  # height : 50%
+                        loc='upper left',
+                        bbox_to_anchor=(1.05, 0., 1, 1),
+                        bbox_transform=ax.transAxes,
+                        borderpad=0,
+                        )
+    cmap_grey = LinearSegmentedColormap.from_list('custom_gray', 
+                                                  [(0,0,0), (1,1,1)], N=256)
+    cb2 = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap_grey), cax=axins2, orientation="vertical")
+    cb2.set_label('Retardance', rotation=270, labelpad=15)
+    cb2.set_ticks([0, 0.5, 1])  # Assuming the data for azimuth ranges from 0 to 2π, we normalize this range to 0-1 for the colorbar.
+    cb2.set_ticklabels(['0', round(retardance_img.max()/2, 1), round(retardance_img.max(), 1)])
+    axins2.set_title("Value", fontsize=8)
+    plt.show()
+
+def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv', include_labels=False):
     fig = plt.figure(figsize=(12,2.5))
-    colormap = 'viridis'
     plt.rcParams['image.origin'] = 'lower'
-    # plt.figure(figsize=(12,2.5))
     plt.subplot(1,3,1)
-    plt.imshow(ret_image,cmap=colormap)
-    plt.colorbar(fraction=0.046, pad=0.04)
+    plt.imshow(ret_image,cmap='plasma') # viridis
+    cbar1 = plt.colorbar(fraction=0.046, pad=0.04)
+    cbar1.set_label('Radians')
     plt.title('Retardance')
     plt.subplot(1,3,2)
-    plt.imshow(azim_image, cmap=colormap)
-    plt.colorbar(fraction=0.046, pad=0.04)
+    plt.imshow(azim_image, cmap='twilight')
+    cbar2 = plt.colorbar(fraction=0.046, pad=0.04)
+    cbar2.set_label('Radians')
     plt.title('Orientation')
     ax = plt.subplot(1,3,3)
-    if azimuth_plot_type == 'lines':
-        plot_birefringence_lines(ret_image, azim_image, cmap=colormap, line_color='white', ax=ax)
-    else:
-        plot_birefringence_colorized(ret_image, azim_image)
-    plt.colorbar(fraction=0.046, pad=0.04)
     plt.title('Retardance & Orientation')
+    if azimuth_plot_type == 'lines':
+        plot_birefringence_lines(ret_image, azim_image, cmap='viridis', line_color='white', ax=ax)
+    else:
+        if include_labels:
+            plot_hue_map(ret_image, azim_image, ax=ax)
+        else:
+            plot_birefringence_colorized(ret_image, azim_image)
+        
+    # plt.colorbar(fraction=0.046, pad=0.04)
+    # plt.title('Retardance & Orientation')
     plt.rcParams.update({
         "text.usetex": False,
         "font.family": "sans-serif"
@@ -378,29 +452,29 @@ def plot_iteration_update(
     
     # Plot measurements
     plt.subplot(2,4,1)
-    plt.imshow(vol_meas)
+    plt.imshow(vol_meas, cmap='plasma')
     plt.colorbar()
     plt.title('Ground truth volume (MIP)', weight='bold')
     plt.subplot(2,4,2)
-    plt.imshow(ret_meas)
+    plt.imshow(ret_meas, cmap='plasma')
     plt.colorbar()
     plt.title('Measured retardance')
     plt.subplot(2,4,3)
-    plt.imshow(azim_meas)
+    plt.imshow(azim_meas, cmap='twilight')
     plt.colorbar()
     plt.title('Measured orientation')
 
     # Plot predictions
     plt.subplot(2,4,5)
-    plt.imshow(vol_current)
+    plt.imshow(vol_current, cmap='plasma')
     plt.colorbar()
     plt.title('Predicted volume (MIP)', weight='bold')
     plt.subplot(2,4,6)
-    plt.imshow(ret_current)
+    plt.imshow(ret_current, cmap='plasma')
     plt.colorbar()
     plt.title('Retardance of predicted volume')
     plt.subplot(2,4,7)
-    plt.imshow(azim_current)
+    plt.imshow(azim_current, cmap='twilight')
     plt.colorbar()
     plt.title('Orientation of predicted volume')
 
@@ -469,3 +543,13 @@ def plot_est_iteration_update(
         return fig
     else:
         return None
+
+def main():
+    width, height = 512, 512
+    gradient_horizontal = np.linspace(0, 1, width)
+    horizontal_img = np.tile(gradient_horizontal, (height, 1))
+    rgb = hue_map(horizontal_img)
+    plt.imshow(rgb, cmap='hsv')
+
+if __name__ == '__main__':
+    main()

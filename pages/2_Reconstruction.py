@@ -327,7 +327,7 @@ if st.button("**Reconstruct birefringent volume!**"):
     st.session_state['my_volume'] = volume_estimation
     st.write("Scroll over image to zoom in and out.")
     # Todo: use a slider to filter the volume
-    volume_ths = 0.05 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
+    volume_ths = 0.5 #st.slider('volume ths', min_value=0., max_value=1., value=0.1)
     matplotlib.pyplot.close()
     my_fig = st.session_state['my_volume'].plot_lines_plotly(delta_n_ths=volume_ths)
     st.plotly_chart(my_fig, use_container_width=True)
