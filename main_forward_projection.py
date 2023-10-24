@@ -23,6 +23,8 @@ backend = BackEnds.PYTORCH
 if backend == BackEnds.PYTORCH:
     import torch
     torch.set_grad_enabled(False)
+else:
+    device = 'cpu'
 
 
 # Get optical parameters template
@@ -45,8 +47,8 @@ optical_info['n_voxels_per_ml'] = 1
 #       do single_voxel{volume_shape[0]//2} for a voxel in the center
 shift_from_center = 0
 volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
-# volume_type = 'ellipsoid'
-volume_type = 'shell'
+volume_type = 'ellipsoid'
+# volume_type = 'shell'
 # volume_type = '2ellipsoids'
 # volume_type = 'single_voxel'
 
@@ -100,12 +102,16 @@ my_volume.save_as_file('objects/shell_rect_voxels.h5', description=my_descriptio
 # # Plot ray geometry
 # rays.plot_rays()
 
-# # Plot the volume
-# plotly_figure = my_volume.plot_lines_plotly()
-# # Append volumes to plot
-# plotly_figure = my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(),
-#                                               opacity=0.01, fig=plotly_figure)
-# plotly_figure.show()
+# Plot the volume
+plotly_figure = my_volume.plot_lines_plotly()
+# Append volumes to plot
+plotly_figure = my_volume.plot_volume_plotly(optical_info, voxels_in=my_volume.get_delta_n(),
+                                              opacity=0.01, fig=plotly_figure)
+plotly_figure.show()
+
+if backend == BackEnds.PYTORCH:
+    # Move volume to GPU if avaliable
+    volume_GT = my_volume.to(device)
 
 # Move volume to GPU if avaliable
 my_volume = my_volume.to(device)

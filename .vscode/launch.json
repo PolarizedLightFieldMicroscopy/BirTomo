@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: Streamlit Home",
+            "type": "python",
+            "request": "launch",
+            "module": "streamlit",
+            "env": {
+                // any .env variables you may have
+                "STREAMLIT_APP": "${file}",
+                "STREAMLIT_ENV": "development",
+            },
+            "args": [
+                "run",
+                "User_Interface.py"
+                // "${file}"
+            ],
+            "jinja": true,
+            "justMyCode": true
+        }
+    ]
+}

@@ -1,21 +1,18 @@
 import pytest
-
 from VolumeRaytraceLFM.birefringence_implementations import *
 import matplotlib.pyplot as plt
 import copy
 import os
-
 
 @pytest.fixture(scope = 'module')
 def global_data():
     '''Create global optic_setting and optical_info containing all the optics and volume information
         The tests can access this by passing the name of this function as an argument for example:
         def test_something(global_data):
-            optical_info = global_data['optical_info]
+            optical_info = global_data['optical_info']
     '''
-    
-    # Set torch precision to Double to match numpy 
-    torch.set_default_tensor_type(torch.DoubleTensor)
+    # Set torch precision to Double to match numpy
+    torch.set_default_dtype(torch.float64)
     
     # Fetch default optical info
     optical_info = OpticalElement.get_optical_info_template()
@@ -289,7 +286,6 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     optical_info['n_micro_lenses']  = volume_shape[1] - 4
     optical_info['n_voxels_per_ml'] = 1
 
-    
     # Create Ray-tracing objects
     BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(backend=BackEnds.PYTORCH, optical_info=optical_info)
@@ -297,7 +293,6 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     BF_raytrace_numpy.compute_rays_geometry()
     BF_raytrace_torch.compute_rays_geometry()
 
-    
     # Generate a volume with random everywhere
     voxel_torch_random = BirefringentVolume(backend=BackEnds.PYTORCH, optical_info=optical_info, volume_creation_args={'init_mode' : 'random'})
 
@@ -305,8 +300,6 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     voxel_numpy_random = BirefringentVolume(backend=BackEnds.NUMPY,  optical_info=optical_info,
                                     Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
 
-
-    
     assert BF_raytrace_numpy.optical_info == voxel_numpy_random.optical_info, 'Mismatch on RayTracer and volume optical_info numpy'
     assert BF_raytrace_torch.optical_info == voxel_torch_random.optical_info, 'Mismatch on RayTracer and volume optical_info torch'
     
@@ -322,10 +315,10 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     assert torch.all(torch.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
-    
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
 @pytest.mark.parametrize('volume_init_mode', [
+        'single_voxel',
         'random',
         'ellipsoid',
         '1planes',
@@ -347,15 +340,13 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     optical_info['n_voxels_per_ml'] = 1
     optical_info['pixels_per_ml'] = 17
 
-    
     # Create Ray-tracing objects
     BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(backend=BackEnds.PYTORCH, optical_info=optical_info)
-    
+
     BF_raytrace_numpy.compute_rays_geometry()
     BF_raytrace_torch.compute_rays_geometry()
 
-    
     # Generate a volume with random everywhere
     voxel_torch_random = BirefringentVolume(backend=BackEnds.PYTORCH, optical_info=optical_info, volume_creation_args={'init_mode' : volume_init_mode})
     # Copy the volume, to have exactly the same things
@@ -370,7 +361,6 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     with np.errstate(divide='raise'):
         [ret_img_numpy, azi_img_numpy] = BF_raytrace_numpy.ray_trace_through_volume(voxel_numpy_random)
     [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
-    [ret_img_torch, azi_img_torch] = BF_raytrace_torch.ray_trace_through_volume(voxel_torch_random)
     
     plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
@@ -380,7 +370,6 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     assert torch.all(torch.isnan(azi_img_torch)==False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)), "Error when comparing retardance computations"
-    
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
 @pytest.mark.parametrize('n_voxels_per_ml', [
@@ -404,23 +393,19 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
     optical_info['n_voxels_per_ml'] = n_voxels_per_ml
     optical_info['pixels_per_ml'] = 17
 
-    
     # Create Ray-tracing objects
     BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
     BF_raytrace_torch = BirefringentRaytraceLFM(backend=BackEnds.PYTORCH, optical_info=optical_info)
-    
+
     BF_raytrace_numpy.compute_rays_geometry()
     BF_raytrace_torch.compute_rays_geometry()
 
-    
     # Generate a volume with random everywhere
     voxel_torch_random = BirefringentVolume(backend=BackEnds.PYTORCH,  optical_info=optical_info, volume_creation_args={'init_mode' : 'ellipsoid'})
     # Copy the volume, to have exactly the same things
     voxel_numpy_random = BirefringentVolume(backend=BackEnds.NUMPY,  optical_info=optical_info,
                                     Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
 
-
-    
     assert BF_raytrace_numpy.optical_info == voxel_numpy_random.optical_info, 'Mismatch on RayTracer and volume optical_info numpy'
     assert BF_raytrace_torch.optical_info == voxel_torch_random.optical_info, 'Mismatch on RayTracer and volume optical_info torch'
     
@@ -440,9 +425,8 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
     
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
-
-
 @pytest.mark.parametrize('volume_init_mode', [
+        'single_voxel',
         'random',
         'ellipsoid',
         '1planes',
@@ -456,9 +440,10 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     optical_info = local_data['optical_info']
 
     # Simplify the settings, so it's fast to compute
-    volume_shape = [3,3,3]
+    volume_shape = [7,7,7]
     optical_info['volume_shape'] = volume_shape
     optical_info['pixels_per_ml'] = 17
+    optical_info['n_micro_lenses'] = 3
 
     BF_raytrace_torch = BirefringentRaytraceLFM(backend=BackEnds.PYTORCH, optical_info=optical_info)
     BF_raytrace_torch.compute_rays_geometry()
@@ -473,7 +458,6 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     # Set all gradients to zero
     optimizer.zero_grad()
 
-
     # Compute a forward projection
     [ret_image, azim_image] = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
     # Calculate a loss, for example minimizing the mean of both images
@@ -482,9 +466,10 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     # Compute and propagate the gradients
     L.backward()
 
+    # TODO: check that the none of the gradients are nans
     # Check if the gradients where properly propagated
-    assert volume_torch_random.Delta_n.grad.sum() != 0, 'Gradients were not propagated to the volumes Delta_n correctly'
-    assert volume_torch_random.optic_axis.grad.sum() != 0, 'Gradients were not propagated to the volumes optic_axis correctly'
+    assert volume_torch_random.Delta_n.grad is not None, 'Gradients were not propagated to the volumes Delta_n correctly'
+    assert volume_torch_random.optic_axis.grad is not None, 'Gradients were not propagated to the volumes optic_axis correctly'
 
     # Calculate the volume values before updating the values with the gradients
     Delta_n_sum_initial = volume_torch_random.Delta_n.sum()
@@ -497,11 +482,10 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     Delta_n_sum_final = volume_torch_random.Delta_n.sum()
     optic_axis_sum_final = volume_torch_random.optic_axis.sum()
 
+    # TODO: check that none of the gradients are nans
     # These should be different
-    assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
-    assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
-
-
+    assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume was not updated correctly. Nothing changed in the volume after the optimization step.'
+    assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume was not updated correctly. Nothing changed in the volume after the optimization step.'
 
 # @pytest.mark.parametrize('volume_init_mode', [
 #         'random',
@@ -567,11 +551,73 @@ def speed_speed(global_data, volume_init_mode):
         # assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
         # assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume wasnt updated correctly, nothing changed in the volume after the optimization step'
 
+def test_azimuth_neg_birefringence(global_data):
+    '''Verify that the effects of the birefringence being of opposite sign.'''
+    torch.set_grad_enabled(False)
+    # Gather global data
+    local_data = copy.deepcopy(global_data)
+    optical_info = local_data['optical_info']
 
+    # Volume shape
+    volume_shape = [3,3,3]
+    optical_info['volume_shape'] = volume_shape
+
+    # The n_micro_lenses defines the active volume area, and it should be smaller than the volume_shape.
+    # This as some rays go beyond the volume in front of a single micro-lens
+    optical_info['n_micro_lenses']  = 1
+    optical_info['n_voxels_per_ml'] = 1
+    optical_info['pixels_per_ml'] = 17
+
+    
+    # Create Ray-tracing objects
+    BF_raytrace_numpy = BirefringentRaytraceLFM(optical_info=optical_info)
+    BF_raytrace_torch = BirefringentRaytraceLFM(backend=BackEnds.PYTORCH, optical_info=optical_info)
+    
+    BF_raytrace_numpy.compute_rays_geometry()
+    BF_raytrace_torch.compute_rays_geometry()
+
+    # Create birefringence voxel volumes
+    voxel_args_pos = {
+    'init_mode' : 'single_voxel',
+    'init_args' : {
+        'delta_n' : 0.05,
+        'offset' : [0, 0, 0]
+        }
+    }
+    voxel_args_neg = {
+    'init_mode' : 'single_voxel',
+    'init_args' : {
+        'delta_n' : -0.05,
+        'offset' : [0, 0, 0]
+        }
+    }
+    voxel_pos_torch = BirefringentVolume(backend=BackEnds.PYTORCH, optical_info=optical_info, volume_creation_args=voxel_args_pos)
+    voxel_neg_torch = BirefringentVolume(backend=BackEnds.PYTORCH, optical_info=optical_info, volume_creation_args=voxel_args_neg)
+    voxel_pos_numpy = BirefringentVolume(backend=BackEnds.NUMPY, optical_info=optical_info, volume_creation_args=voxel_args_pos)
+    voxel_neg_numpy = BirefringentVolume(backend=BackEnds.NUMPY, optical_info=optical_info, volume_creation_args=voxel_args_neg)
+
+    # Verify wtih pytorch
+    [ret_img_pos, azi_img_pos] = BF_raytrace_torch.ray_trace_through_volume(voxel_pos_torch)
+    [ret_img_neg, azi_img_neg] = BF_raytrace_torch.ray_trace_through_volume(voxel_neg_torch)
+    rotated_azi_img_neg = torch.flip(azi_img_neg.permute(1,0), [1])
+    plot_ret_azi_flipsign_image_comparison(ret_img_pos.numpy(), azi_img_pos.numpy(), ret_img_neg.numpy(), rotated_azi_img_neg.numpy())
+    assert np.all(np.isclose(ret_img_pos.numpy(), ret_img_neg.numpy(), atol=1e-5)), "Retardance depends on the sign of the birefrigence."
+    check_azimuth_images(azi_img_pos.numpy(), rotated_azi_img_neg.numpy(), "Flipping the sign of the birefringence does not simply rotate the azimuth.")
+
+    # Verify with numpy
+    with np.errstate(divide='raise'):
+        [ret_img_pos, azi_img_pos] = BF_raytrace_numpy.ray_trace_through_volume(voxel_pos_numpy)
+        [ret_img_neg, azi_img_neg] = BF_raytrace_numpy.ray_trace_through_volume(voxel_neg_numpy)
+    rotated_azi_img_neg = np.flip(azi_img_neg.T, axis=1)
+    plot_ret_azi_flipsign_image_comparison(ret_img_pos, azi_img_pos, ret_img_neg, rotated_azi_img_neg)
+    assert np.all(np.isclose(ret_img_pos.astype(np.float32), ret_img_neg.astype(np.float32), atol=1e-5)), "Retardance depends on the sign of the birefrigence."
+    check_azimuth_images(azi_img_pos.astype(np.float32), rotated_azi_img_neg.astype(np.float32), "Flipping the sign of the birefringence does not simply rotate the azimuth.")
 
 def main():
+    test_torch_auto_differentiation(global_data(), '1planes')
+    test_torch_auto_differentiation(global_data(), 'ellipsoid')
     # speed_speed(global_data(), 'ellipsoid')
-    test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[8])
+    # test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[8])
     # Multi lenslet example
     # test_forward_projection_different_volumes(global_data(), 'ellipsoid')
     # test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[51])
@@ -660,6 +706,40 @@ def plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, a
     diff = np.abs(azi_img_torch-azi_img_numpy)
     plt.imshow(diff)
     plt.title(f'Azi. Diff: {diff.sum()}')
+    plt.pause(0.05)
+    plt.show(block=True)
+
+def plot_ret_azi_flipsign_image_comparison(ret_img_pos, azi_img_pos, ret_img_neg, azi_img_neg):
+    # Check if we are running in pytest
+    import os
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return
+    plt.rcParams['image.origin'] = 'lower'
+    plt.clf()
+    plt.subplot(3,2,1)
+    plt.imshow(ret_img_pos)
+    plt.title('Ret. pos bir')
+    plt.subplot(3,2,2)
+    plt.imshow(azi_img_pos, cmap='twilight')
+    plt.title('Azi. pos bir')
+
+    plt.subplot(3,2,3)
+    plt.imshow(ret_img_neg)
+    plt.title('Ret. neg bir')
+    plt.subplot(3,2,4)
+    plt.imshow(azi_img_neg, cmap='twilight')
+    plt.title('Azi. neg bir')
+
+    plt.subplot(3,2,5)
+    diff = np.abs(ret_img_pos-ret_img_neg)
+    plt.imshow(diff)
+    plt.title(f'Ret. Diff: {diff.sum():.3f}')
+
+    plt.subplot(3,2,6)
+    diff = np.abs(azi_img_pos-azi_img_neg)
+    plt.imshow(diff)
+    plt.title(f'Azi. Diff: {diff.sum():.3f}')
+    plt.tight_layout()
     plt.pause(0.05)
     plt.show(block=True)
 

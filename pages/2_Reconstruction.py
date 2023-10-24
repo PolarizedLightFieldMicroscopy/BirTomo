@@ -369,7 +369,7 @@ if 'vol_est' in st.session_state:
     # st.session_state['vol_threshold'] = 0.1
     st.session_state['vol_threshold'] = st.slider(
         'Display optic axis vectors for the voxel where the birefringence is above the threshold:',
-        min_value=0., max_value=1., value=0.1
+        min_value=0., max_value=1., value=0.5
         )
     st.session_state['fig_est'] = st.session_state['vol_est'].plot_lines_plotly(delta_n_ths=st.session_state['vol_threshold'])
     # starts off more pan'ed in than desired

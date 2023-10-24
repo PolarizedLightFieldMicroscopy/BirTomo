@@ -1,10 +1,8 @@
 import pytest
-
 from VolumeRaytraceLFM.birefringence_implementations import *
 import matplotlib.pyplot as plt
 import copy
 import os
-
 
 # @pytest.fixture(scope = 'module')
 def global_data():
