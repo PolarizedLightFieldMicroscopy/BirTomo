@@ -11,71 +11,43 @@ from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 from VolumeRaytraceLFM.optic_config import volume_2_projections
 from plotting_tools import plot_iteration_update, plot_retardance_orientation
+from VolumeRaytraceLFM.volumes import volume_args
+# from VolumeRaytraceLFM.ray import setup_raytracer
+# from VolumeRaytraceLFM.visualization_utils import handle_visualization_and_saving
 
 SAVE_FORWARD_IMAGES = True
+SESSION_DIR = 'Oct27'
 backend = BackEnds.PYTORCH
-shift_from_center = -1
+# shift_from_center = -1
 
 DEVICE = torch.device(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
 
-DIR_POSTFIX = 'mla3_pixml5'
-VOL_NAME = 'sphere'
-sphere_args = {
-    'init_mode' : 'ellipsoid',
-    'init_args' : {
-    'radius' : [4.5, 4.5, 4.5],
-    'center' : [0.5, 0.5, 0.5],
-    'delta_n' : -0.01,
-    'border_thickness' : 1
-        }
-    }
+# DIR_POSTFIX = 'mla25_TVregaxisx'
+DIR_POSTFIX = 'mla1'
+VOL_NAME = 'voxel_optimzer'
 
-plane_args = {
-    'init_mode' : '1planes',
-    'init_args' : {
-        }
-    }
-
-voxel_args = {
-    'init_mode' : 'single_voxel',
-    'init_args' : {
-        'delta_n' : -0.05,
-        'offset' : [0, 0, 0]
-        }
-    }
-
-ellisoid_init_args = {
-    'init_mode' : 'ellipsoid',
-    }
-
-planes_init_args = {
-    'init_mode' : '1planes',
-    }
-
-vol_args = sphere_args
-
+vol_args = volume_args.voxel_args
 
 def setup_optical_parameters():
     """Setup optical parameters."""
     optical_info = BirefringentVolume.get_optical_info_template()
-    optical_info['volume_shape'] = [15, 51, 51]
-    # optical_info['volume_shape'] = [11, 11, 11]
+    optical_info['volume_shape'] = [1, 3, 3]
     optical_info['axial_voxel_size_um'] = 1.0
     optical_info['pixels_per_ml'] = 17
-    optical_info['n_micro_lenses'] = 25
+    optical_info['n_micro_lenses'] = 1
     optical_info['n_voxels_per_ml'] = 1
     return optical_info
 
 def setup_training_parameters():
     """Setup training parameters."""
     return {
-        'n_epochs': 201,
+        'n_epochs': 11,
         'azimuth_weight': .5,
         'regularization_weight': 0.1,
         'lr': 1e-3,
-        'output_posfix': 'normproj'
+        'output_posfix': ''
     }
 
 def setup_raytracer(optical_info):
@@ -100,7 +72,7 @@ def forward_image_handling(volume_type, optical_info, training_params, rays):
     """Handle forward image processing."""
     base_dir = 'forward_images'
     forward_img_dir = (f'{volume_type}_{optical_info["volume_shape"][0]}'
-                       f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}_{training_params["output_posfix"]}')
+                       f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}_{DIR_POSTFIX}')
     path = os.path.join(base_dir, forward_img_dir)
 
     if SAVE_FORWARD_IMAGES:
@@ -125,15 +97,15 @@ def setup_volume_estimation(optical_info, rays):
     """Setup volume estimation."""
     volume_estimation = BirefringentVolume(backend=backend,
                                            optical_info=optical_info,
-                                           volume_creation_args = {'init_mode' : 'random'}
+                                           volume_creation_args = volume_args.random_args
                                            )
     # Let's rescale the random to initialize the volume
     volume_estimation.Delta_n.requires_grad = False
     volume_estimation.optic_axis.requires_grad = False
-    volume_estimation.Delta_n *= -0.01
+    # volume_estimation.Delta_n *= -0.01
     # # And mask out volume that is outside FOV of the microscope
-    mask = rays.get_volume_reachable_region()
-    volume_estimation.Delta_n[mask.view(-1)==0] = 0
+    # mask = rays.get_volume_reachable_region()
+    # volume_estimation.Delta_n[mask.view(-1)==0] = 0
     volume_estimation.Delta_n.requires_grad = True
     volume_estimation.optic_axis.requires_grad = True
     # Indicate to this object that we are going to optimize Delta_n and optic_axis
@@ -174,6 +146,13 @@ def compute_losses(co_gt, ca_gt, ret_image_current, azim_image_current, volume_e
         (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
         (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
     )
+    axis_x = volume_estimation.get_optic_axis()[0, ...]
+    TV_reg_axis_x = (
+        (axis_x[1:, ...] - axis_x[:-1, ...]).pow(2).sum() +
+        (axis_x[:, 1:, ...] - axis_x[:, :-1, ...]).pow(2).sum() +
+        (axis_x[:, :, 1:] - axis_x[:, :, :-1]).pow(2).sum()
+    )
+    # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
     regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean()
 
     # Total loss
@@ -193,7 +172,7 @@ def one_iteration(co_gt, ca_gt, optimizer, rays, volume_estimation, training_par
     return L.item(), data_term.item(), regularization_term.item(), ret_image_current, azim_image_current
 
 def handle_visualization_and_saving(ep, Delta_n_GT, ret_image_measured, azim_image_measured, volume_estimation, figure, output_dir, ret_image_current, azim_image_current, losses, data_term_losses, regularization_term_losses):
-    if ep % 10 == 0:
+    if ep % 1 == 0:
         plt.clf()
         plot_iteration_update(
             volume_2_projections(Delta_n_GT.unsqueeze(0))[0, 0].detach().cpu().numpy(),
@@ -247,7 +226,7 @@ def reconstruct(ret_image_measured, azim_image_measured, training_params, optimi
     volume_estimation.save_as_file(f"{output_dir}/volume_final_ep_{'{:02d}'.format(ep)}.h5")
     return volume_estimation
 
-def create_savedir(base_dir, sub_dir, optical_info):
+def create_savedir(base_dir, sub_dir, optical_info, VOL_NAME=VOL_NAME):
     base_dir = 'forward_images'
     forward_img_dir = (f'{VOL_NAME}_{optical_info["volume_shape"][0]}'
                        f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}_{DIR_POSTFIX}')
@@ -271,11 +250,14 @@ def visualize_volume(volume_recon, optical_info):
         plotly_figure.show()
     return
 
-def main():
+def execute_pipeline(vol_args, 
+                     SESSION_DIR=SESSION_DIR, 
+                     VOL_NAME=VOL_NAME, 
+                     DIR_POSTFIX=DIR_POSTFIX):
     optical_info = setup_optical_parameters()
     training_params = setup_training_parameters()
     rays = setup_raytracer(optical_info)
-    savedir = create_savedir('forward_images', 'Oct23', optical_info)
+    savedir = create_savedir('forward_images', SESSION_DIR, optical_info, VOL_NAME=VOL_NAME)
     # volume_type = 'shell'  # Define this as needed
     volume_GT = BirefringentVolume(
         backend=backend,
@@ -286,16 +268,58 @@ def main():
     visualize_volume(volume_GT, optical_info)
     ret_image_meas, azim_image_meas = forward_model(volume_GT, rays, savedir)
     my_fig = plot_retardance_orientation(ret_image_meas.cpu().numpy(), azim_image_meas.cpu().numpy(), 'hsv', include_labels=True)
-    plt.pause(0.2)
-    plt.show(block=True)
-    my_fig.savefig(savedir + '/ret_azim.png', bbox_inches='tight', dpi=300)
+    # plt.pause(0.2)
+    # plt.show(block=True)
+    my_fig.tight_layout()
+    my_fig.savefig(savedir + '/ret_azim.png', dpi=300)
     Delta_n_GT = volume_GT.get_delta_n().detach().clone()
     volume_estimation = setup_volume_estimation(optical_info, rays)
     optimizer = optimizer_setup(volume_estimation, training_params)
 
     # Starting the reconstruction
-    output_dir = f'reconstructions/Oct23/{VOL_NAME}_{optical_info["volume_shape"][0]}' \
-                + f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}_{training_params["output_posfix"]}'
+    output_dir = f'reconstructions/{SESSION_DIR}/{VOL_NAME}_{optical_info["volume_shape"][0]}' \
+                + f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}_{DIR_POSTFIX}'
+    os.makedirs(output_dir, exist_ok=True)
+    torch.save({'optical_info' : optical_info,
+            'training_params' : training_params,
+            'vol_args' : vol_args}, f'{output_dir}/parameters.pt')
+
+    # Initialize visualization settings and figures
+    figure = setup_visualization()
+
+    volume_recon = reconstruct(ret_image_meas, azim_image_meas, training_params, optimizer, rays, Delta_n_GT, volume_estimation, figure, output_dir)
+    visualize_volume(volume_recon, optical_info)
+    print(f"Reconstructed {VOL_NAME}")
+
+
+def main():
+    optical_info = setup_optical_parameters()
+    training_params = setup_training_parameters()
+    rays = setup_raytracer(optical_info)
+    savedir = create_savedir('forward_images', SESSION_DIR, optical_info)
+    # volume_type = 'shell'  # Define this as needed
+    volume_GT = BirefringentVolume(
+        backend=backend,
+        optical_info=optical_info,
+        volume_creation_args=vol_args
+    )
+    # with torch.no_grad():
+    #     volume_GT.get_delta_n()[:optical_info['volume_shape'][0] // 2 + 2,...] = 0
+    volume_GT = volume_GT.to(DEVICE)
+    # visualize_volume(volume_GT, optical_info)
+    ret_image_meas, azim_image_meas = forward_model(volume_GT, rays, savedir)
+    my_fig = plot_retardance_orientation(ret_image_meas.cpu().numpy(), azim_image_meas.cpu().numpy(), 'hsv', include_labels=True)
+    # plt.pause(0.2)
+    # plt.show(block=True)
+    my_fig.tight_layout()
+    my_fig.savefig(savedir + '/ret_azim.png', dpi=300)
+    Delta_n_GT = volume_GT.get_delta_n().detach().clone()
+    volume_estimation = setup_volume_estimation(optical_info, rays)
+    optimizer = optimizer_setup(volume_estimation, training_params)
+
+    # Starting the reconstruction
+    output_dir = f'reconstructions/{SESSION_DIR}/{VOL_NAME}_{optical_info["volume_shape"][0]}' \
+                + f'x{optical_info["volume_shape"][1]}x{optical_info["volume_shape"][2]}_{DIR_POSTFIX}'
     os.makedirs(output_dir, exist_ok=True)
     torch.save({'optical_info' : optical_info,
             'training_params' : training_params,
@@ -309,3 +333,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # params_sets = [
+    #     {"vol_args": volume_args.sphere_args2, "VOL_NAME": "sphere2pos"},
+    #     {"vol_args": volume_args.sphere_args3, "VOL_NAME": "sphere3pos"},
+    #     {"vol_args": volume_args.sphere_args4, "VOL_NAME": "sphere4pos"},
+    #     {"vol_args": volume_args.sphere_args5, "VOL_NAME": "sphere5pos"},
+    #     {"vol_args": volume_args.sphere_args6, "VOL_NAME": "sphere6pos"},
+    # ]
+
+    # params_sets = [
+    #     {"vol_args": volume_args.sphere_args2, "VOL_NAME": "sphere2pos"},
+    #     {"vol_args": volume_args.sphere_args3, "VOL_NAME": "sphere3pos"},
+    #     {"vol_args": volume_args.sphere_args4, "VOL_NAME": "sphere4pos"},
+    #     {"vol_args": volume_args.sphere_args5, "VOL_NAME": "sphere5pos"},
+    #     {"vol_args": volume_args.sphere_args6, "VOL_NAME": "sphere6pos"},
+    # ]
+    # for params in params_sets:
+    #     execute_pipeline(**params)

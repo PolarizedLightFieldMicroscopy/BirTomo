@@ -523,7 +523,11 @@ class BirefringentVolume(BirefringentElement):
             offset = init_args['offset'] if 'offset' in init_args.keys() else [0,0,0]
             voxel_parameters = self.generate_single_voxel_volume(volume_shape, delta_n, optic_axis, offset)
         elif init_mode=='random':
-            voxel_parameters = self.generate_random_volume(volume_shape)
+            if init_args == {}:
+                my_init_args = {'Delta_n_range' : [0,1], 'axes_range' : [-1,1]}
+            else:
+                my_init_args = init_args
+            voxel_parameters = self.generate_random_volume(volume_shape, init_args=my_init_args)
         elif 'planes' in init_mode:
             n_planes = int(init_mode[0])
             z_offset = init_args['z_offset'] if 'z_offset' in init_args.keys() else 0
@@ -1365,6 +1369,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 print(f"Error: {e}")
             assert not torch.isnan(JM).any(), "A Jones matrix contains NaN values."
         return JM
+
+    def clone(self):
+        # Code to create a copy of this instance
+        new_instance = BirefringentVolume(...)
+        return new_instance
 
     @staticmethod
     def rayJM_numpy(JMlist):

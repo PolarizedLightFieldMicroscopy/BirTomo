@@ -1,0 +1,7 @@
+{
+    "n_epochs": 101,
+    "azimuth_weight": 0.5,
+    "regularization_weight": 0.1,
+    "lr": 1e-3,
+    "output_posfix": ""
+}
