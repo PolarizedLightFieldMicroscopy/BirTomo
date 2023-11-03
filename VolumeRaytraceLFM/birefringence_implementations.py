@@ -161,6 +161,7 @@ class BirefringentVolume(BirefringentElement):
             mags = np.linalg.norm(self.optic_axis, axis=0)
             valid_mask = mags>0
             self.optic_axis[:, valid_mask] /= mags[valid_mask]
+
     def __iadd__(self, other):
         ''' Overload the += operator to be able to sum volumes'''
         # Check that shapes are the same
@@ -347,7 +348,7 @@ class BirefringentVolume(BirefringentElement):
             isomax=0.1,
             opacity=opacity, # needs to be small to see through all surfaces
             surface_count=20, # needs to be a large number for good volume rendering
-            # colorscale=colormap
+            colorscale=colormap
             )
         camera = {'eye': {'x': 50, 'y': 0, 'z': 0}}
         fig.update_layout(
@@ -491,7 +492,7 @@ class BirefringentVolume(BirefringentElement):
         delta_n = np.array(volume_file['data/delta_n'])
         # Fetch optic_axis
         optic_axis = np.array(volume_file['data/optic_axis'])
-
+        # TODO: adjust for when optical_info is None
         region_shape = np.array(optical_info['volume_shape'])
         if (delta_n.shape == region_shape).all():
             pass
@@ -505,7 +506,38 @@ class BirefringentVolume(BirefringentElement):
             raise ValueError(err)
         # Create volume
         volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
+        return volume_out
 
+    @staticmethod
+    def load_from_file(h5_file_path, backend_type='numpy'):
+        ''' Loads a birefringent volume from an h5 file and places it in the center of the volume
+            It requires to have:
+                data/delta_n [nz,ny,nx]: Birefringence volumetric information.
+                data/optic_axis [3,nz,ny,nx]: Optical axis per voxel.'''
+        if backend_type == 'torch':
+            backend = BackEnds.PYTORCH
+        elif backend_type == 'numpy':
+            backend = BackEnds.NUMPY
+        else:
+            raise ValueError(f"Backend type {backend_type} is not an option.")
+        # Load volume
+        volume_file = h5py.File(h5_file_path, "r")
+        # Fetch birefringence
+        delta_n = np.array(volume_file['data/delta_n'])
+        # Fetch optic_axis
+        optic_axis = np.array(volume_file['data/optic_axis'])
+        # Fetch optical info
+        volume_shape = np.array(volume_file['optical_info/volume_shape'])
+        voxel_size_um = np.array(volume_file['optical_info/voxel_size_um'])
+        cube_voxels = True
+        # Create optical info dictionary
+        # TODO: add the remaining variables, notably the voxel size and the cube voxels boolean
+        optical_info = dict({'volume_shape': volume_shape,
+                             'voxel_size_um': voxel_size_um,
+                             'cube_voxels': cube_voxels}
+                             )
+        # Create volume
+        volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
         return volume_out
 
     def init_volume(self, init_mode='zeros', init_args={}):

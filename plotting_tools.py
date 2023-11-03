@@ -10,20 +10,13 @@ def explode(data):
     return data_e
 
 def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to_plot=None, colormap='inferno', use_matplotlib=False):
-    # is optical_config a Waveblocks object or a dictionary?
-    wave_blocks_found = False
-    if wave_blocks_found and isinstance(optical_config, OpticConfig):
-        volume_shape = optical_config.volume_config.volume_shape
-        volume_size_um = optical_config.volume_config.volume_size_um
-        [dz, dxy, dxy] = optical_config.volume_config.voxel_size_um
-    else:
-        try:
-            volume_shape = optical_config['volume_shape']
-            volume_size_um = optical_config['volume_size_um']
-            [dz, dxy, dxy] = optical_config['voxel_size']
-        except:
-            print('Error in plot_ray_path: optical_config should be either a waveblock.OpticConfig or a dictionary containing the required variables...')
-            return
+    try:
+        volume_shape = optical_config['volume_shape']
+        volume_size_um = optical_config['volume_size_um']
+        [dz, dxy, dxy] = optical_config['voxel_size']
+    except:
+        print('Error in plot_ray_path: optical_config should be a dictionary containing the required variables...')
+        return
 
     z1,y1,x1 = ray_entry
     z2,y2,x2 = ray_exit
@@ -362,28 +355,33 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
 def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv', include_labels=False):
     fig = plt.figure(figsize=(12,2.5))
     plt.rcParams['image.origin'] = 'lower'
+    # Retardance subplot
     plt.subplot(1,3,1)
     plt.imshow(ret_image,cmap='plasma') # viridis
     cbar1 = plt.colorbar(fraction=0.046, pad=0.04)
     cbar1.set_label('Radians')
     plt.title('Retardance')
+    plt.xticks([])
+    plt.yticks([])
+    # Azimuth orientation subplot
     plt.subplot(1,3,2)
     plt.imshow(azim_image, cmap='twilight')
     cbar2 = plt.colorbar(fraction=0.046, pad=0.04)
     cbar2.set_label('Radians')
     plt.title('Orientation')
+    plt.xticks([])
+    plt.yticks([])
+    # Combined retardance and orientation subplot
     ax = plt.subplot(1,3,3)
-    plt.title('Retardance & Orientation')
     if azimuth_plot_type == 'lines':
+        plt.title('Retardance & Orientation')
         plot_birefringence_lines(ret_image, azim_image, cmap='viridis', line_color='white', ax=ax)
     else:
         if include_labels:
             plot_hue_map(ret_image, azim_image, ax=ax)
         else:
+            plt.title('Retardance & Orientation')
             plot_birefringence_colorized(ret_image, azim_image)
-        
-    # plt.colorbar(fraction=0.046, pad=0.04)
-    # plt.title('Retardance & Orientation')
     plt.rcParams.update({
         "text.usetex": False,
         "font.family": "sans-serif"

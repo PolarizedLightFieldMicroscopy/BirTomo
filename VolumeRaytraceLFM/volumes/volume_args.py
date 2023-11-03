@@ -120,3 +120,33 @@ shell1_args = {
     'border_thickness' : 1
         }
     }
+
+ellipsoid_large_args = {
+    'init_mode' : 'ellipsoid',
+    'init_args' : {
+    'radius' : [5.5, 9.5, 5.5],
+    'center' : [0.5, 0.5, 0.5],
+    'delta_n' : -0.01,
+    'border_thickness' : 1
+        }
+    }
+
+ellipsoid_args1 = {
+    'init_mode' : 'ellipsoid',
+    'init_args' : {
+    'radius' : [3.5, 9.5, 5.5],
+    'center' : [0.5, 0.5, 0.5],
+    'delta_n' : 0.01,
+    'border_thickness' : 1
+        }
+    }
+
+ellipsoid_args2 = {
+    'init_mode' : 'ellipsoid',
+    'init_args' : {
+    'radius' : [3.5, 6.5, 4.5],
+    'center' : [0.5, 0.5, 0.5],
+    'delta_n' : 0.01,
+    'border_thickness' : 1.5
+        }
+    }
