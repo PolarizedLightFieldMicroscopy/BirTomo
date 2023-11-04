@@ -3,7 +3,7 @@ from VolumeRaytraceLFM.birefringence_implementations import  (
     BirefringentVolume,
     BirefringentRaytraceLFM
 )
-from plotting_tools import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 import numpy as np
 
 

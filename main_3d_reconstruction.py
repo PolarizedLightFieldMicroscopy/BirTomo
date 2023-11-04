@@ -1,5 +1,4 @@
-"""Main script to run 3D reconstruction
-- includes forward projection
+"""Old script to run 3D reconstruction, see run_recon.py instead.
 """
 import time
 import os
@@ -9,8 +8,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from plotting_tools import plot_birefringence_lines, plot_birefringence_colorized, plot_iteration_update
-from VolumeRaytraceLFM.optic_config import volume_2_projections
+from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update
+from VolumeRaytraceLFM.visualization.plotting_volume import volume_2_projections
 # from N_regularization import N
 
 # Select backend: requires pytorch to calculate gradients

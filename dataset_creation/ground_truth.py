@@ -10,7 +10,7 @@ import time         # to measure ray tracing time
 import numpy as np
 from tifffile import imsave, imread
 import matplotlib.pyplot as plt
-from plotting_tools import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import  (
     BirefringentVolume,

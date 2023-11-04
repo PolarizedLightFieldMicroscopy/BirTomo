@@ -1,13 +1,13 @@
-''' Main script to generate forward projections.
+''' Temporary script to generate forward projections.
 - modular version of main_forward_projection.py
 '''
 import os
-import time
 import torch
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from plotting_tools import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
+from VolumeRaytraceLFM.ray import setup_raytracer
 
 SAVE_FORWARD_IMAGES = True
 backend = BackEnds.PYTORCH
@@ -53,15 +53,6 @@ def setup_optical_parameters():
     optical_info['n_micro_lenses'] = 7
     optical_info['n_voxels_per_ml'] = 1
     return optical_info
-
-def setup_raytracer(optical_info):
-    """Initialize Birefringent Raytracer."""
-    print(f'For raytracing, using computing device: cpu')
-    rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info).to('cpu')
-    start_time = time.time()
-    rays.compute_rays_geometry()
-    print(f'Ray-tracing time in seconds: {time.time() - start_time}')
-    return rays.to(DEVICE)
 
 def forward_model(volume_GT, rays, savedir):
     """Compute output of forward model."""
@@ -170,7 +161,6 @@ def main():
     plt.pause(0.2)
     plt.show(block=True)
     my_fig.savefig(savedir + '/ret_azim.png', bbox_inches='tight', dpi=300)
-    
 
 
 if __name__ == "__main__":
