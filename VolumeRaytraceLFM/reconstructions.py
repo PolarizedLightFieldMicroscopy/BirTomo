@@ -1,21 +1,25 @@
-import torch
-import numpy as np
-import time
+
 import copy
-from tqdm import tqdm
+import time
 import os
 import json
+import torch
+import numpy as np
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from VolumeRaytraceLFM.visualization_utils import (convert_volume_to_2d_mip,
-                                                    prepare_plot_mip,
-                                                    plot_iteration_update_gridspec,
-                                                    setup_visualization
-                                                    )
-from plotting_tools import plot_retardance_orientation
-from VolumeRaytraceLFM.files_utils import create_unique_directory
-from utils import parameters
+from VolumeRaytraceLFM.birefringence_implementations import (
+    BirefringentVolume,
+    BirefringentRaytraceLFM
+    )
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_volume import (
+    convert_volume_to_2d_mip,
+    prepare_plot_mip,
+    )
+from VolumeRaytraceLFM.visualization.plt_util import setup_visualization
+from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update_gridspec
+from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
 
 class ReconstructionConfig:
     def __init__(self, optical_info, ret_image, azim_image, initial_vol, iteration_params, loss_fcn=None, gt_vol=None):
@@ -153,7 +157,7 @@ class Reconstructor:
 
     def setup_raytracer(self):
         """Initialize Birefringent Raytracer."""
-        print(f'For raytracing, using default computing device, likely cpu')
+        print('For raytracing, using default computing device, likely cpu')
         rays = BirefringentRaytraceLFM(backend=self.backend, optical_info=self.optical_info)
         start_time = time.time()
         rays.compute_rays_geometry()
@@ -181,7 +185,7 @@ class Reconstructor:
         return initial_volume
 
     def mask_outside_rays(self):
-        # Mask out volume that is outside FOV of the microscope
+        """Mask out volume that is outside FOV of the microscope"""
         self.volume_pred.Delta_n.requires_grad = False
         self.volume_pred.optic_axis.requires_grad = False
         mask = self.rays.get_volume_reachable_region()
@@ -238,8 +242,8 @@ class Reconstructor:
         regularization_term = training_params['regularization_weight'] * (TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean())
 
         # Total loss
-        L = data_term + regularization_term
-        return L, data_term, regularization_term
+        loss = data_term + regularization_term
+        return loss, data_term, regularization_term
 
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()

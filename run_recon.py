@@ -8,10 +8,8 @@ from VolumeRaytraceLFM.setup_parameters import (
     setup_iteration_parameters
     )
 from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructor
-from VolumeRaytraceLFM.visualization_utils import (
-    visualize_volume,
-    )
-from VolumeRaytraceLFM.files_utils import create_unique_directory
+from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
+from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
 
 BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device(
@@ -19,7 +17,7 @@ DEVICE = torch.device(
     )
 
 def main():
-    optical_info = setup_optical_parameters("VolumeRaytraceLFM\optical_config2.json")
+    optical_info = setup_optical_parameters("config_settings\optical_config2.json")
     optical_system = {'optical_info': optical_info}
     simulator = ForwardModel(optical_system, backend=BACKEND)
     # Volume creation
@@ -35,7 +33,7 @@ def main():
     azim_image_meas = simulator.azim_img
 
     recon_optical_info = optical_info
-    iteration_params = setup_iteration_parameters("VolumeRaytraceLFM\iter_config.json")
+    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,

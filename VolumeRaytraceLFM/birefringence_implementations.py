@@ -1395,7 +1395,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             JM[:,1,0] = offdiag
             JM[:,1,1] = diag2
             try:
-                import error_handling
+                from VolumeRaytraceLFM.utils import error_handling
                 error_handling.check_for_inf_or_nan(JM)
             except ValueError as e:
                 print(f"Error: {e}")

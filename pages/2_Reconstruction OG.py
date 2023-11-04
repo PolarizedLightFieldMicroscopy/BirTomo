@@ -23,9 +23,9 @@ import matplotlib.pyplot as plt
 import matplotlib 
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from VolumeRaytraceLFM.optic_config import volume_2_projections
-from plotting_tools import plot_iteration_update
-from loss_functions import *
+from VolumeRaytraceLFM.visualization.plotting_volume import volume_2_projections
+from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update
+from VolumeRaytraceLFM.loss_functions import *
 
 st.header("Choose our parameters")
 

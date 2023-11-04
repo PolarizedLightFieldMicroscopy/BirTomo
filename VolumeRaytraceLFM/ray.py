@@ -1,8 +1,7 @@
 import time
 import torch
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentRaytraceLFM
 try:
     import torch
     DEVICE = torch.device(

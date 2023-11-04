@@ -5,8 +5,9 @@ import os
 import h5py         # for reading h5 volume files
 import streamlit as st
 import matplotlib.pyplot as plt
-from VolumeRaytraceLFM.util import save_as_tif
-from plotting_tools import plot_retardance_orientation, plot_intensity_images
+from VolumeRaytraceLFM.utils.file_utils import save_as_tif
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_intensity import plot_intensity_images
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentVolume, BirefringentRaytraceLFM, JonesMatrixGenerators

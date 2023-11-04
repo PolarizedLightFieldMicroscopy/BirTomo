@@ -1,4 +1,4 @@
-![python version](https://img.shields.io/badge/python-3.10-blue)
+![python version](https://img.shields.io/badge/python-3.11-blue)
 [![Run Pytest](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml)
 # forward-model
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
@@ -48,7 +48,7 @@ Necessary packages:
 
 Run the following code to create a virtual environment will all the necessary and relevant packages:
 ```
-conda create --name model python=3.10 tqdm matplotlib h5py --yes
+conda create --name model python=3.11 tqdm matplotlib h5py --yes
 conda activate model
 conda install -c conda-forge pytorch ipykernel tifffile --yes
 conda install -c plotly plotly --yes

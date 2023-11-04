@@ -7,7 +7,7 @@ This script using numpy back-end to:
 """
 import time         # to measure ray tracing time
 import matplotlib.pyplot as plt
-from plotting_tools import plot_intensity_images
+from VolumeRaytraceLFM.visualization.plotting_intensity import plot_intensity_images
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import  (
     BirefringentVolume,

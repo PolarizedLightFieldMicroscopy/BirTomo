@@ -1,3 +1,10 @@
+"""
+This module provides utility functions for interfacing and extracting information from HDF5 files.
+It includes functions for investigating the keys in an HDF5 file, extracting microscope parameter 
+names and values, converting data between dataframes and dictionaries, and displaying HDF5 metadata 
+within a Streamlit application. Additionally, it defines a function to perform forward propagation 
+of rays through a volume using ray tracing.
+"""
 import time
 import streamlit as st
 import pandas as pd
@@ -9,6 +16,8 @@ except:
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 
 def key_investigator(key_home, my_str='', prefix='- '):
+    """Recursively investigates the keys in an HDF5 file and constructs a multiline string
+    representation of the file's hierarchical structure."""
     if hasattr(key_home, 'keys'):
         for my_key in key_home.keys():
             my_str = my_str + prefix + my_key +'\n'
@@ -16,6 +25,8 @@ def key_investigator(key_home, my_str='', prefix='- '):
     return my_str
 
 def get_microscope_param_names():
+    """Returns a tuple of lists containing parameter keys and their descriptions related to 
+    microscope settings."""
     microscope_params_keys = [
         'n_micro_lenses',
         'wavelength',
@@ -37,6 +48,8 @@ def get_microscope_param_names():
     return microscope_params_keys, microscope_params_descriptions
 
 def extract_scalar_params(dict_optical):
+    """Extracts scalar parameters of a microscope from a dictionary containing optical 
+    information and returns a pandas DataFrame with the parameters and their values."""
     keys, descriptions = get_microscope_param_names()
     microscope_vals = [dict_optical[k] for k in keys]
     df_microscope = pd.DataFrame(
@@ -46,6 +59,8 @@ def extract_scalar_params(dict_optical):
     return df_microscope
 
 def dataframe_to_dict(df):
+    """Converts microscope parameters from a pandas DataFrame back into a dictionary
+    using a predefined set of parameter names."""
     keys, descriptions = get_microscope_param_names()
     key_to_description_dict = dict(zip(keys, descriptions))
     values_from_df = {}
@@ -59,6 +74,7 @@ def dataframe_to_dict(df):
 
 # def check_h5_format(h5file):
 def get_vol_shape_from_h5(h5file):
+    """Retrieves the volume shape from an HDF5 file and returns it as a list of integers."""
     with h5py.File(h5file) as file:
         try:
             vol_shape = file['optical_info']['volume_shape'][()]
@@ -70,6 +86,8 @@ def get_vol_shape_from_h5(h5file):
     return vol_shape_default
 
 def display_h5_metadata(h5file):
+    """Displays the metadata of an HDF5 file, including file structure, description, volume shape,
+    and voxel size using Streamlit components."""
     with h5py.File(h5file) as file:
         st.markdown('**File Structure:**\n' + key_investigator(file))
         try:
@@ -95,9 +113,9 @@ def display_h5_metadata(h5file):
             st.error(e)
     return
 
-
 def forward_propagate(rays, volume):
-    '''Ray trace through the volume'''
+    """Performs the forward propagation of rays through a volume and returns the resulting
+    retardance and azimuth images, along with the execution time of the ray tracing."""
     try:
         # rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
         start_time = time.time()

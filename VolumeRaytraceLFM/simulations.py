@@ -3,7 +3,7 @@ import time
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from plotting_tools import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 
 class ForwardModel:
     def __init__(self, optical_system, backend):
@@ -51,7 +51,7 @@ class ForwardModel:
         ret_image = self.convert_to_numpy(self.ret_img)
         azim_image = self.convert_to_numpy(self.azim_img)
         my_fig = plot_retardance_orientation(ret_image, azim_image, 'hsv', include_labels=True)
-        # my_fig.tight_layout()
+        my_fig.tight_layout()
         plt.pause(0.2)
         plt.show(block=True)
     

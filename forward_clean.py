@@ -1,4 +1,4 @@
-''' Main script to generate forward projections.
+''' Temporary script to generate forward projections.
 - modular version of main_forward_projection.py
 '''
 import os
@@ -6,7 +6,7 @@ import torch
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from plotting_tools import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 from VolumeRaytraceLFM.ray import setup_raytracer
 
 SAVE_FORWARD_IMAGES = True
@@ -161,7 +161,6 @@ def main():
     plt.pause(0.2)
     plt.show(block=True)
     my_fig.savefig(savedir + '/ret_azim.png', bbox_inches='tight', dpi=300)
-    
 
 
 if __name__ == "__main__":

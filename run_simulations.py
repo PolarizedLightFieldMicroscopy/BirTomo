@@ -4,19 +4,9 @@ from VolumeRaytraceLFM.simulations import ForwardModel
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.volumes import volume_args
 from VolumeRaytraceLFM.setup_parameters import setup_optical_parameters
+from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
 
 BACKEND = BackEnds.PYTORCH
-
-def visualize_volume(volume: BirefringentVolume, optical_info: dict):
-    # with torch.no_grad():
-    plotly_figure = volume.plot_lines_plotly()
-    plotly_figure = volume.plot_volume_plotly(optical_info,
-                                            voxels_in=volume.get_delta_n(),
-                                            opacity=0.02,
-                                            fig=plotly_figure
-                                            )
-    plotly_figure.show()
-    return
 
 def adjust_volume(volume: BirefringentVolume):
     if BACKEND == BackEnds.PYTORCH:
@@ -27,7 +17,7 @@ def adjust_volume(volume: BirefringentVolume):
     return volume
 
 if __name__ == '__main__':
-    optical_info = setup_optical_parameters("VolumeRaytraceLFM\optical_config1.json")
+    optical_info = setup_optical_parameters("config_settings\optical_config1.json")
     optical_system = {'optical_info': optical_info}
     simulator = ForwardModel(optical_system, backend=BACKEND)
     volume_GT = BirefringentVolume(

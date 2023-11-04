@@ -1,4 +1,4 @@
-"""Main script to run 3D reconstruction
+"""Temporary script to run 3D reconstruction
 - modular version of main_3d_reconstruction.py
 - includes forward projection
 """
@@ -9,8 +9,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from VolumeRaytraceLFM.optic_config import volume_2_projections
-from plotting_tools import plot_iteration_update, plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_volume import volume_2_projections
+from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 from VolumeRaytraceLFM.volumes import volume_args
 # from VolumeRaytraceLFM.ray import setup_raytracer
 # from VolumeRaytraceLFM.visualization_utils import handle_visualization_and_saving

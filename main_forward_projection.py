@@ -1,4 +1,4 @@
-"""Main script to run forward projection
+"""Old script to run forward projection. See run_simulations.py instead.
 This script using numpy/pytorch back-end to:
     - Create a volume with different birefringent shapes.
     - Compute the ray geometry depending on the Light field microscope and volume configuration.
@@ -8,7 +8,7 @@ This script using numpy/pytorch back-end to:
 """
 import time         # to measure ray tracing time
 import matplotlib.pyplot as plt
-from plotting_tools import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import  (
     BirefringentVolume,

@@ -18,11 +18,11 @@ import io
 import numpy as np
 import torch
 from tqdm import tqdm
-import matplotlib 
+import matplotlib
+import pandas as pd
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
-from loss_functions import *
-import pandas as pd
+from VolumeRaytraceLFM.loss_functions import *
 from utils.parameters import (
         forward_propagate,
         dataframe_to_dict,
@@ -30,7 +30,7 @@ from utils.parameters import (
         get_vol_shape_from_h5,
         display_h5_metadata
     )
-from plotting_tools import plot_retardance_orientation
+from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 
 # st.sidebar.selectbox('Side bar variable', options=['Rudolf', 'Grant'], index=0)
 
