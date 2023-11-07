@@ -40,7 +40,7 @@ def main():
         volume_creation_args = volume_args.random_args
     )
     recon_directory = create_unique_directory("reconstructions")
-    recon_config = ReconstructionConfig(optical_info, ret_image_meas, azim_image_meas,
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=volume_GT)
     recon_config.save(recon_directory)
     # recon_config_recreated = ReconstructionConfig.load(recon_directory)

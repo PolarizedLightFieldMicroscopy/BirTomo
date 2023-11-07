@@ -89,5 +89,5 @@ class ForwardModel:
         self.ret_img = ret_image
         self.azim_img = azim_image
 
-        if intensity:
+        if intensity and self.is_numpy_backend():
             self.img_list = self.rays.ray_trace_through_volume(volume, intensity=True)
