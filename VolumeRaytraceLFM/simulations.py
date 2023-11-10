@@ -6,11 +6,11 @@ from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, 
 from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 
 class ForwardModel:
-    def __init__(self, optical_system, backend):
+    def __init__(self, optical_system, backend, device='cpu'):
         self.backend = backend
         # Linking with the optical system
         self.optical_info = optical_system['optical_info']
-        self.rays = self.setup_raytracer()
+        self.rays = self.setup_raytracer(device=device)
         self.ret_img = None  # placeholder
         self.azim_img = None  # placeholder
         self.volume_GT = None  # placeholder
@@ -21,6 +21,18 @@ class ForwardModel:
         # Set up directories
         if False:
             self.create_savedir()
+
+    def to_device(self, device):
+        """Move all tensors to the specified device."""
+        if self.is_pytorch_backend():
+            if self.ret_img is not None:
+                self.ret_img = self.ret_img.to(device)
+            if self.azim_img is not None:
+                self.azim_img = self.azim_img.to(device)
+            if self.volume_GT is not None:
+                self.volume_GT = self.volume_GT.to(device)
+            self.rays.to(device)
+        return self
 
     def is_pytorch_backend(self):
         return self.backend == BackEnds.PYTORCH
@@ -38,13 +50,15 @@ class ForwardModel:
     def is_pytorch_tensor(self, obj):
         return "torch.Tensor" in str(type(obj))
 
-    def setup_raytracer(self):
+    def setup_raytracer(self, device='cpu'):
         """Initialize Birefringent Raytracer."""
-        print(f'For raytracing, using default computing device, likely cpu')
+        print(f'For raytracing, using computing device {device}')
         rays = BirefringentRaytraceLFM(backend=self.backend, optical_info=self.optical_info)
+        if self.is_pytorch_backend():
+            rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry()
-        print(f'Ray-tracing time in seconds: {time.time() - start_time}')
+        print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
         return rays
 
     def view_images(self):

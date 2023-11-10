@@ -113,7 +113,7 @@ class ReconstructionConfig:
 
 
 class Reconstructor:
-    def __init__(self, recon_info: ReconstructionConfig):
+    def __init__(self, recon_info: ReconstructionConfig, device='cpu'):
         """
         Initialize the Reconstructor with the provided parameters.
 
@@ -136,7 +136,7 @@ class Reconstructor:
             mip_image = convert_volume_to_2d_mip(self.birefringence_simulated.unsqueeze(0))
             self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
 
-        self.rays = self.setup_raytracer()
+        self.rays = self.setup_raytracer(device=device)
 
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
@@ -155,13 +155,26 @@ class Reconstructor:
         default_volume = None
         return default_volume
 
-    def setup_raytracer(self):
+    def to_device(self, device):
+        """
+        Move all tensors to the specified device.
+        """
+        self.ret_img_meas = torch.from_numpy(self.ret_img_meas).to(device)
+        self.azim_img_meas = torch.from_numpy(self.azim_img_meas).to(device)
+        # self.volume_initial_guess = self.volume_initial_guess.to(device)
+        if self.volume_ground_truth is not None:
+            self.volume_ground_truth = self.volume_ground_truth.to(device)
+        self.rays.to(device)
+        self.volume_pred = self.volume_pred.to(device)
+
+    def setup_raytracer(self, device='cpu'):
         """Initialize Birefringent Raytracer."""
-        print('For raytracing, using default computing device, likely cpu')
+        print(f'For raytracing, using computing device {device}')
         rays = BirefringentRaytraceLFM(backend=self.backend, optical_info=self.optical_info)
+        rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry()
-        print(f'Ray-tracing time in seconds: {time.time() - start_time}')
+        print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
         return rays
 
     def setup_initial_volume(self):

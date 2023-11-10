@@ -1,4 +1,6 @@
+import torch
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 def plot_iteration_update(
                 vol_meas, ret_meas, azim_meas,
@@ -114,6 +116,8 @@ def plot_volume_subplot(index, volume, title):
 
 def plot_image_subplot(ax, image, title, cmap='plasma'):
     """Helper function to plot an image in a subplot with a colorbar and title."""
+    if isinstance(image, torch.Tensor):
+        image = image.cpu().numpy()
     im = ax.imshow(image, cmap=cmap)
     plt.colorbar(im, ax=ax)
     ax.set_title(title, fontsize=8)
