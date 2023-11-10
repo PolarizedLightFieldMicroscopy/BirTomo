@@ -1402,6 +1402,43 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             assert not torch.isnan(JM).any(), "A Jones matrix contains NaN values."
         return JM
 
+    def vox_ray_ret_azim(self, Delta_n, opticAxis, rayDir, ell, wavelength):
+        '''Calculate the effective retardance and azimuth of a ray passing through a voxel'''
+        if self.backend == BackEnds.NUMPY:
+            # Azimuth is the angle of the slow axis of retardance.
+            azim = np.arctan2(np.dot(opticAxis, rayDir[1]), np.dot(opticAxis, rayDir[2]))
+            if Delta_n == 0:
+                azim = 0
+            elif Delta_n < 0:
+                azim = azim + np.pi / 2
+            # print(f"Azimuth angle of index ellipsoid is
+            #   {np.around(np.rad2deg(azim), decimals=0)} degrees.")
+            normAxis = np.linalg.norm(opticAxis)
+            proj_along_ray = np.dot(opticAxis, rayDir[0])
+            # np.divide(my_arr, my_arr1, out=np.ones_like(my_arr, dtype=np.float32), where=my_arr1 != 0)
+            ret = abs(Delta_n) * (1 - np.dot(opticAxis, rayDir[0]) ** 2) * 2 * np.pi * ell / wavelength
+        else:
+            raise NotImplementedError("Not implemented for pytorch yet.")
+        return ret, azim
+
+    def vox_ray_matrix(self, ret, azim):
+        '''Calculate the Jones matrix associated with a particular ray and voxel combination'''
+        if self.backend == BackEnds.NUMPY:
+            JM = JonesMatrixGenerators.linear_retarder(ret, azim)
+            pass
+        else:
+            raise NotImplementedError("Not implemented for pytorch yet.")
+            offdiag = 1j * torch.sin(azim) * torch.sin(ret)
+            diag1 = torch.cos(ret) + 1j * torch.cos(azim) * torch.sin(ret)
+            diag2 = torch.conj(diag1)
+            # Construct Jones Matrix
+            JM = torch.zeros([Delta_n.shape[0], 2, 2], dtype=torch.complex64, device=Delta_n.device)
+            JM[:,0,0] = diag1
+            JM[:,0,1] = offdiag
+            JM[:,1,0] = offdiag
+            JM[:,1,1] = diag2
+        return JM
+
     def clone(self):
         # Code to create a copy of this instance
         new_instance = BirefringentVolume(...)
