@@ -34,8 +34,6 @@ class ReconstructionConfig:
         assert isinstance(optical_info, dict), "Expected optical_info to be a dictionary"
         assert isinstance(ret_image, (torch.Tensor, np.ndarray)), "Expected ret_image to be a PyTorch Tensor or a numpy array"
         assert isinstance(azim_image, (torch.Tensor, np.ndarray)), "Expected azim_image to be a PyTorch Tensor or a numpy array"
-        # assert isinstance(ret_image, torch.Tensor), "Expected ret_image to be a PyTorch Tensor"
-        # assert isinstance(azim_image, torch.Tensor), "Expected azim_image to be a PyTorch Tensor"
         assert isinstance(initial_vol, BirefringentVolume), "Expected initial_volume to be of type BirefringentVolume"
         assert isinstance(iteration_params, dict), "Expected iteration_params to be a dictionary"
         if loss_fcn:
@@ -46,8 +44,6 @@ class ReconstructionConfig:
         self.optical_info = optical_info
         self.retardance_image = self._to_numpy(ret_image)
         self.azimuth_image = self._to_numpy(azim_image)
-        # self.retardance_image = ret_image.detach()
-        # self.azimuth_image = azim_image.detach()
         self.initial_volume = initial_vol
         self.interation_parameters = iteration_params
         self.loss_function = loss_fcn
@@ -113,13 +109,14 @@ class ReconstructionConfig:
 
 
 class Reconstructor:
+    backend = BackEnds.PYTORCH
+
     def __init__(self, recon_info: ReconstructionConfig, device='cpu'):
         """
         Initialize the Reconstructor with the provided parameters.
 
         iteration_params (class): containing reconstruction parameters
         """
-        self.backend = BackEnds.PYTORCH
         self.optical_info = recon_info.optical_info
         self.ret_img_meas = recon_info.retardance_image
         self.azim_img_meas = recon_info.azimuth_image
@@ -170,7 +167,7 @@ class Reconstructor:
     def setup_raytracer(self, device='cpu'):
         """Initialize Birefringent Raytracer."""
         print(f'For raytracing, using computing device {device}')
-        rays = BirefringentRaytraceLFM(backend=self.backend, optical_info=self.optical_info)
+        rays = BirefringentRaytraceLFM(backend=Reconstructor.backend, optical_info=self.optical_info)
         rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry()
@@ -252,10 +249,47 @@ class Reconstructor:
             (axis_x[:, :, 1:] - axis_x[:, :, :-1]).pow(2).sum()
         )
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
-        regularization_term = training_params['regularization_weight'] * (TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean())
+        regularization_term = training_params['regularization_weight'] * (0.5 * TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean())
 
         # Total loss
         loss = data_term + regularization_term
+        return loss, data_term, regularization_term
+
+    def _compute_loss(self, retardance_pred: torch.Tensor, azimuth_pred: torch.Tensor):
+        """
+        Compute the loss for the current iteration after the forward model is applied.
+
+        Note: If ep is a class attibrute, then the loss function can depend on the current epoch.
+        """
+        vol_pred = self.volume_pred
+        params = self.iteration_params
+        retardance_meas = self.ret_img_meas
+        azimuth_meas = self.azim_img_meas
+
+        loss_fcn_name = params.get('loss_fcn', 'L1_cos')
+        if not torch.is_tensor(retardance_meas):
+            retardance_meas = torch.tensor(retardance_meas)
+        if not torch.is_tensor(azimuth_meas):
+            azimuth_meas = torch.tensor(azimuth_meas)
+        # Vector difference GT
+        co_gt, ca_gt = retardance_meas * torch.cos(azimuth_meas), retardance_meas * torch.sin(azimuth_meas)
+        # Compute data term loss
+        co_pred, ca_pred = retardance_pred * torch.cos(azimuth_pred), retardance_pred * torch.sin(azimuth_pred)
+        data_term = ((co_gt - co_pred) ** 2 + (ca_gt - ca_pred) ** 2).mean()
+
+        # Compute regularization term
+        delta_n = vol_pred.get_delta_n()
+        TV_reg = (
+            (delta_n[1:, ...] - delta_n[:-1, ...]).pow(2).sum() +
+            (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
+            (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
+        )
+        # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
+        regularization_term = params['regularization_weight'] * (0.5 * TV_reg + 1000 * (vol_pred.Delta_n ** 2).mean())
+
+        # Total loss
+        loss = data_term + regularization_term
+
         return loss, data_term, regularization_term
 
     def one_iteration(self, optimizer, volume_estimation):
@@ -263,7 +297,7 @@ class Reconstructor:
 
         # Apply forward model
         [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
-        loss, data_term, regularization_term = self.compute_losses(self.ret_img_meas, self.azim_img_meas, ret_image_current, azim_image_current, volume_estimation, self.iteration_params)
+        loss, data_term, regularization_term = self._compute_loss(ret_image_current, azim_image_current)
 
         loss.backward()
         optimizer.step()
