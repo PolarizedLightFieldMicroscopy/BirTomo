@@ -118,6 +118,7 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
     plt.show()
 
 def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv', include_labels=False):
+    plt.ioff()  # Prevents plots from popping up
     fig = plt.figure(figsize=(12,2.5))
     plt.rcParams['image.origin'] = 'lower'
     # Retardance subplot

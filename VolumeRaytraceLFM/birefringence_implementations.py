@@ -909,13 +909,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
         n_ml_half = floor(n_micro_lenses * n_voxels_per_ml / 2.0)
         mask = torch.zeros(self.optical_info['volume_shape'])
-        mask[:,
-            self.vox_ctr_idx[1]-n_ml_half+1 : self.vox_ctr_idx[1]+n_ml_half,
-            self.vox_ctr_idx[2]-n_ml_half+1 : self.vox_ctr_idx[2]+n_ml_half] = 1.0
+        include_ray_angle_reach = True
+        if include_ray_angle_reach:
+            vox_span_half = int(self.voxel_span_per_ml + (n_micro_lenses * n_voxels_per_ml) / 2)
+            mask[:,
+                self.vox_ctr_idx[1]-vox_span_half+1 : self.vox_ctr_idx[1]+vox_span_half,
+                self.vox_ctr_idx[2]-vox_span_half+1 : self.vox_ctr_idx[2]+vox_span_half] = 1.0
+        else:
+            mask[:,
+                self.vox_ctr_idx[1]-n_ml_half+1 : self.vox_ctr_idx[1]+n_ml_half,
+                self.vox_ctr_idx[2]-n_ml_half+1 : self.vox_ctr_idx[2]+n_ml_half] = 1.0
         # mask_volume = BirefringentVolume(backend=self.backend,
         #                   optical_info=self.optical_info, Delta_n=0.01, optic_axis=[0.5,0.5,0])
         # [r,a] = self.ray_trace_through_volume(mask_volume)
-
         # # Check gradients to see what is affected
         # L = r.mean() + a.mean()
         # L.backward()
@@ -942,7 +948,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
         min_needed_volume_size = int(self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml))
         assert min_needed_volume_size <= volume_shape[1] and min_needed_volume_size <= volume_shape[2], "The volume in front of the microlenses" + \
-             f"({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
+             f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
                 f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"        
 
         odd_mla_shift = np.mod(n_micro_lenses,2)

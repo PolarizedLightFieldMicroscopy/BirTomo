@@ -20,6 +20,7 @@ from VolumeRaytraceLFM.visualization.plotting_volume import (
 from VolumeRaytraceLFM.visualization.plt_util import setup_visualization
 from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update_gridspec
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
+from VolumeRaytraceLFM.utils.dimensions_utils import get_region_of_ones_shape
 
 class ReconstructionConfig:
     def __init__(self, optical_info, ret_image, azim_image, initial_vol, iteration_params, loss_fcn=None, gt_vol=None):
@@ -66,6 +67,7 @@ class ReconstructionConfig:
         # Save the retardance and azimuth images
         np.save(os.path.join(directory, 'ret_image.npy'), self.retardance_image)
         np.save(os.path.join(directory, 'azim_image.npy'), self.azimuth_image)
+        plt.ioff()
         my_fig = plot_retardance_orientation(self.retardance_image, self.azimuth_image, 'hsv', include_labels=True)
         my_fig.savefig(directory + '/ret_azim.png', bbox_inches='tight', dpi=300)
         plt.close(my_fig)
@@ -195,13 +197,26 @@ class Reconstructor:
         return initial_volume
 
     def mask_outside_rays(self):
-        """Mask out volume that is outside FOV of the microscope"""
-        self.volume_pred.Delta_n.requires_grad = False
-        self.volume_pred.optic_axis.requires_grad = False
+        """
+        Mask out volume that is outside FOV of the microscope.
+        Original shapes of the volume are preserved.
+        """
+        birefringence = self.volume_pred.get_delta_n()
+        optic_axis = self.volume_pred.get_optic_axis()
         mask = self.rays.get_volume_reachable_region()
-        self.volume_pred.Delta_n[mask.view(-1)==0] = 0
-        self.volume_pred.Delta_n.requires_grad = True
-        self.volume_pred.optic_axis.requires_grad = True
+        with torch.no_grad():
+            self.volume_pred.Delta_n[mask.view(-1)==0] = 0
+            # Masking the optic axis caused NaNs in the Jones Matrix. So, we don't mask it.
+            # self.volume_pred.optic_axis[:, mask.view(-1)==0] = 0
+
+    def crop_pred_volume_to_reachable_region(self):
+        region_shape = get_region_of_ones_shape(self.rays.get_volume_reachable_region())
+        pass
+
+    def _turn_off_initial_volume_gradients(self):
+        """Turn off the gradients for the initial volume guess."""
+        self.volume_initial_guess.Delta_n.requires_grad = False
+        self.volume_initial_guess.optic_axis.requires_grad = False
 
     def specify_variables_to_learn(self, learning_vars=None):
         """
@@ -347,8 +362,7 @@ class Reconstructor:
         self.mask_outside_rays()
         self.specify_variables_to_learn()
         # Turn off the gradients for the initial volume guess
-        self.volume_initial_guess.Delta_n.requires_grad = False
-        self.volume_initial_guess.optic_axis.requires_grad = False
+        self._turn_off_initial_volume_gradients()
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
         figure = setup_visualization()
         # Iterations
