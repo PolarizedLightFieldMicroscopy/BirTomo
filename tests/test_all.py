@@ -613,9 +613,59 @@ def test_azimuth_neg_birefringence(global_data):
     assert np.all(np.isclose(ret_img_pos.astype(np.float32), ret_img_neg.astype(np.float32), atol=1e-5)), "Retardance depends on the sign of the birefrigence."
     check_azimuth_images(azi_img_pos.astype(np.float32), rotated_azi_img_neg.astype(np.float32), "Flipping the sign of the birefringence does not simply rotate the azimuth.")
 
+def test_intensity_with_both_methods(global_data):
+    '''Verify that the effects of the birefringence being of opposite sign.'''
+    torch.set_grad_enabled(False)
+    # Gather global data
+    local_data = copy.deepcopy(global_data)
+    
+
+    # Select backend method
+    backends = [BackEnds.NUMPY, BackEnds.PYTORCH]
+    results = []
+    for backend in backends:
+        # Get optical parameters template
+        optical_info = local_data['optical_info']
+        # Alter some of the optical parameters
+        # optical_info['volume_shape'] = [15, 51, 51]
+        # optical_info['axial_voxel_size_um'] = 1.0
+        # optical_info['cube_voxels'] = True
+        # optical_info['pixels_per_ml'] = 17
+        # optical_info['n_micro_lenses'] = 9
+        # optical_info['n_voxels_per_ml'] = 1
+        # Create non-identity polarizers and analyzers
+        # LC-PolScope setup
+        optical_info['analyzer'] = JonesMatrixGenerators.left_circular_polarizer()
+        optical_info['polarizer_swing'] = 0.03
+
+        # number is the shift from the end of the volume, change it as you wish,
+        #       do single_voxel{volume_shape[0]//2} for a voxel in the center
+        shift_from_center = 0
+
+        # Create a Birefringent Raytracer!
+        rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
+
+        # Compute the rays and use the Siddon's algorithm to compute the intersections with voxels.
+        # If a filepath is passed as argument, the object with all its calculations
+        #   get stored/loaded from a file
+        rays.compute_rays_geometry()
+
+        # Load volume from a file
+        loaded_volume = BirefringentVolume.init_from_file("objects/shell.h5", backend, optical_info)
+        my_volume = loaded_volume
+
+        image_list = rays.ray_trace_through_volume(my_volume, intensity=True)
+
+        if backend==BackEnds.PYTORCH:
+            image_list = [img.detach().cpu().numpy() for img in image_list]
+        results.append(image_list)
+    for nSetting in range(5):
+        check_azimuth_images(results[0][nSetting], results[1][nSetting])
+        
 def main():
-    test_torch_auto_differentiation(global_data(), '1planes')
-    test_torch_auto_differentiation(global_data(), 'ellipsoid')
+    # test_torch_auto_differentiation(global_data(), '1planes')
+    # test_torch_auto_differentiation(global_data(), 'ellipsoid')
+    test_intensity_with_both_methods(global_data())
     # speed_speed(global_data(), 'ellipsoid')
     # test_forward_projection_lenslet_grid_random_volumes(global_data(), 3*[8])
     # Multi lenslet example

@@ -323,13 +323,8 @@ if st.button("**Reconstruct birefringent volume!**"):
         L.backward()
         # Apply gradient updates to the volume
         optimizer.step()
-        with torch.no_grad():
-            num_nan_vecs = torch.sum(torch.isnan(volume_estimation.optic_axis[0, :]))
-            replacement_vecs = torch.nn.functional.normalize(torch.rand(3, int(num_nan_vecs)), p=2, dim=0).to(device)
-            volume_estimation.optic_axis[:, torch.isnan(volume_estimation.optic_axis[0, :])] = replacement_vecs
-            if ep == 0 and num_nan_vecs != 0:
-                st.write(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors, " +
-                         "likely on every iteration.")
+        volume_estimation.normalize_optic_axis()
+        
         # print(f'Ep:{ep} loss: {L.item()}')
         losses.append(L.item())
         data_term_losses.append(data_term.item())

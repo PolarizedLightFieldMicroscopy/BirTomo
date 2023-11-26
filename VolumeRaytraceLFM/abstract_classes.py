@@ -471,7 +471,7 @@ class RayTraceLFM(OpticalElement):
         # self.voxel_span_per_ml *= (self.optical_info['voxel_size_um'][1]
         #                            / self.optical_info['voxel_size_um'][0])
         # Compute what's the maximum reach of a ray from the center voxel
-        self.voxel_span_per_ml = np.ceil(self.voxel_span_per_ml / 2)
+        self.voxel_span_per_ml = np.ceil(self.voxel_span_per_ml / 2.0)
 
         # Pre-comute things for torch and store in tensors
         i_range,j_range = self.ray_entry.shape[1:]
