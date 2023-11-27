@@ -909,13 +909,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
         n_ml_half = floor(n_micro_lenses * n_voxels_per_ml / 2.0)
         mask = torch.zeros(self.optical_info['volume_shape'])
-        mask[:,
-            self.vox_ctr_idx[1]-n_ml_half+1 : self.vox_ctr_idx[1]+n_ml_half,
-            self.vox_ctr_idx[2]-n_ml_half+1 : self.vox_ctr_idx[2]+n_ml_half] = 1.0
+        include_ray_angle_reach = True
+        if include_ray_angle_reach:
+            vox_span_half = int(self.voxel_span_per_ml + (n_micro_lenses * n_voxels_per_ml) / 2)
+            mask[:,
+                self.vox_ctr_idx[1]-vox_span_half+1 : self.vox_ctr_idx[1]+vox_span_half,
+                self.vox_ctr_idx[2]-vox_span_half+1 : self.vox_ctr_idx[2]+vox_span_half] = 1.0
+        else:
+            mask[:,
+                self.vox_ctr_idx[1]-n_ml_half+1 : self.vox_ctr_idx[1]+n_ml_half,
+                self.vox_ctr_idx[2]-n_ml_half+1 : self.vox_ctr_idx[2]+n_ml_half] = 1.0
         # mask_volume = BirefringentVolume(backend=self.backend,
         #                   optical_info=self.optical_info, Delta_n=0.01, optic_axis=[0.5,0.5,0])
         # [r,a] = self.ray_trace_through_volume(mask_volume)
-
         # # Check gradients to see what is affected
         # L = r.mean() + a.mean()
         # L.backward()
@@ -942,7 +948,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
         min_needed_volume_size = int(self.voxel_span_per_ml + (n_micro_lenses*n_voxels_per_ml))
         assert min_needed_volume_size <= volume_shape[1] and min_needed_volume_size <= volume_shape[2], "The volume in front of the microlenses" + \
-             f"({n_micro_lenses},{n_micro_lenses}) is to large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
+             f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
                 f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"        
 
         odd_mla_shift = np.mod(n_micro_lenses,2)
@@ -956,12 +962,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj])
                     + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
                     )
-                self.vox_indices_ml_shifted_all += [[RayTraceLFM.ravel_index((vox[ix][0],
-                                                        vox[ix][1]+current_offset[0],
-                                                        vox[ix][2]+current_offset[1]),
-                                                    self.optical_info['volume_shape']) for ix in range(len(vox))]
-                                                    for vox in self.ray_vol_colli_indices
-                                                    ]
+                self.vox_indices_ml_shifted_all += [
+                    [
+                        RayTraceLFM.ravel_index(
+                        (vox[ix][0], vox[ix][1]+current_offset[0], vox[ix][2]+current_offset[1]),
+                        self.optical_info['volume_shape']) for ix in range(len(vox))
+                    ]
+                    for vox in self.ray_vol_colli_indices
+                    ]
                 # Shift ray-pixel indices
                 if self.ray_valid_indices_all  is None:
                     self.ray_valid_indices_all = self.ray_valid_indices.clone()
@@ -1406,6 +1414,43 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             except ValueError as e:
                 print(f"Error: {e}")
             assert not torch.isnan(JM).any(), "A Jones matrix contains NaN values."
+        return JM
+
+    def vox_ray_ret_azim(self, Delta_n, opticAxis, rayDir, ell, wavelength):
+        '''Calculate the effective retardance and azimuth of a ray passing through a voxel'''
+        if self.backend == BackEnds.NUMPY:
+            # Azimuth is the angle of the slow axis of retardance.
+            azim = np.arctan2(np.dot(opticAxis, rayDir[1]), np.dot(opticAxis, rayDir[2]))
+            if Delta_n == 0:
+                azim = 0
+            elif Delta_n < 0:
+                azim = azim + np.pi / 2
+            # print(f"Azimuth angle of index ellipsoid is
+            #   {np.around(np.rad2deg(azim), decimals=0)} degrees.")
+            normAxis = np.linalg.norm(opticAxis)
+            proj_along_ray = np.dot(opticAxis, rayDir[0])
+            # np.divide(my_arr, my_arr1, out=np.ones_like(my_arr, dtype=np.float32), where=my_arr1 != 0)
+            ret = abs(Delta_n) * (1 - np.dot(opticAxis, rayDir[0]) ** 2) * 2 * np.pi * ell / wavelength
+        else:
+            raise NotImplementedError("Not implemented for pytorch yet.")
+        return ret, azim
+
+    def vox_ray_matrix(self, ret, azim):
+        '''Calculate the Jones matrix associated with a particular ray and voxel combination'''
+        if self.backend == BackEnds.NUMPY:
+            JM = JonesMatrixGenerators.linear_retarder(ret, azim)
+            pass
+        else:
+            raise NotImplementedError("Not implemented for pytorch yet.")
+            offdiag = 1j * torch.sin(azim) * torch.sin(ret)
+            diag1 = torch.cos(ret) + 1j * torch.cos(azim) * torch.sin(ret)
+            diag2 = torch.conj(diag1)
+            # Construct Jones Matrix
+            JM = torch.zeros([Delta_n.shape[0], 2, 2], dtype=torch.complex64, device=Delta_n.device)
+            JM[:,0,0] = diag1
+            JM[:,0,1] = offdiag
+            JM[:,1,0] = offdiag
+            JM[:,1,1] = diag2
         return JM
 
     def clone(self):

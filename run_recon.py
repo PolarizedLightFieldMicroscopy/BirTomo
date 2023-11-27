@@ -58,7 +58,7 @@ def recon_gpu():
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)  
 
 def main():
-    optical_info = setup_optical_parameters("config_settings\optical_config3.json")
+    optical_info = setup_optical_parameters("config_settings\optical_config_largemla.json")
     optical_system = {'optical_info': optical_info}
     # Initialize the forward model. Raytracing is performed as part of the initialization.
     simulator = ForwardModel(optical_system, backend=BACKEND)
@@ -66,15 +66,15 @@ def main():
     volume_GT = BirefringentVolume(
         backend=BACKEND,
         optical_info=optical_info,
-        volume_creation_args=volume_args.ellipsoid_args2
+        volume_creation_args=volume_args.sphere_args5 #ellipsoid_args2 #voxel_args
     )
-    visualize_volume(volume_GT, optical_info)
+    # visualize_volume(volume_GT, optical_info)
     simulator.forward_model(volume_GT)
     # simulator.view_images()
     ret_image_meas = simulator.ret_img
     azim_image_meas = simulator.azim_img
 
-    recon_optical_info = optical_info
+    recon_optical_info = optical_info.copy()
     iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
