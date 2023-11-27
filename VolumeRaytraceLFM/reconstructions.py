@@ -20,8 +20,11 @@ from VolumeRaytraceLFM.visualization.plotting_volume import (
 from VolumeRaytraceLFM.visualization.plt_util import setup_visualization
 from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update_gridspec
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
-from VolumeRaytraceLFM.utils.dimensions_utils import get_region_of_ones_shape
-
+from VolumeRaytraceLFM.utils.dimensions_utils import (
+    get_region_of_ones_shape,
+    reshape_and_crop,
+    store_as_pytorch_parameter
+    )
 class ReconstructionConfig:
     def __init__(self, optical_info, ret_image, azim_image, initial_vol, iteration_params, loss_fcn=None, gt_vol=None):
         """
@@ -117,7 +120,7 @@ class Reconstructor:
         """
         Initialize the Reconstructor with the provided parameters.
 
-        iteration_params (class): containing reconstruction parameters
+        recon_info (class): containing reconstruction parameters
         """
         self.optical_info = recon_info.optical_info
         self.ret_img_meas = recon_info.retardance_image
@@ -201,8 +204,6 @@ class Reconstructor:
         Mask out volume that is outside FOV of the microscope.
         Original shapes of the volume are preserved.
         """
-        birefringence = self.volume_pred.get_delta_n()
-        optic_axis = self.volume_pred.get_optic_axis()
         mask = self.rays.get_volume_reachable_region()
         with torch.no_grad():
             self.volume_pred.Delta_n[mask.view(-1)==0] = 0
@@ -210,9 +211,29 @@ class Reconstructor:
             # self.volume_pred.optic_axis[:, mask.view(-1)==0] = 0
 
     def crop_pred_volume_to_reachable_region(self):
-        region_shape = get_region_of_ones_shape(self.rays.get_volume_reachable_region())
-        pass
+        """Crop the predicted volume to the region that is reachable by the microscope.
+        Note: This method modifies the volume_pred attribute. The voxel indices of the predetermined ray tracing are no longer valid.
+        """
+        mask = self.rays.get_volume_reachable_region()
+        region_shape = get_region_of_ones_shape(mask).tolist()
+        original_shape = self.optical_info["volume_shape"]
+        self.optical_info["volume_shape"] = region_shape
+        self.volume_pred.optical_info["volume_shape"] = region_shape
+        birefringence = self.volume_pred.Delta_n
+        optic_axis = self.volume_pred.optic_axis
+        with torch.no_grad():
+            cropped_birefringence = reshape_and_crop(birefringence, original_shape, region_shape)
+            self.volume_pred.Delta_n = store_as_pytorch_parameter(cropped_birefringence, 'scalar')
+            cropped_optic_axis = reshape_and_crop(optic_axis, [3, *original_shape], region_shape)
+            self.volume_pred.optic_axis = store_as_pytorch_parameter(cropped_optic_axis, 'vector')
 
+    def restrict_volume_to_reachable_region(self):
+        """Restrict the volume to the region that is reachable by the microscope.
+        This includes cropping the volume are creating a new ray geometry
+        """
+        self.crop_pred_volume_to_reachable_region()
+        self.rays = self.setup_raytracer()
+            
     def _turn_off_initial_volume_gradients(self):
         """Turn off the gradients for the initial volume guess."""
         self.volume_initial_guess.Delta_n.requires_grad = False
@@ -223,7 +244,7 @@ class Reconstructor:
         Specify which variables of the initial volume object should be considered for learning.
         This method updates the 'members_to_learn' attribute of the initial volume object, ensuring
         no duplicates are added.
-        Parameters:
+        Args:
             learning_vars (list): Variable names to be appended for learning.
                                     Defaults to ['Delta_n', 'optic_axis'].
         """
@@ -359,7 +380,7 @@ class Reconstructor:
         """
         if output_dir is None:
             output_dir = create_unique_directory("reconstructions")
-        self.mask_outside_rays()
+        # self.restrict_volume_to_reachable_region()
         self.specify_variables_to_learn()
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()

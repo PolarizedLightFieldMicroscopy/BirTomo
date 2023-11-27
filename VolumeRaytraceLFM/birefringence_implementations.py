@@ -962,12 +962,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj])
                     + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
                     )
-                self.vox_indices_ml_shifted_all += [[RayTraceLFM.ravel_index((vox[ix][0],
-                                                        vox[ix][1]+current_offset[0],
-                                                        vox[ix][2]+current_offset[1]),
-                                                    self.optical_info['volume_shape']) for ix in range(len(vox))]
-                                                    for vox in self.ray_vol_colli_indices
-                                                    ]
+                self.vox_indices_ml_shifted_all += [
+                    [
+                        RayTraceLFM.ravel_index(
+                        (vox[ix][0], vox[ix][1]+current_offset[0], vox[ix][2]+current_offset[1]),
+                        self.optical_info['volume_shape']) for ix in range(len(vox))
+                    ]
+                    for vox in self.ray_vol_colli_indices
+                    ]
                 # Shift ray-pixel indices
                 if self.ray_valid_indices_all  is None:
                     self.ray_valid_indices_all = self.ray_valid_indices.clone()

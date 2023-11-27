@@ -21,7 +21,6 @@ class PolarimetricLossFunction:
             self.weight_regularization = params.get('weight_regularization', 0.1)
             # Initialize any specific loss functions you might need
             self.mse_loss = nn.MSELoss()
-
             # Initialize regularization functions
             self.regularization_fns = [(REGULARIZATION_FNS[fn_name], weight) for fn_name, weight in params.get('regularization_fns', [])]
         else:

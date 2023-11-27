@@ -115,7 +115,9 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
     cb2.set_ticks([0, 0.5, 1])  # Assuming the data for azimuth ranges from 0 to 2π, we normalize this range to 0-1 for the colorbar.
     cb2.set_ticklabels(['0', round(retardance_img.max()/2, 1), round(retardance_img.max(), 1)])
     axins2.set_title("Value", fontsize=8)
-    plt.show()
+    display_plot = False
+    if display_plot:
+        plt.show()
 
 def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv', include_labels=False):
     plt.ioff()  # Prevents plots from popping up
