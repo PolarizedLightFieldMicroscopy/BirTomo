@@ -1,9 +1,7 @@
 import os
-import tifffile
-import numpy as np
 import torch
+import skimage.io as io
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.simulations import ForwardModel
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.volumes import volume_args
 from VolumeRaytraceLFM.setup_parameters import (
@@ -13,67 +11,29 @@ from VolumeRaytraceLFM.setup_parameters import (
 from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructor
 from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
+from utils.polscope import normalize_retardance, normalize_azimuth
 
 BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device(
         "cuda" if torch.cuda.is_available() else "cpu"
     )
 
-def recon_gpu():
-    '''Reconstruct a volume on the GPU.'''
-    optical_info = setup_optical_parameters("config_settings\optical_config3.json")
-    optical_system = {'optical_info': optical_info}
-    # Initialize the forward model. Raytracing is performed as part of the initialization.
-    simulator = ForwardModel(optical_system, backend=BACKEND, device=DEVICE)
-    simulator.to_device(DEVICE)  # Move the simulator to the GPU
-
-    # Volume creation
-    volume_GT = BirefringentVolume(
-        backend=BACKEND,
-        optical_info=optical_info,
-        volume_creation_args=volume_args.ellipsoid_args2
-    )
-    volume_GT.to(DEVICE)  # Move the volume to the GPU
-
-    visualize_volume(volume_GT, optical_info)
-    simulator.forward_model(volume_GT)
-    ret_image_meas = simulator.ret_img
-    azim_image_meas = simulator.azim_img
-
-    recon_optical_info = optical_info
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
-    initial_volume = BirefringentVolume(
-        backend=BackEnds.PYTORCH,
-        optical_info=recon_optical_info,
-        volume_creation_args = volume_args.random_args
-    )
-    initial_volume.to(DEVICE)  # Move the volume to the GPU
-
-    recon_directory = create_unique_directory("reconstructions")
-    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
-                                        initial_volume, iteration_params, gt_vol=volume_GT)
-    recon_config.save(recon_directory)
-
-    reconstructor = Reconstructor(recon_config, device=DEVICE)
-    reconstructor.to_device(DEVICE)  # Move the reconstructor to the GPU
-
-    reconstructor.reconstruct(output_dir=recon_directory)
-    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)  
 
 def main():
-    ret_image_meas = tifffile.imread(os.path.join('xylem', 'XylemCellLightFieldLCPolRetStack.tiff')).astype(np.float32)
-    azim_image_meas = tifffile.imread(os.path.join('xylem', 'XylemCellLightFieldLCPolAzimStack.tiff')).astype(np.float32)
+    recon_optical_info = setup_optical_parameters("config_settings\optical_config_xylem_mla70.json")
+    iteration_params = setup_iteration_parameters("config_settings\iter_config_xylem.json")
 
-    # Normalize images to be between 0 and pi
-    ret_image_meas = (ret_image_meas / 32000) * np.pi
-    azim_image_meas = (azim_image_meas / 16000) * np.pi
+    wavelength_nm = recon_optical_info['wavelength'] * 1000
+    ret_image_meas_polscope = io.imread(os.path.join('xylem', 'ret_mla70_slice14.png'))
+    azim_image_meas_polscope = io.imread(os.path.join('xylem', 'azim_mla70_slice14.png'))
+    # Note: potentially the images should be saved as np.float32
+    ret_image_meas= normalize_retardance(ret_image_meas_polscope, 60, wavelength=wavelength_nm)
+    azim_image_meas = normalize_azimuth(azim_image_meas_polscope)
 
-    recon_optical_info = setup_optical_parameters("config_settings\optical_config_xylem.json")
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,
-        volume_creation_args = volume_args.random_args
+        volume_creation_args = volume_args.random_args1
     )
     recon_directory = create_unique_directory("reconstructions")
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
@@ -86,4 +46,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # recon_gpu()
