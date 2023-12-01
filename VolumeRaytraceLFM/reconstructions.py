@@ -20,7 +20,11 @@ from VolumeRaytraceLFM.visualization.plotting_volume import (
 from VolumeRaytraceLFM.visualization.plt_util import setup_visualization
 from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update_gridspec
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
-
+from VolumeRaytraceLFM.utils.dimensions_utils import (
+    get_region_of_ones_shape,
+    reshape_and_crop,
+    store_as_pytorch_parameter
+    )
 class ReconstructionConfig:
     def __init__(self, optical_info, ret_image, azim_image, initial_vol, iteration_params, loss_fcn=None, gt_vol=None):
         """
@@ -34,8 +38,6 @@ class ReconstructionConfig:
         assert isinstance(optical_info, dict), "Expected optical_info to be a dictionary"
         assert isinstance(ret_image, (torch.Tensor, np.ndarray)), "Expected ret_image to be a PyTorch Tensor or a numpy array"
         assert isinstance(azim_image, (torch.Tensor, np.ndarray)), "Expected azim_image to be a PyTorch Tensor or a numpy array"
-        # assert isinstance(ret_image, torch.Tensor), "Expected ret_image to be a PyTorch Tensor"
-        # assert isinstance(azim_image, torch.Tensor), "Expected azim_image to be a PyTorch Tensor"
         assert isinstance(initial_vol, BirefringentVolume), "Expected initial_volume to be of type BirefringentVolume"
         assert isinstance(iteration_params, dict), "Expected iteration_params to be a dictionary"
         if loss_fcn:
@@ -46,8 +48,6 @@ class ReconstructionConfig:
         self.optical_info = optical_info
         self.retardance_image = self._to_numpy(ret_image)
         self.azimuth_image = self._to_numpy(azim_image)
-        # self.retardance_image = ret_image.detach()
-        # self.azimuth_image = azim_image.detach()
         self.initial_volume = initial_vol
         self.interation_parameters = iteration_params
         self.loss_function = loss_fcn
@@ -70,6 +70,7 @@ class ReconstructionConfig:
         # Save the retardance and azimuth images
         np.save(os.path.join(directory, 'ret_image.npy'), self.retardance_image)
         np.save(os.path.join(directory, 'azim_image.npy'), self.azimuth_image)
+        plt.ioff()
         my_fig = plot_retardance_orientation(self.retardance_image, self.azimuth_image, 'hsv', include_labels=True)
         my_fig.savefig(directory + '/ret_azim.png', bbox_inches='tight', dpi=300)
         plt.close(my_fig)
@@ -113,13 +114,14 @@ class ReconstructionConfig:
 
 
 class Reconstructor:
+    backend = BackEnds.PYTORCH
+
     def __init__(self, recon_info: ReconstructionConfig, device='cpu'):
         """
         Initialize the Reconstructor with the provided parameters.
 
-        iteration_params (class): containing reconstruction parameters
+        recon_info (class): containing reconstruction parameters
         """
-        self.backend = BackEnds.PYTORCH
         self.optical_info = recon_info.optical_info
         self.ret_img_meas = recon_info.retardance_image
         self.azim_img_meas = recon_info.azimuth_image
@@ -170,7 +172,7 @@ class Reconstructor:
     def setup_raytracer(self, device='cpu'):
         """Initialize Birefringent Raytracer."""
         print(f'For raytracing, using computing device {device}')
-        rays = BirefringentRaytraceLFM(backend=self.backend, optical_info=self.optical_info)
+        rays = BirefringentRaytraceLFM(backend=Reconstructor.backend, optical_info=self.optical_info)
         rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry()
@@ -198,20 +200,51 @@ class Reconstructor:
         return initial_volume
 
     def mask_outside_rays(self):
-        """Mask out volume that is outside FOV of the microscope"""
-        self.volume_pred.Delta_n.requires_grad = False
-        self.volume_pred.optic_axis.requires_grad = False
+        """
+        Mask out volume that is outside FOV of the microscope.
+        Original shapes of the volume are preserved.
+        """
         mask = self.rays.get_volume_reachable_region()
-        self.volume_pred.Delta_n[mask.view(-1)==0] = 0
-        self.volume_pred.Delta_n.requires_grad = True
-        self.volume_pred.optic_axis.requires_grad = True
+        with torch.no_grad():
+            self.volume_pred.Delta_n[mask.view(-1)==0] = 0
+            # Masking the optic axis caused NaNs in the Jones Matrix. So, we don't mask it.
+            # self.volume_pred.optic_axis[:, mask.view(-1)==0] = 0
+
+    def crop_pred_volume_to_reachable_region(self):
+        """Crop the predicted volume to the region that is reachable by the microscope.
+        Note: This method modifies the volume_pred attribute. The voxel indices of the predetermined ray tracing are no longer valid.
+        """
+        mask = self.rays.get_volume_reachable_region()
+        region_shape = get_region_of_ones_shape(mask).tolist()
+        original_shape = self.optical_info["volume_shape"]
+        self.optical_info["volume_shape"] = region_shape
+        self.volume_pred.optical_info["volume_shape"] = region_shape
+        birefringence = self.volume_pred.Delta_n
+        optic_axis = self.volume_pred.optic_axis
+        with torch.no_grad():
+            cropped_birefringence = reshape_and_crop(birefringence, original_shape, region_shape)
+            self.volume_pred.Delta_n = store_as_pytorch_parameter(cropped_birefringence, 'scalar')
+            cropped_optic_axis = reshape_and_crop(optic_axis, [3, *original_shape], region_shape)
+            self.volume_pred.optic_axis = store_as_pytorch_parameter(cropped_optic_axis, 'vector')
+
+    def restrict_volume_to_reachable_region(self):
+        """Restrict the volume to the region that is reachable by the microscope.
+        This includes cropping the volume are creating a new ray geometry
+        """
+        self.crop_pred_volume_to_reachable_region()
+        self.rays = self.setup_raytracer()
+            
+    def _turn_off_initial_volume_gradients(self):
+        """Turn off the gradients for the initial volume guess."""
+        self.volume_initial_guess.Delta_n.requires_grad = False
+        self.volume_initial_guess.optic_axis.requires_grad = False
 
     def specify_variables_to_learn(self, learning_vars=None):
         """
         Specify which variables of the initial volume object should be considered for learning.
         This method updates the 'members_to_learn' attribute of the initial volume object, ensuring
         no duplicates are added.
-        Parameters:
+        Args:
             learning_vars (list): Variable names to be appended for learning.
                                     Defaults to ['Delta_n', 'optic_axis'].
         """
@@ -252,10 +285,47 @@ class Reconstructor:
             (axis_x[:, :, 1:] - axis_x[:, :, :-1]).pow(2).sum()
         )
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
-        regularization_term = training_params['regularization_weight'] * (TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean())
+        regularization_term = training_params['regularization_weight'] * (0.5 * TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean())
 
         # Total loss
         loss = data_term + regularization_term
+        return loss, data_term, regularization_term
+
+    def _compute_loss(self, retardance_pred: torch.Tensor, azimuth_pred: torch.Tensor):
+        """
+        Compute the loss for the current iteration after the forward model is applied.
+
+        Note: If ep is a class attibrute, then the loss function can depend on the current epoch.
+        """
+        vol_pred = self.volume_pred
+        params = self.iteration_params
+        retardance_meas = self.ret_img_meas
+        azimuth_meas = self.azim_img_meas
+
+        loss_fcn_name = params.get('loss_fcn', 'L1_cos')
+        if not torch.is_tensor(retardance_meas):
+            retardance_meas = torch.tensor(retardance_meas)
+        if not torch.is_tensor(azimuth_meas):
+            azimuth_meas = torch.tensor(azimuth_meas)
+        # Vector difference GT
+        co_gt, ca_gt = retardance_meas * torch.cos(azimuth_meas), retardance_meas * torch.sin(azimuth_meas)
+        # Compute data term loss
+        co_pred, ca_pred = retardance_pred * torch.cos(azimuth_pred), retardance_pred * torch.sin(azimuth_pred)
+        data_term = ((co_gt - co_pred) ** 2 + (ca_gt - ca_pred) ** 2).mean()
+
+        # Compute regularization term
+        delta_n = vol_pred.get_delta_n()
+        TV_reg = (
+            (delta_n[1:, ...] - delta_n[:-1, ...]).pow(2).sum() +
+            (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
+            (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
+        )
+        # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
+        regularization_term = params['regularization_weight'] * (0.5 * TV_reg + 1000 * (vol_pred.Delta_n ** 2).mean())
+
+        # Total loss
+        loss = data_term + regularization_term
+
         return loss, data_term, regularization_term
 
     def one_iteration(self, optimizer, volume_estimation):
@@ -263,7 +333,7 @@ class Reconstructor:
 
         # Apply forward model
         [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
-        loss, data_term, regularization_term = self.compute_losses(self.ret_img_meas, self.azim_img_meas, ret_image_current, azim_image_current, volume_estimation, self.iteration_params)
+        loss, data_term, regularization_term = self._compute_loss(ret_image_current, azim_image_current)
 
         loss.backward()
         optimizer.step()
@@ -310,11 +380,10 @@ class Reconstructor:
         """
         if output_dir is None:
             output_dir = create_unique_directory("reconstructions")
-        self.mask_outside_rays()
+        # self.restrict_volume_to_reachable_region()
         self.specify_variables_to_learn()
         # Turn off the gradients for the initial volume guess
-        self.volume_initial_guess.Delta_n.requires_grad = False
-        self.volume_initial_guess.optic_axis.requires_grad = False
+        self._turn_off_initial_volume_gradients()
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
         figure = setup_visualization()
         # Iterations
