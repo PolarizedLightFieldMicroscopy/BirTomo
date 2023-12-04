@@ -55,7 +55,7 @@ def recon_gpu():
     reconstructor.to_device(DEVICE)  # Move the reconstructor to the GPU
 
     reconstructor.reconstruct(output_dir=recon_directory)
-    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)  
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 def main():
     optical_info = setup_optical_parameters("config_settings\optical_config_largemla.json")

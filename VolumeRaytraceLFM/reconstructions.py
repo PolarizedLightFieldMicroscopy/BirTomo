@@ -1,4 +1,4 @@
-
+'''This module contains the ReconstructionConfig and Reconstructor classes.'''
 import copy
 import time
 import os
@@ -295,7 +295,7 @@ class Reconstructor:
         """
         Compute the loss for the current iteration after the forward model is applied.
 
-        Note: If ep is a class attibrute, then the loss function can depend on the current epoch.
+        Note: If ep is a class attribute, then the loss function can depend on the current epoch.
         """
         vol_pred = self.volume_pred
         params = self.iteration_params
@@ -367,8 +367,14 @@ class Reconstructor:
             fig.canvas.draw()
             fig.canvas.flush_events()
             time.sleep(0.1)
-            if ep % 10 == 0:
+            # Save the loss terms to text files
+            np.savetxt(os.path.join(output_dir, 'loss_total.txt'), self.loss_total_list)
+            np.savetxt(os.path.join(output_dir, 'loss_data_term.txt'), self.loss_data_term_list)
+            np.savetxt(os.path.join(output_dir, 'loss_reg_term.txt'), self.loss_reg_term_list)
+            if ep % 2 == 0:
                 plt.savefig(os.path.join(output_dir, f"optim_ep_{'{:02d}'.format(ep)}.pdf"))
+                # For the long iterations, save the volume every 2 iterations
+                volume_estimation.save_as_file(os.path.join(output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"))
             time.sleep(0.1)
         if ep % 100 == 0:
             volume_estimation.save_as_file(os.path.join(output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"))
@@ -391,5 +397,6 @@ class Reconstructor:
             self.one_iteration(optimizer, self.volume_pred)
             self.visualize_and_save(ep, figure, output_dir)
         # Final visualizations after training completes
+        self.volume_pred.save_as_file(os.path.join(output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"))
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
         plt.show()
