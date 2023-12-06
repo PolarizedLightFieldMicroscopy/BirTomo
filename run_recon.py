@@ -55,7 +55,41 @@ def recon_gpu():
     reconstructor.to_device(DEVICE)  # Move the reconstructor to the GPU
 
     reconstructor.reconstruct(output_dir=recon_directory)
-    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)  
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
+def recon():
+    optical_info = setup_optical_parameters("config_settings\optical_config_voxel.json")
+    optical_system = {'optical_info': optical_info}
+    # Initialize the forward model. Raytracing is performed as part of the initialization.
+    simulator = ForwardModel(optical_system, backend=BACKEND)
+    # Volume creation
+    volume_GT = BirefringentVolume(
+        backend=BACKEND,
+        optical_info=optical_info,
+        volume_creation_args=volume_args.voxel_args
+    )
+    visualize_volume(volume_GT, optical_info)
+
+    simulator.forward_model(volume_GT)
+    # simulator.view_images()
+    ret_image_meas = simulator.ret_img
+    azim_image_meas = simulator.azim_img
+
+    recon_optical_info = optical_info.copy()
+    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
+    initial_volume = BirefringentVolume(
+        backend=BackEnds.PYTORCH,
+        optical_info=recon_optical_info,
+        volume_creation_args = volume_args.random_args
+    )
+    recon_directory = create_unique_directory("reconstructions")
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
+                                        initial_volume, iteration_params, gt_vol=volume_GT)
+    recon_config.save(recon_directory)
+    # recon_config_recreated = ReconstructionConfig.load(recon_directory)
+    reconstructor = Reconstructor(recon_config)
+    reconstructor.reconstruct(output_dir=recon_directory)
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 def main():
     optical_info = setup_optical_parameters("config_settings\optical_config_largemla.json")
@@ -91,5 +125,4 @@ def main():
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 if __name__ == '__main__':
-    main()
-    # recon_gpu()
+    recon()
