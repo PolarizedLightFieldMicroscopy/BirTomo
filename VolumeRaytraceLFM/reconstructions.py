@@ -244,6 +244,7 @@ class Reconstructor:
         Specify which variables of the initial volume object should be considered for learning.
         This method updates the 'members_to_learn' attribute of the initial volume object, ensuring
         no duplicates are added.
+        The variable names must be attributes of the BirefringentVolume class.
         Args:
             learning_vars (list): Variable names to be appended for learning.
                                     Defaults to ['Delta_n', 'optic_axis'].
@@ -331,11 +332,22 @@ class Reconstructor:
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
 
+        # The in-place operation may cause problems with the gradient tracking
+        if False:
+            Delta_n_combined = torch.cat([volume_estimation.Delta_n_first_half, volume_estimation.Delta_n_second_half], dim=0)
+            volume_estimation.Delta_n = torch.nn.Parameter(Delta_n_combined)
         # Apply forward model
         [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
         loss, data_term, regularization_term = self._compute_loss(ret_image_current, azim_image_current)
 
         loss.backward()
+
+        # One method would be to set the gradients of the second half to zero
+        if False:
+            half_length = volume_estimation.Delta_n.size(0) // 2
+            volume_estimation.Delta_n.grad[half_length:] = 0
+
+        # Note: This is where volume_estimation.Delta_n.grad becomes non-zero
         optimizer.step()
 
         self.ret_img_pred = ret_image_current.detach().cpu().numpy()
@@ -348,6 +360,9 @@ class Reconstructor:
 
     def visualize_and_save(self, ep, fig, output_dir):
         volume_estimation = self.volume_pred
+        # Delta_n_combined = torch.cat([volume_estimation.Delta_n_first_half, volume_estimation.Delta_n_second_half], dim=0)
+        # Delta_n_combined.retain_grad()
+        # volume_estimation.Delta_n = torch.nn.Parameter(Delta_n_combined)
         if ep % 1 == 0:
             # plt.clf()
             mip_image = convert_volume_to_2d_mip(volume_estimation.get_delta_n().detach().unsqueeze(0))
@@ -374,16 +389,51 @@ class Reconstructor:
             volume_estimation.save_as_file(os.path.join(output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"))
         return
 
+    def modify_volume(self):
+        """
+        Method to modify the initial volume guess.
+        """
+        volume = self.volume_pred
+        Delta_n = volume.Delta_n
+        length = Delta_n.size(0)
+        half_length = length // 2
+
+        # Split Delta_n into two parts
+        # volume.Delta_n_first_half = Delta_n[:half_length].clone().detach().requires_grad_(True)
+        # volume.Delta_n_second_half = Delta_n[half_length:].clone().detach().requires_grad_(False)
+        volume.Delta_n_first_half = torch.nn.Parameter(Delta_n[:half_length].clone())
+        # volume.Delta_n_second_half = Delta_n[half_length:].clone().detach()  # This remains as a tensor attribute
+        volume.Delta_n_second_half = torch.nn.Parameter(Delta_n[half_length:].clone())
+
+        # Below is false
+        # Now, Delta_n_first_half has requires_grad=True and Delta_n_second_half has requires_grad=False
+
+        # # During the forward pass, combine them
+        Delta_n_combined = torch.cat([volume.Delta_n_first_half, volume.Delta_n_second_half], dim=0)
+        # volume.Delta_n = torch.nn.Parameter(Delta_n_combined)
+
+        # Update Delta_n of BirefringentVolume directly
+        with torch.no_grad():  # Temporarily disable gradient tracking
+            volume.Delta_n[:] = Delta_n_combined  # Update the value in-place
+        return
+
     def reconstruct(self, output_dir=None):
         """
         Method to perform the actual reconstruction based on the provided parameters.
         """
         if output_dir is None:
             output_dir = create_unique_directory("reconstructions")
-        # self.restrict_volume_to_reachable_region()
-        self.specify_variables_to_learn()
+
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
+
+        # Adjust the estimated volume variable
+        # self.restrict_volume_to_reachable_region()
+        param_list = ['Delta_n_first_half']
+        self.specify_variables_to_learn()
+        if False:
+            self.modify_volume()
+
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
         figure = setup_visualization()
         # Iterations

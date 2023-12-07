@@ -6,26 +6,41 @@ try:
 except:
     pass
 
-class OpticBlock(nn.Module):  # pure virtual class
+class OpticBlock(nn.Module):
     """Base class containing all the basic functionality of an optic block"""
 
     def __init__(
         self, optic_config=None, members_to_learn=None,
-    ):  # Contains a list of members which should be optimized (In case none are provided members are created without gradients)
+    ):
+        """
+        Initialize the OpticBlock.
+        Args:
+            optic_config (optional): Configuration for the optic block. Defaults to None.
+            members_to_learn (optional): List of members to be optimized. Defaults to None.
+        """
         super(OpticBlock, self).__init__()
         self.optic_config = optic_config
         self.members_to_learn = [] if members_to_learn is None else members_to_learn
         self.device_dummy = nn.Parameter(torch.tensor([1.0]))
 
-
     def get_trainable_variables(self):
+        """
+        Get the trainable variables of the optic block.
+        Returns:
+            list: List of trainable variables.
+        """
         trainable_vars = []
         for name, param in self.named_parameters():
             if name in self.members_to_learn:
                 trainable_vars.append(param)
         return list(trainable_vars)
-    
+
     def get_device(self):
+        """
+        Get the device of the optic block.
+        Returns:
+            torch.device: The device of the optic block.
+        """
         return self.device_dummy.device
 
 

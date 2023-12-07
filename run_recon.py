@@ -1,4 +1,7 @@
+import os
+import numpy as np
 import torch
+import time
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.simulations import ForwardModel
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
@@ -59,21 +62,30 @@ def recon_gpu():
 
 def recon():
     optical_info = setup_optical_parameters("config_settings\optical_config_voxel.json")
-    optical_system = {'optical_info': optical_info}
-    # Initialize the forward model. Raytracing is performed as part of the initialization.
-    simulator = ForwardModel(optical_system, backend=BACKEND)
-    # Volume creation
-    volume_GT = BirefringentVolume(
-        backend=BACKEND,
-        optical_info=optical_info,
-        volume_creation_args=volume_args.voxel_args
-    )
-    visualize_volume(volume_GT, optical_info)
+    simulate = False
+    if simulate:
+        optical_system = {'optical_info': optical_info}
+        # Initialize the forward model. Raytracing is performed as part of the initialization.
+        simulator = ForwardModel(optical_system, backend=BACKEND)
+        # Volume creation
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.voxel_args
+        )
+        # visualize_volume(volume_GT, optical_info)
 
-    simulator.forward_model(volume_GT)
-    # simulator.view_images()
-    ret_image_meas = simulator.ret_img
-    azim_image_meas = simulator.azim_img
+        simulator.forward_model(volume_GT)
+        # simulator.view_images()
+        ret_image_meas = simulator.ret_img
+        azim_image_meas = simulator.azim_img
+        # ret_numpy = ret_image_meas.detach().numpy()
+        # np.save('forward_images/ret_voxel_pos_1mla.npy', ret_numpy)
+        # azim_numpy = azim_image_meas.detach().numpy()
+        # np.save('forward_images/azim_voxel_pos_1mla.npy', azim_numpy)
+    else:
+        ret_image_meas = np.load(os.path.join('forward_images', 'ret_voxel_pos_1mla.npy'))
+        azim_image_meas = np.load(os.path.join('forward_images', 'azim_voxel_pos_1mla.npy'))
 
     recon_optical_info = optical_info.copy()
     iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
@@ -83,10 +95,11 @@ def recon():
         volume_creation_args = volume_args.random_args
     )
     recon_directory = create_unique_directory("reconstructions")
+    if not simulate:
+        volume_GT = initial_volume
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=volume_GT)
     recon_config.save(recon_directory)
-    # recon_config_recreated = ReconstructionConfig.load(recon_directory)
     reconstructor = Reconstructor(recon_config)
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
