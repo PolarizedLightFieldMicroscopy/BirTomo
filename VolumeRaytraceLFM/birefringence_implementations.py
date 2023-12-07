@@ -6,6 +6,7 @@ from utils import errors
 from tifffile import imsave
 
 NORM_PROJ = False   # normalize the projection of the ray onto the optic axis
+OPTIMIZING_MODE = False # use the birefringence stored in Delta_n_combined
 
 class BirefringentElement(OpticalElement):
     ''' Birefringent element, such as voxel, raytracer, etc, extending optical element,
@@ -1178,7 +1179,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # Extract the information from the volume
             # Birefringence
             try:
-                Delta_n = volume_in.Delta_n[vox]
+                if OPTIMIZING_MODE:
+                    Delta_n = volume_in.Delta_n_combined[vox]
+                else:
+                    Delta_n = volume_in.Delta_n[vox]
                 # And axis
                 opticAxis = volume_in.optic_axis[:,vox].permute(1,0)
                 # Grab the subset of precomputed ray directions that have voxels in this step

@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import torch
-import time
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.simulations import ForwardModel
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
@@ -73,12 +72,13 @@ def recon():
             optical_info=optical_info,
             volume_creation_args=volume_args.voxel_args
         )
-        # visualize_volume(volume_GT, optical_info)
+        visualize_volume(volume_GT, optical_info)
 
         simulator.forward_model(volume_GT)
         # simulator.view_images()
         ret_image_meas = simulator.ret_img
         azim_image_meas = simulator.azim_img
+        # Save the images as numpy arrays
         # ret_numpy = ret_image_meas.detach().numpy()
         # np.save('forward_images/ret_voxel_pos_1mla.npy', ret_numpy)
         # azim_numpy = azim_image_meas.detach().numpy()
