@@ -26,7 +26,7 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     store_as_pytorch_parameter
     )
 
-COMBINING_DELTA_N = True
+COMBINING_DELTA_N = False
 DEBUG = False
 
 class ReconstructionConfig:
@@ -342,7 +342,7 @@ class Reconstructor:
             # The in-place operation causes problems with the gradient tracking
             # with torch.no_grad():  # Temporarily disable gradient tracking
             #   volume_estimation.Delta_n[:] = Delta_n_combined  # Update the value in-place
-            volume_estimation.Delta_n_combined = Delta_n_combined
+            volume_estimation.Delta_n_combined = torch.nn.Parameter(Delta_n_combined)
         # Apply forward model
         [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
         loss, data_term, regularization_term = self._compute_loss(ret_image_current, azim_image_current)
