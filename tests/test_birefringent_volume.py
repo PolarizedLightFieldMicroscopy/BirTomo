@@ -2,6 +2,7 @@
 import numpy as np
 import torch
 import pytest
+import h5py
 from plotly.graph_objs import Figure
 from VolumeRaytraceLFM.birefringence_implementations import *
 

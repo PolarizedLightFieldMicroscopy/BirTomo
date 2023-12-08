@@ -8,12 +8,12 @@ This script using numpy/pytorch back-end to:
 """
 import time         # to measure ray tracing time
 import matplotlib.pyplot as plt
+from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
 from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import  (
     BirefringentVolume,
-    BirefringentRaytraceLFM,
-    JonesMatrixGenerators
+    BirefringentRaytraceLFM
 )
 
 # Select backend method
