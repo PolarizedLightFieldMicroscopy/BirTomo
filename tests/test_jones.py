@@ -1,7 +1,8 @@
 '''Test that Jones matrix conventions are consistent.'''
 import numpy as np
-from VolumeRaytraceLFM.birefringence_implementations import (
-        JonesMatrixGenerators, JonesVectorGenerators
+from VolumeRaytraceLFM.jones_calculus import (
+        JonesMatrixGenerators,
+        JonesVectorGenerators
         )
 
 def test_polarizer_generators():
