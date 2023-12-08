@@ -1,18 +1,15 @@
 from math import floor
 from tqdm import tqdm
-import h5py
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
+from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
 from utils import errors
-from tifffile import imsave
 
 NORM_PROJ = False   # normalize the projection of the ray onto the optic axis
 OPTIMIZING_MODE = False # use the birefringence stored in Delta_n_combined
 
 ###########################################################################################
-# Implementations of OpticalElement
-# TODO: rename to BirefringentVolume inherits
 class BirefringentVolume(BirefringentElement):
     '''This class stores a 3D array of voxels with birefringence properties,
     either with a numpy or pytorch back-end.'''
@@ -53,77 +50,96 @@ class BirefringentVolume(BirefringentElement):
                                                  torch_args=torch_args,
                                                  optical_info=optical_info
                                                  )
+        self._initialize_volume_attributes(optical_info, Delta_n, optic_axis)
 
-        if self.backend == BackEnds.NUMPY:
-            self.volume_shape = self.optical_info['volume_shape']
-            # In the case when an optic axis per voxel of a 3D volume is provided
-            # e.g. [3,nz,ny,nx]
-            if isinstance(optic_axis, np.ndarray) and len(optic_axis.shape) == 4:
-                self.volume_shape = optic_axis.shape[1:]
-                # flatten all the voxels in order to normalize them
-                optic_axis = optic_axis.reshape(
-                                3,
-                                self.volume_shape[0] * self.volume_shape[1] * self.volume_shape[2]
-                                ).astype(np.float64)
-                for n_voxel in range(len(optic_axis[0,...])):
-                    oa_norm = np.linalg.norm(optic_axis[:,n_voxel])
-                    if oa_norm > 0:
-                        optic_axis[:,n_voxel] /= oa_norm
-                # Set 4D shape again
-                self.optic_axis = optic_axis.reshape(3, *self.volume_shape)
-
-                self.Delta_n = Delta_n
-                assert len(self.Delta_n.shape) == 3, \
-                        '3D Delta_n expected, as the optic_axis was provided as a 3D array'
-            # Single optic axis, we replicate it for all the voxels
-            elif isinstance(optic_axis, list) or isinstance(optic_axis, np.ndarray):
-                # Same optic axis for all voxels
-                optic_axis = np.array(optic_axis)
-                norm = np.linalg.norm(optic_axis)
-                if norm != 0:
-                    optic_axis /= norm
-                self.optic_axis = np.expand_dims(optic_axis,[1,2,3]).repeat(self.volume_shape[0],1).repeat(self.volume_shape[1],2).repeat(self.volume_shape[2],3)
-
-                # Create Delta_n 3D volume
-                self.Delta_n = Delta_n * np.ones(self.volume_shape)
-
-            self.Delta_n[np.isnan(self.Delta_n)] = 0
-            self.optic_axis[np.isnan(self.optic_axis)] = 0
-        elif self.backend == BackEnds.PYTORCH:
-            # Update volume shape from optic config
-            self.volume_shape = self.optical_info['volume_shape']
-            # Normalization of optical axis, depending on input
-            if not isinstance(optic_axis, list) and optic_axis.ndim==4:
-                if isinstance(optic_axis, np.ndarray):
-                    optic_axis = torch.from_numpy(optic_axis).type(torch.get_default_dtype())
-                norm_A = (optic_axis[0,...]**2+optic_axis[1,...]**2+optic_axis[2,...]**2).sqrt()
-                self.optic_axis = optic_axis / norm_A.repeat(3,1,1,1)
-                assert len(Delta_n.shape) == 3, \
-                        '3D Delta_n expected, as the optic_axis was provided as a 3D torch tensor'
-                self.Delta_n = Delta_n
-                if not torch.is_tensor(Delta_n):
-                    self.Delta_n = torch.from_numpy(Delta_n).type(torch.get_default_dtype())
-            else:
-                # Same optic axis for all voxels
-                optic_axis = np.array(optic_axis).astype(np.float32)
-                norm = np.linalg.norm(optic_axis)
-                if norm != 0:
-                    optic_axis /= norm
-                self.optic_axis = torch.from_numpy(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1) \
-                                    .repeat(1, self.volume_shape[0], self.volume_shape[1], self.volume_shape[2])
-                self.Delta_n = Delta_n * torch.ones(self.volume_shape)
-            # Check for not a number, for when the voxel optic_axis is all zeros
-            self.Delta_n[torch.isnan(self.Delta_n)] = 0
-            self.optic_axis[torch.isnan(self.optic_axis)] = 0
-            # Store the data as pytorch parameters
-            self.optic_axis = nn.Parameter(self.optic_axis.reshape(3,-1)).type(torch.get_default_dtype())
-            self.Delta_n = nn.Parameter(self.Delta_n.flatten()).type(torch.get_default_dtype())
         # Check if a volume creation was requested
         if volume_creation_args is not None:
-            self.init_volume(
-                volume_creation_args['init_mode'],
-                volume_creation_args['init_args'] if 'init_args' in volume_creation_args.keys() else {}
-                )
+            self.init_volume(volume_creation_args['init_mode'], volume_creation_args.get('init_args', {}))
+
+    def _initialize_volume_attributes(self, optical_info, Delta_n, optic_axis):
+        self.volume_shape = optical_info['volume_shape']
+        if self.backend == BackEnds.NUMPY:
+            self._initialize_numpy_backend(Delta_n, optic_axis)
+        elif self.backend == BackEnds.PYTORCH:
+            self._initialize_pytorch_backend(Delta_n, optic_axis)
+        else:
+            raise ValueError(f"Unsupported backend type: {self.backend}")
+
+    def _initialize_numpy_backend(self, Delta_n, optic_axis):
+        # In the case when an optic axis per voxel of a 3D volume is provided, e.g. [3,nz,ny,nx]
+        if isinstance(optic_axis, np.ndarray) and len(optic_axis.shape) == 4:
+            self._handle_3d_optic_axis_numpy(optic_axis)
+            self.Delta_n = Delta_n
+            assert len(self.Delta_n.shape) == 3, '3D Delta_n expected, as the optic_axis was provided as a 3D array'
+        # Single optic axis, replicate for all voxels
+        elif isinstance(optic_axis, list) or isinstance(optic_axis, np.ndarray):
+            self._handle_single_optic_axis_numpy(optic_axis)
+            # Create Delta_n 3D volume
+            self.Delta_n = Delta_n * np.ones(self.volume_shape)
+
+        self.Delta_n[np.isnan(self.Delta_n)] = 0
+        self.optic_axis[np.isnan(self.optic_axis)] = 0
+
+    def _initialize_pytorch_backend(self, Delta_n, optic_axis):
+        # Normalization of optical axis, depending on input
+        if not isinstance(optic_axis, list) and optic_axis.ndim == 4:
+            self._handle_3d_optic_axis_torch(optic_axis)
+            assert len(Delta_n.shape) == 3, \
+                    '3D Delta_n expected, as the optic_axis was provided as a 3D torch tensor'
+            self.Delta_n = Delta_n
+            if not torch.is_tensor(Delta_n):
+                    self.Delta_n = torch.from_numpy(Delta_n).type(torch.get_default_dtype())
+        else:
+            self._handle_single_optic_axis_torch(optic_axis)
+            self.Delta_n = Delta_n * torch.ones(self.volume_shape)
+
+        # Check for not a number, for when the voxel optic_axis is all zeros
+        self.Delta_n[torch.isnan(self.Delta_n)] = 0
+        self.optic_axis[torch.isnan(self.optic_axis)] = 0
+        # Store the data as pytorch parameters
+        self.optic_axis = nn.Parameter(self.optic_axis.reshape(3, -1)).type(torch.get_default_dtype())
+        self.Delta_n = nn.Parameter(self.Delta_n.flatten()).type(torch.get_default_dtype())
+
+    def _handle_3d_optic_axis_numpy(self, optic_axis):
+        """Normalize and reshape a 3D optic axis array for Numpy backend."""
+        self.volume_shape = optic_axis.shape[1:]
+        # Flatten all the voxels in order to normalize them
+        optic_axis = optic_axis.reshape(
+                        3,
+                        self.volume_shape[0] * self.volume_shape[1] * self.volume_shape[2]
+                        ).astype(np.float64)
+        for n_voxel in range(len(optic_axis[0,...])):
+            oa_norm = np.linalg.norm(optic_axis[:,n_voxel])
+            if oa_norm > 0:
+                optic_axis[:,n_voxel] /= oa_norm
+        # Set 4D shape again
+        self.optic_axis = optic_axis.reshape(3, *self.volume_shape)
+
+    def _handle_single_optic_axis_numpy(self, optic_axis):
+        """Set a single optic axis for all voxels for Numpy backend."""
+        optic_axis = np.array(optic_axis)
+        oa_norm = np.linalg.norm(optic_axis)
+        if oa_norm != 0:
+            optic_axis /= oa_norm
+        self.optic_axis = np.expand_dims(optic_axis,[1,2,3]).repeat(self.volume_shape[0],1).repeat(self.volume_shape[1],2).repeat(self.volume_shape[2],3)
+        # self.optic_axis = np.expand_dims(optic_axis, axis=(1, 2, 3))
+        # self.optic_axis = np.repeat(self.optic_axis, self.volume_shape, axis=(1, 2, 3))
+
+    def _handle_3d_optic_axis_torch(self, optic_axis):
+        """Normalize and reshape a 3D optic axis array for PyTorch backend."""
+        if isinstance(optic_axis, np.ndarray):
+            optic_axis = torch.from_numpy(optic_axis).type(torch.get_default_dtype())
+        oa_norm = torch.sqrt(torch.sum(optic_axis**2, dim=0))
+        self.optic_axis = optic_axis / oa_norm.repeat(3, 1, 1, 1)
+
+    def _handle_single_optic_axis_torch(self, optic_axis):
+        """Set a single optic axis for all voxels for PyTorch backend."""
+        optic_axis = np.array(optic_axis).astype(np.float32)
+        oa_norm = np.linalg.norm(optic_axis)
+        if oa_norm != 0:
+            optic_axis /= oa_norm
+        optic_axis_tensor = torch.from_numpy(optic_axis).unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        self.optic_axis = optic_axis_tensor.repeat(1, *self.volume_shape)
 
     def get_delta_n(self):
         '''Retrieves the birefringence as a 3D array'''
@@ -368,56 +384,6 @@ class BirefringentVolume(BirefringentElement):
             axis = self.optic_axis[:, vox_idx]
         return self.Delta_n[vox_idx], axis
 
-########### Generate different birefringent volumes
-    def save_as_file(self, h5_file_path, description="Temporary description", optical_all=False):
-        '''Store this volume into an h5 file'''
-        print(f'Saving volume to h5 file: {h5_file_path}')
-        # Create file
-        with h5py.File(h5_file_path, "w") as f:
-            # Save optical_info
-            oc_grp = f.create_group('optical_info')
-            try:
-                oc_grp.create_dataset('description',
-                    [1],
-                    data=description
-                    )
-                vol_shape = self.optical_info['volume_shape']
-                voxel_size_um = self.optical_info['voxel_size_um']
-            except:
-                pass
-
-            if not optical_all:
-                try:
-                    oc_grp.create_dataset('volume_shape',
-                        np.array(vol_shape).shape if isinstance(vol_shape, list) else [1],
-                        data=vol_shape
-                        )
-                    oc_grp.create_dataset('voxel_size_um',
-                        np.array(voxel_size_um).shape if isinstance(voxel_size_um, list) else [1],
-                        data=voxel_size_um
-                        )
-                except:
-                    pass
-            else:
-                for k,v in self.optical_info.items():
-                    try:
-                        oc_grp.create_dataset(k, np.array(v).shape if isinstance(v,list) else [1], data=v)
-                        # print(f'Added optical_info/{k} to {h5_file_path}')
-                    except:
-                        pass
-            # Save data (birefringence and optic_axis)
-            delta_n = self.get_delta_n()
-            optic_axis = self.get_optic_axis()
-
-            if self.backend == BackEnds.PYTORCH:
-                delta_n = delta_n.detach().cpu().numpy()
-                optic_axis = optic_axis.detach().cpu().numpy()
-
-            data_grp = f.create_group('data')
-            data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n.astype(np.float32))
-            data_grp.create_dataset("optic_axis", optic_axis.shape, data=optic_axis.astype(np.float32))
-        return h5_file_path
-
     @staticmethod
     def crop_to_region_shape(delta_n, optic_axis, volume_shape, region_shape):
         '''
@@ -475,16 +441,10 @@ class BirefringentVolume(BirefringentElement):
             It requires to have:
                 optical_info/volume_shape [3]: shape of the volume in voxels [nz,ny,nx]
                 data/delta_n [nz,ny,nx]: Birefringence volumetric information.
-                data/optic_axis [3,nz,ny,nx]: Optical axis per voxel.'''
-
-        # Load volume
-        volume_file = h5py.File(h5_file_path, "r")
-
-        # Fetch birefringence
-        delta_n = np.array(volume_file['data/delta_n'])
-        # Fetch optic_axis
-        optic_axis = np.array(volume_file['data/optic_axis'])
-        # TODO: adjust for when optical_info is None
+                data/optic_axis [3,nz,ny,nx]: Optical axis per voxel.
+        '''
+        file_manager = VolumeFileManager()
+        delta_n, optic_axis = file_manager.extract_data_from_h5(h5_file_path)
         region_shape = np.array(optical_info['volume_shape'])
         if (delta_n.shape == region_shape).all():
             pass
@@ -496,9 +456,8 @@ class BirefringentVolume(BirefringentElement):
             err = (f"BirefringentVolume has dimensions ({delta_n.shape}) that are not all greater " +
                     f"than or less than the volume region dimensions ({region_shape}) set for the microscope")
             raise ValueError(err)
-        # Create volume
-        volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
-        return volume_out
+        volume = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
+        return volume
 
     @staticmethod
     def load_from_file(h5_file_path, backend_type='numpy'):
@@ -512,15 +471,9 @@ class BirefringentVolume(BirefringentElement):
             backend = BackEnds.NUMPY
         else:
             raise ValueError(f"Backend type {backend_type} is not an option.")
-        # Load volume
-        volume_file = h5py.File(h5_file_path, "r")
-        # Fetch birefringence
-        delta_n = np.array(volume_file['data/delta_n'])
-        # Fetch optic_axis
-        optic_axis = np.array(volume_file['data/optic_axis'])
-        # Fetch optical info
-        volume_shape = np.array(volume_file['optical_info/volume_shape'])
-        voxel_size_um = np.array(volume_file['optical_info/voxel_size_um'])
+
+        file_manager = VolumeFileManager()
+        delta_n, optic_axis, volume_shape, voxel_size_um = file_manager.extract_all_data_from_h5(h5_file_path)
         cube_voxels = True
         # Create optical info dictionary
         # TODO: add the remaining variables, notably the voxel size and the cube voxels boolean
@@ -532,6 +485,40 @@ class BirefringentVolume(BirefringentElement):
         volume_out = BirefringentVolume(backend=backend, optical_info=optical_info, Delta_n=delta_n, optic_axis=optic_axis)
         return volume_out
 
+    def save_as_file(self, h5_file_path, description="Temporary description", optical_all=False):
+        '''Store this volume into an h5 file'''
+        print(f'Saving volume to h5 file: {h5_file_path}')
+
+        delta_n, optic_axis = self._get_data_as_numpy_arrays()
+        file_manager = VolumeFileManager()
+        file_manager.save_as_h5(h5_file_path, delta_n, optic_axis, self.optical_info, description, optical_all)
+
+    def _get_data_as_numpy_arrays(self):
+        '''Converts delta_n and optic_axis based on backend'''
+        delta_n = self.get_delta_n()
+        optic_axis = self.get_optic_axis()
+
+        if self.backend == BackEnds.PYTORCH:
+            delta_n = delta_n.detach().cpu().numpy()
+            optic_axis = optic_axis.detach().cpu().numpy()
+
+        return delta_n, optic_axis
+
+    def save_as_tiff(self, filename):
+        '''Store this volume into a tiff file'''
+        delta_n, optic_axis = self._get_data_as_numpy_arrays()
+        file_manager = VolumeFileManager()
+        file_manager.save_as_channel_stack_tiff(filename, delta_n, optic_axis)
+
+    def _get_backend_str(self):
+        if self.backend == BackEnds.PYTORCH:
+            return 'pytorch'
+        elif self.backend == BackEnds.NUMPY:
+            return 'numpy'
+        else:
+            raise ValueError(f"Backend type {self.backend} is not supported.")
+
+########### Generate different birefringent volumes ############
     def init_volume(self, init_mode='zeros', init_args={}):
         ''' This function creates predefined volumes and shapes, such as planes, ellipsoids, random, etc
             TODO: use init_args for random and planes'''
@@ -860,18 +847,6 @@ class BirefringentVolume(BirefringentElement):
         else:
             raise NotImplementedError
         return volume
-
-    def save_as_tiff(self, filename):
-        '''Store this volume into a tiff file'''
-        print(f'Saving volume to file: {filename}')
-        delta_n = self.get_delta_n()
-        optic_axis = self.get_optic_axis()
-        combined_data = np.stack([delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0, dtype=np.float32)
-        if self.backend == BackEnds.PYTORCH:
-            delta_n = delta_n.detach().cpu().numpy()
-            optic_axis = optic_axis.detach().cpu().numpy()
-        imsave(filename, combined_data)
-        return filename
 
 
 ############ Implementations
