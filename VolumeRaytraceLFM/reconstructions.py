@@ -192,6 +192,17 @@ class Reconstructor:
             'training_params' : self.training_params,
             'volume_type' : volume_type}, f'{output_dir}/parameters.pt')
 
+    @staticmethod
+    def replace_nans(volume, ep):
+        """Used in response to an error message."""
+        with torch.no_grad():
+            num_nan_vecs = torch.sum(torch.isnan(volume.optic_axis[0, :]))
+            if num_nan_vecs > 0:
+                replacement_vecs = torch.nn.functional.normalize(torch.rand(3, int(num_nan_vecs)), p=2, dim=0)
+                volume.optic_axis[:, torch.isnan(volume.optic_axis[0, :])] = replacement_vecs
+                if ep == 0:
+                    print(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors.")
+
     def setup_raytracer(self, device='cpu'):
         """Initialize Birefringent Raytracer."""
         print(f'For raytracing, using computing device {device}')
