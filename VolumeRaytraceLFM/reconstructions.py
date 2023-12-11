@@ -6,7 +6,6 @@ import json
 import torch
 import numpy as np
 from tqdm import tqdm
-import streamlit as st
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
@@ -519,6 +518,7 @@ class Reconstructor:
 
         n_epochs = self.iteration_params['n_epochs']
         if use_streamlit:
+            import streamlit as st
             st.write("Working on these ", n_epochs, "iterations...")
             my_recon_img_plot = st.empty()
             my_loss = st.empty()
