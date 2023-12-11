@@ -84,10 +84,18 @@ class ReconstructionConfig:
         with open(os.path.join(directory, 'iteration_params.json'), 'w') as f:
             json.dump(self.interation_parameters, f, indent=4)
         # Save the volumes if the 'save_as_file' method exists
-        if hasattr(self.initial_volume, 'save_as_file'):    
-            self.initial_volume.save_as_file(os.path.join(directory, 'initial_volume.h5'))
+        if hasattr(self.initial_volume, 'save_as_file'):
+            my_description = "Initial volume used for reconstruction."
+            self.initial_volume.save_as_file(
+                os.path.join(directory, 'initial_volume.h5'),
+                description=my_description
+                )
         if self.gt_volume and hasattr(self.gt_volume, 'save_as_file'):
-            self.gt_volume.save_as_file(os.path.join(directory, 'gt_volume.h5'))
+            my_description = "Ground truth volume used for reconstruction."
+            self.gt_volume.save_as_file(
+                os.path.join(directory, 'gt_volume.h5'),
+                description=my_description
+                )
 
     @classmethod
     def load(cls, parent_directory):
@@ -408,7 +416,11 @@ class Reconstructor:
                 plt.savefig(os.path.join(output_dir, f"optim_ep_{'{:02d}'.format(ep)}.pdf"))
             time.sleep(0.1)
         if ep % 100 == 0:
-            volume_estimation.save_as_file(os.path.join(output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"))
+            my_description = "Volume estimation after " + str(ep) + " iterations."
+            volume_estimation.save_as_file(
+                os.path.join(output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"),
+                description=my_description
+                )
         return
 
     def modify_volume(self):

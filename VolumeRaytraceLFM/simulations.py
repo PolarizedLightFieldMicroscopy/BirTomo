@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
 from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
+from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
 
 class ForwardModel:
     def __init__(self, optical_system, backend, device='cpu'):
@@ -61,10 +62,17 @@ class ForwardModel:
         print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
         return rays
 
-    def view_images(self):
+    def view_images(self, azimuth_plot_type='hsv'):
+        """View the simulated images,
+        and pause until the user closes the figure.
+        Args:
+            azimuth_plot_type (str): 'hsv' or 'lines'
+        """
         ret_image = self.convert_to_numpy(self.ret_img)
         azim_image = self.convert_to_numpy(self.azim_img)
-        my_fig = plot_retardance_orientation(ret_image, azim_image, 'hsv', include_labels=True)
+        my_fig = plot_retardance_orientation(
+            ret_image, azim_image, azimuth_plot_type, include_labels=True
+            )
         my_fig.tight_layout()
         plt.pause(0.2)
         plt.show(block=True)
@@ -81,6 +89,15 @@ class ForwardModel:
 
     def save_intensity_image(self):
         pass
+
+    def add_polscope_components(self):
+        # Create non-identity polarizers and analyzers
+        # LC-PolScope setup
+        self.optical_info['polarizer'] = JonesMatrixGenerators.polscope_analyzer()
+        self.optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator_modes(setting=0, swing=0)
+
+    def plot_rays(self):
+        self.rays.plot_rays()
 
     def create_savedir(self):
         """
