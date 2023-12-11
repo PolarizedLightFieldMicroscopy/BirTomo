@@ -5,7 +5,9 @@ import os
 import json
 import torch
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
+import streamlit as st
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
@@ -76,7 +78,7 @@ class ReconstructionConfig:
         np.save(os.path.join(directory, 'azim_image.npy'), self.azimuth_image)
         plt.ioff()
         my_fig = plot_retardance_orientation(self.retardance_image, self.azimuth_image, 'hsv', include_labels=True)
-        my_fig.savefig(directory + '/ret_azim.png', bbox_inches='tight', dpi=300)
+        my_fig.savefig(os.path.join(directory, 'ret_azim.png'), bbox_inches='tight', dpi=300)
         plt.close(my_fig)
         # Save the dictionaries
         with open(os.path.join(directory, 'optical_info.json'), 'w') as f:
@@ -180,6 +182,15 @@ class Reconstructor:
             self.volume_ground_truth = self.volume_ground_truth.to(device)
         self.rays.to(device)
         self.volume_pred = self.volume_pred.to(device)
+
+    def save_parameters(self, output_dir, volume_type):
+        """In progress.
+        Args:
+            volume_type (dict): example volume_args.random_args
+        """
+        torch.save({'optical_info' : self.optical_info,
+            'training_params' : self.training_params,
+            'volume_type' : volume_type}, f'{output_dir}/parameters.pt')
 
     def setup_raytracer(self, device='cpu'):
         """Initialize Birefringent Raytracer."""
@@ -333,6 +344,8 @@ class Reconstructor:
             (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
             (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
         )
+        if isinstance(params['regularization_weight'], list):
+            params['regularization_weight'] = params['regularization_weight'][0]
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
         regularization_term = params['regularization_weight'] * (0.5 * TV_reg + 1000 * (vol_pred.Delta_n ** 2).mean())
 
@@ -453,7 +466,25 @@ class Reconstructor:
         Delta_n.requires_grad = False
         return
 
-    def reconstruct(self, output_dir=None):
+    def __visualize_and_update_streamlit(self, progress_bar, ep, n_epochs, recon_img_plot, my_loss):
+        percent_complete = int(ep / n_epochs * 100)
+        progress_bar.progress(percent_complete + 1)
+        if ep%2==0:
+            plt.close()
+            recon_img_fig = plot_retardance_orientation(
+                    self.ret_img_pred,
+                    self.azim_img_pred,
+                    'hsv'
+                )
+            recon_img_plot.pyplot(recon_img_fig)
+            df_loss = pd.DataFrame(
+                    {'Total loss': self.loss_total_list,
+                    'Data fidelity': self.loss_data_term_list,
+                    'Regularization': self.loss_reg_term_list
+                    })
+            my_loss.line_chart(df_loss)
+
+    def reconstruct(self, output_dir=None, use_streamlit=False):
         """
         Method to perform the actual reconstruction based on the provided parameters.
         """
@@ -474,9 +505,29 @@ class Reconstructor:
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
         figure = setup_visualization()
+
+        n_epochs = self.iteration_params['n_epochs']
+        if use_streamlit:
+            st.write("Working on these ", n_epochs, "iterations...")
+            my_recon_img_plot = st.empty()
+            my_loss = st.empty()
+            my_plot = st.empty() # set up a place holder for the plot
+            my_3D_plot = st.empty() # set up a place holder for the 3D plot
+            progress_bar = st.progress(0)
+        
         # Iterations
-        for ep in tqdm(range(self.iteration_params['n_epochs']), "Minimizing"):
+        for ep in tqdm(range(n_epochs), "Minimizing"):
             self.one_iteration(optimizer, self.volume_pred)
+            
+            
+            azim_damp_mask = self.ret_img_meas / self.ret_img_meas.max()
+            self.azim_img_pred[azim_damp_mask==0] = 0
+
+            if use_streamlit:
+                self.__visualize_and_update_streamlit(
+                    progress_bar, ep, n_epochs, my_recon_img_plot, my_loss
+                    )
+            
             self.visualize_and_save(ep, figure, output_dir)
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))

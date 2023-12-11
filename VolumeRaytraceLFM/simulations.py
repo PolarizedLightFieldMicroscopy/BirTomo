@@ -59,7 +59,8 @@ class ForwardModel:
             rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry()
-        print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
+        self.ray_geometry_computation_time = time.time() - start_time
+        print(f'Raytracing time in seconds: {self.ray_geometry_computation_time:.4f}')
         return rays
 
     def view_images(self, azimuth_plot_type='hsv'):

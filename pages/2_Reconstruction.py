@@ -22,6 +22,9 @@ import matplotlib
 import pandas as pd
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume, BirefringentRaytraceLFM
+from VolumeRaytraceLFM.simulations import ForwardModel
+from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructor
+from VolumeRaytraceLFM.volumes import volume_args
 from VolumeRaytraceLFM.loss_functions import *
 from utils.parameters import (
         forward_propagate,
@@ -59,7 +62,7 @@ optical_info.update(values_from_df)
 
 ############## Optimization parameters ###################
 tabs[1].subheader("Iterative reconstruction parameters")
-n_epochs = tabs[1].slider('Number of iterations', min_value=1, max_value=500, value=200)
+n_epochs = tabs[1].slider('Number of iterations', min_value=1, max_value=500, value=11)
 optim_cols = tabs[1].columns(2)
 # See loss_functions.py for more details
 optim_cols[0].markdown('**Loss function**')
@@ -127,7 +130,7 @@ with volume_container:
     elif how_acquire == 'Internal':
         forw_cols[0].write('*Internal imaging method*')
         how_synthetic = forw_cols[0].radio("Method of acquiring birefringent volume to image",
-                                ['Generate a new volume', 'Upload h5 file'], index=1)
+                                ['Generate a new volume', 'Upload h5 file'], index=0)
         optical_info['n_voxels_per_ml_volume'] = forw_cols[0].slider(
                 'Supersampling: number of voxels per microlens in volume',
                 min_value=1, max_value=21, value=1
@@ -182,6 +185,17 @@ if st.button('**Calculate retardance and orientation images!**', key='calc1'):
         st.success(f"Geometric ray tracing was successful in {execution_time:.2f} secs!", icon="✅")
         st.session_state['ret_image'] = ret_image
         st.session_state['azim_image'] = azim_image
+
+if st.button('**Calculate retardance and orientation images from classes!**', key='calc2'):
+    optical_system = {'optical_info': optical_info}
+    with torch.no_grad():
+        simulator = ForwardModel(optical_system, backend=backend)
+        execution_time = simulator.ray_geometry_computation_time
+        st.success(f"Geometric ray tracing was successful in {execution_time:.3f} secs!", icon="✅")
+        simulator.forward_model(st.session_state.GT)
+        st.session_state['ret_image'] = simulator.ret_img.detach().numpy()
+        st.session_state['azim_image'] = simulator.azim_img.detach().numpy()
+    pass
   
 if "ret_image" in st.session_state:
     # Plot with streamlit
@@ -258,6 +272,40 @@ def create_optimizer(volume):
     optim = torch.optim.Adam(parameters, lr=training_params['lr'])
 
     return optim
+
+BACKEND = BackEnds.PYTORCH
+DEVICE = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+
+if st.button("**Reconstruct birefringent volume with classes!**"):
+    assert backend == BackEnds.PYTORCH, 'backend must be torch'
+    if 'ret_image' not in st.session_state:
+        st.error("We need images before we can reconstruct a volume.")
+    try:
+        my_volume = st.session_state.GT
+        Delta_n_GT = my_volume.get_delta_n().detach().clone()
+        optic_axis_GT = my_volume.get_optic_axis().detach().clone()
+    except NameError:
+        st.error("Ground truth volume is unknown.")
+
+    recon_optical_info = optical_info.copy()
+    recon_optical_info['volume_shape'] = list(est_vol_shape)
+    iteration_params = training_params
+    initial_volume = BirefringentVolume(
+        backend=BackEnds.PYTORCH,
+        optical_info=recon_optical_info,
+        volume_creation_args = volume_args.random_args
+    )
+    recon_config = ReconstructionConfig(recon_optical_info, output_ret_image, output_azim_image,
+                                        initial_volume, iteration_params, gt_vol=st.session_state.GT)
+    reconstructor = Reconstructor(recon_config)
+    reconstructor.reconstruct(output_dir=None, use_streamlit=True)
+
+    st.success("Done reconstructing! How does it look?", icon="✅")
+    st.session_state['vol_est'] = reconstructor.volume_pred
+    st.session_state['ret_est'] = reconstructor.ret_img_pred
+    st.session_state['azim_est'] = reconstructor.azim_img_pred
 
 if st.button("**Reconstruct birefringent volume!**"):
     assert backend == BackEnds.PYTORCH, 'backend must be torch'
