@@ -6,26 +6,41 @@ try:
 except:
     pass
 
-class OpticBlock(nn.Module):  # pure virtual class
+class OpticBlock(nn.Module):
     """Base class containing all the basic functionality of an optic block"""
 
     def __init__(
         self, optic_config=None, members_to_learn=None,
-    ):  # Contains a list of members which should be optimized (In case none are provided members are created without gradients)
+    ):
+        """
+        Initialize the OpticBlock.
+        Args:
+            optic_config (optional): Configuration for the optic block. Defaults to None.
+            members_to_learn (optional): List of members to be optimized. Defaults to None.
+        """
         super(OpticBlock, self).__init__()
         self.optic_config = optic_config
         self.members_to_learn = [] if members_to_learn is None else members_to_learn
         self.device_dummy = nn.Parameter(torch.tensor([1.0]))
 
-
     def get_trainable_variables(self):
+        """
+        Get the trainable variables of the optic block.
+        Returns:
+            list: List of trainable variables.
+        """
         trainable_vars = []
         for name, param in self.named_parameters():
             if name in self.members_to_learn:
                 trainable_vars.append(param)
         return list(trainable_vars)
-    
+
     def get_device(self):
+        """
+        Get the device of the optic block.
+        Returns:
+            torch.device: The device of the optic block.
+        """
         return self.device_dummy.device
 
 
@@ -155,46 +170,3 @@ class OpticConfig(nn.Module):
         
     def get_k(self):
         return self.k
-
-
-# Convert volume to single 2D MIP image, input [batch,1,xDim,yDim,zDim]
-def volume_2_projections(vol_in, proj_type=torch.sum, scaling_factors=[1,1,1], depths_in_ch=True, ths=[0.0,1.0], normalize=False, border_thickness=1, add_scale_bars=True, scale_bar_vox_sizes=[40,20]):
-    vol = vol_in.detach().clone().abs()
-    # Normalize sets limits from 0 to 1
-    if normalize:
-        vol -= vol.min()
-        vol /= vol.max()
-    if depths_in_ch:
-        vol = vol.permute(0,3,2,1).unsqueeze(1)
-    if ths[0]!=0.0 or ths[1]!=1.0:
-        vol_min,vol_max = vol.min(),vol.max()
-        vol[(vol-vol_min)<(vol_max-vol_min)*ths[0]] = 0
-        vol[(vol-vol_min)>(vol_max-vol_min)*ths[1]] = vol_min + (vol_max-vol_min)*ths[1]
-
-    vol_size = list(vol.shape)
-    vol_size[2:] = [vol.shape[i+2] * scaling_factors[i] for i in range(len(scaling_factors))]
-
-    x_projection = proj_type(vol.float().cpu(), dim=2)
-    y_projection = proj_type(vol.float().cpu(), dim=3)
-    z_projection = proj_type(vol.float().cpu(), dim=4)
-
-    out_img = z_projection.min() * torch.ones(
-        vol_size[0], vol_size[1], vol_size[2] + vol_size[4] + border_thickness, vol_size[3] + vol_size[4] + border_thickness
-    )
-
-    out_img[:, :, : vol_size[2], : vol_size[3]] = z_projection
-    out_img[:, :, vol_size[2] + border_thickness :, : vol_size[3]] = F.interpolate(x_projection.permute(0, 1, 3, 2), size=[vol_size[-1],vol_size[-3]], mode='nearest')
-    out_img[:, :, : vol_size[2], vol_size[3] + border_thickness :] = F.interpolate(y_projection, size=[vol_size[2],vol_size[4]], mode='nearest')
-
-
-    if add_scale_bars:
-        line_color = out_img.max()
-        # Draw white lines
-        out_img[:, :, vol_size[2]: vol_size[2]+ border_thickness, ...] = line_color
-        out_img[:, :, :, vol_size[3]:vol_size[3]+border_thickness, ...] = line_color
-        # start = 0.02
-        # out_img[:, :, int(start* vol_size[2]):int(start* vol_size[2])+4, int(0.9* vol_size[3]):int(0.9* vol_size[3])+scale_bar_vox_sizes[0]] = line_color
-        # out_img[:, :, int(start* vol_size[2]):int(start* vol_size[2])+4, vol_size[2] + border_thickness + 10 : vol_size[2] + border_thickness + 10 + scale_bar_vox_sizes[1]*scaling_factors[2]] = line_color
-        # out_img[:, :, vol_size[2] + border_thickness + 10 : vol_size[2] + border_thickness + 10 + scale_bar_vox_sizes[1]*scaling_factors[2], int(start* vol_size[2]):int(start* vol_size[2])+4] = line_color
-
-    return out_img

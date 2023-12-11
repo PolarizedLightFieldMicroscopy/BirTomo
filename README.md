@@ -1,17 +1,17 @@
-![python version](https://img.shields.io/badge/python-3.10-blue)
+![python version](https://img.shields.io/badge/python-3.11-blue)
 [![Run Pytest](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml)
 # forward-model
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
 
 ## How to use
-For the forward model, the main script is main_forward_projection.py. The workflow within that script is the following:
+For the forward model, the main script is `run_simulations.py``. The workflow within that script is the following:
 
 1. Create a birefringent raytracer.
 1. Compute the ray geometry.
 1. Create a volume to image.
 1. Raytrace through the volume.
 
-For the iterative reconstruction, the main script is main_3d_reconstruction.py.
+For the iterative reconstruction, the main script is `run_recon.py``.
 The workflow within that script is the following:
 1. Generate birefringence and retardance images with forward model that will serve as the ground truth (measurement) images.
     1. Create a birefringent raytracer.
@@ -48,7 +48,7 @@ Necessary packages:
 
 Run the following code to create a virtual environment will all the necessary and relevant packages:
 ```
-conda create --name model python=3.10 tqdm matplotlib h5py --yes
+conda create --name model python=3.11 tqdm matplotlib h5py --yes
 conda activate model
 conda install -c conda-forge pytorch ipykernel tifffile --yes
 conda install -c plotly plotly --yes
