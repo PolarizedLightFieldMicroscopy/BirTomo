@@ -5,9 +5,7 @@ import os
 import json
 import torch
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
-import streamlit as st
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
@@ -478,6 +476,7 @@ class Reconstructor:
         return
 
     def __visualize_and_update_streamlit(self, progress_bar, ep, n_epochs, recon_img_plot, my_loss):
+        import pandas as pd
         percent_complete = int(ep / n_epochs * 100)
         progress_bar.progress(percent_complete + 1)
         if ep%2==0:
@@ -519,6 +518,7 @@ class Reconstructor:
 
         n_epochs = self.iteration_params['n_epochs']
         if use_streamlit:
+            import streamlit as st
             st.write("Working on these ", n_epochs, "iterations...")
             my_recon_img_plot = st.empty()
             my_loss = st.empty()
