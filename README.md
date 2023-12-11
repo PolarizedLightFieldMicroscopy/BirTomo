@@ -4,14 +4,14 @@
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
 
 ## How to use
-For the forward model, the main script is main_forward_projection.py. The workflow within that script is the following:
+For the forward model, the main script is `run_simulations.py``. The workflow within that script is the following:
 
 1. Create a birefringent raytracer.
 1. Compute the ray geometry.
 1. Create a volume to image.
 1. Raytrace through the volume.
 
-For the iterative reconstruction, the main script is main_3d_reconstruction.py.
+For the iterative reconstruction, the main script is `run_recon.py``.
 The workflow within that script is the following:
 1. Generate birefringence and retardance images with forward model that will serve as the ground truth (measurement) images.
     1. Create a birefringent raytracer.

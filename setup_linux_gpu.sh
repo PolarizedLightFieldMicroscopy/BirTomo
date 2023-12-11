@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-conda create --name recon python=3.10 --yes
+conda create --name recon python=3.11 --yes
 conda activate recon
 conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia --yes
 conda install tifffile tqdm matplotlib h5py -c conda-forge --yes
