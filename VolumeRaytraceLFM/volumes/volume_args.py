@@ -1,4 +1,6 @@
-'''Dictonaries of arguments to be the volume_creation_args when initalizing a BirefringentVolume'''
+'''Dictonaries of arguments to be the volume_creation_args when
+initalizing a BirefringentVolume.
+'''
 
 plane_args = {
     'init_mode' : '1planes',
@@ -9,7 +11,7 @@ plane_args = {
 voxel_args = {
     'init_mode' : 'single_voxel',
     'init_args' : {
-        'delta_n' : -0.05,
+        'delta_n' : 0.05,
         'offset' : [0, 0, 0]
         }
     }
