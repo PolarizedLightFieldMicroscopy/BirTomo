@@ -4,4 +4,3 @@ tqdm
 torch
 plotly
 tifffile
-pandas
