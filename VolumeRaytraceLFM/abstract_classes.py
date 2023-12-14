@@ -399,10 +399,10 @@ class RayTraceLFM(OpticalElement):
         Requires:
             calling self.rays_through_volumes to compute ray entry, exit and directions.
         Args:
-            filename (str) optional: Saves the geometry to a pickle file, and loads the geometry
-                                    from a file if the file exists.
+            filename (str) optional: Saves the geometry to a pickle file,
+                and loads the geometry from a file if the file exists.
         Returns:
-            None
+            self: The RayTraceLFM instance with updated geometry.
         Computes:
             self.vox_ctr_idx (np.array [3]):
                 3D index of the central voxel.
@@ -419,10 +419,12 @@ class RayTraceLFM(OpticalElement):
                 ray_vol_colli_indices.
             self.ray_valid_direction  (list [n_valid_rays, 3]):
                 Stores the direction of ray n.
-            self.self.lateral_ray_length_from_center (float):
+            self.lateral_ray_length_from_center (float):
                 Maximum lateral reach of a ray from the center voxel.
             self.voxel_span_per_ml (float):
                 Maximum lateral reach of a ray from the center voxel, rounded up.
+            self.ray_direction_basis (list [3]):
+                List size 3, where each element is a torch tensor shaped [n_rays, 3]
         '''
         # If a filename is provided, check if it exists and load the whole ray tracer class from it.
         if self._load_geometry_from_file(filename):
@@ -451,42 +453,34 @@ class RayTraceLFM(OpticalElement):
         # Maximum number of ray-voxel interactions, to define
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
 
-        # Create the information to store
+        n_valid_rays = len(valid_ray_indices_by_ray_num)
+
+        # Initialize storage for ray valid indices
         if self.backend == BackEnds.NUMPY:
-            self.ray_valid_indices = np.zeros((2, len(valid_ray_indices_by_ray_num)), dtype=int)
+            self.ray_valid_indices = np.zeros((2, n_valid_rays), dtype=int)
         elif self.backend == BackEnds.PYTORCH:
-            self.ray_valid_indices = torch.zeros(2, len(valid_ray_indices_by_ray_num), dtype=int)
-        for ix in range(len(valid_ray_indices_by_ray_num)):
-            self.ray_valid_indices[0, ix] = valid_ray_indices_by_ray_num[ix][0]
-            self.ray_valid_indices[1, ix] = valid_ray_indices_by_ray_num[ix][1]
+            self.ray_valid_indices = torch.zeros(2, n_valid_rays, dtype=int)
+
+        # Populate the ray valid indices array
+        for ix, pixel_pos in enumerate(valid_ray_indices_by_ray_num):
+            self.ray_valid_indices[0, ix] = pixel_pos[0]
+            self.ray_valid_indices[1, ix] = pixel_pos[1]
 
         self._filter_invalid_rays(max_ray_voxels_collision, ray_vol_colli_lengths, ray_valid_direction)
         
         # Collisions indices does not get filtered
         self.ray_vol_colli_indices = ray_vol_colli_indices
 
-        # Update volume shape information, to account for the whole workspace
-        # todo: mainly for pytorch multi-lenslet computation
-        vol_shape = self.optical_info['volume_shape']
-        # in index units
-        vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
-        self.vox_ctr_idx = vox_ctr_idx.astype(int)
-        self.volume_ctr_um = vox_ctr_idx * self.optical_info['voxel_size_um']
+        # Update volume shape information to account for the whole workspace
+        self._update_volume_shape_info()
 
+        # Calculate ray directions basis and stores in self.ray_direction_basis
+        self._calculate_ray_directions()
+
+        # Save geometry to file if filename is provided
         if filename is not None:
             self.pickle(filename)
             print(f'Saved RayTraceLFM object from {filename}')
-
-        # Calculate the ray's direction with the two normalized perpendicular directions
-        # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
-        if self.backend == BackEnds.NUMPY:
-            self.ray_direction_basis = []
-            for n_ray, ray in enumerate(self.ray_valid_direction):
-                self.ray_direction_basis.append(RayTraceLFM.calc_ray_direction(ray))
-        elif self.backend == BackEnds.PYTORCH:
-            self.ray_direction_basis = nn.Parameter(
-                RayTraceLFM.calc_ray_direction_torch(self.ray_valid_direction)
-                )
 
         return self
 
@@ -676,6 +670,39 @@ class RayTraceLFM(OpticalElement):
                 ray_valid_direction.append(self.ray_direction[:, ii, jj])
 
         return ray_valid_indices, ray_vol_colli_indices, ray_vol_colli_lengths, ray_valid_direction
+
+    def _update_volume_shape_info(self):
+        '''
+        Updates volume shape information, including the 3D index and 
+        coordinates of the central voxel.
+        '''
+        vol_shape = self.optical_info['volume_shape']
+        # Central voxel index (in index units)
+        self.vox_ctr_idx = np.array([
+            vol_shape[0] // 2, 
+            vol_shape[1] // 2, 
+            vol_shape[2] // 2
+        ], dtype=int)
+        # Central voxel coordinates (in volume units)
+        self.volume_ctr_um = self.vox_ctr_idx * \
+                             self.optical_info['voxel_size_um']
+
+    def _calculate_ray_directions(self):
+        '''
+        Calculates the direction of each valid ray with two perpendicular
+        directions. Updates ray direction basis.
+        '''
+        if self.backend == BackEnds.NUMPY:
+            self.ray_direction_basis = [
+                RayTraceLFM.calc_ray_direction(ray) 
+                for ray in self.ray_valid_direction
+            ]
+        elif self.backend == BackEnds.PYTORCH:
+            self.ray_direction_basis = nn.Parameter(
+                RayTraceLFM.calc_ray_direction_torch(
+                    self.ray_valid_direction
+                )
+            )
 
     # Helper functions to load/save the whole class to disk
     def pickle(self, filename):

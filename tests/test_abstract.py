@@ -95,7 +95,10 @@ def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
     assert rays.ray_valid_indices is not None
     assert rays.ray_vol_colli_indices is not None
     assert rays.ray_vol_colli_lengths is not None
+    assert rays.lateral_ray_length_from_center is not None
+    assert rays.voxel_span_per_ml is not None
     assert rays.ray_valid_direction is not None
+    assert rays.ray_direction_basis is not None
 
     assert len(rays.ray_valid_indices[0]) == len(rays.ray_vol_colli_indices)
 
