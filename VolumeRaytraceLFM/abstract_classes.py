@@ -417,10 +417,8 @@ class RayTraceLFM(OpticalElement):
                 Stores the direction of ray n.
         '''
         # If a filename is provided, check if it exists and load the whole ray tracer class from it.
-        if filename is not None and exists(filename):
-            data = self.unpickle(filename)
-            print(f'Loaded RayTraceLFM object from {filename}')
-            return data
+        if self._load_geometry_from_file(filename):
+            return self
 
         # todo: We treat differently numpy and torch rays, as some rays go outside the volume of
         #   interest.
@@ -436,7 +434,7 @@ class RayTraceLFM(OpticalElement):
         pixels_per_ml = self.optical_info['pixels_per_ml']
         naObj = self.optical_info['na_obj']
         nMedium = self.optical_info['n_medium']
-        vol_shape = [self.optical_info['volume_shape'][0],] + 2*[valid_vol_shape]
+        vol_shape = [self.optical_info['volume_shape'][0],] + 2 * [valid_vol_shape]
         voxel_size_um = self.optical_info['voxel_size_um']
         # vox_ctr_idx is in index units
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
@@ -474,7 +472,7 @@ class RayTraceLFM(OpticalElement):
         self.voxel_span_per_ml = np.ceil(self.voxel_span_per_ml / 2.0)
 
         # Pre-comute things for torch and store in tensors
-        i_range,j_range = self.ray_entry.shape[1:]
+        i_range, j_range = self.ray_entry.shape[1:]
 
         # Compute Siddon's algorithm for each ray
         ray_valid_indices = []
@@ -562,7 +560,7 @@ class RayTraceLFM(OpticalElement):
         # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
         if self.backend == BackEnds.NUMPY:
             self.ray_direction_basis = []
-            for n_ray,ray in enumerate(self.ray_valid_direction):
+            for n_ray, ray in enumerate(self.ray_valid_direction):
                 self.ray_direction_basis.append(RayTraceLFM.calc_ray_direction(ray))
         elif self.backend == BackEnds.PYTORCH:
             self.ray_direction_basis = nn.Parameter(
@@ -570,6 +568,14 @@ class RayTraceLFM(OpticalElement):
                 )
 
         return self
+
+    def _load_geometry_from_file(self, filename):
+        """Loads ray tracer class from a file if it exists."""
+        if filename and exists(filename):
+            data = self.unpickle(filename)
+            print(f'Loaded RayTraceLFM object from {filename}')
+            return data
+        return False
 
     # Helper functions to load/save the whole class to disk
     def pickle(self, filename):
