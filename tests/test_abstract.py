@@ -33,11 +33,55 @@ def ray_trace_lfm_instance(request, optical_info):
         return RayTraceLFM(backend=BackEnds.PYTORCH, torch_args={}, optical_info=optical_info)
 
 def test_rays_through_vol(pixels_per_ml=5, naObj=60, nMedium=1.52, volume_ctr_um=np.array([0.5, 0.5, 0.5])):
-    ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(pixels_per_ml, naObj, nMedium, volume_ctr_um)
+    ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
+        pixels_per_ml, naObj, nMedium, volume_ctr_um
+        )
     
     rays_shape = ray_enter.shape
     assert rays_shape == ray_exit.shape == ray_diff.shape
     assert pixels_per_ml == rays_shape[1] == rays_shape[2]
+
+@pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
+def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
+    '''
+    Test that the voxel span is computed correctly.
+    The sample ray_diff is created with pixels_per_ml = 5.
+    This function is called by compute_rays_geometry, where the
+        axial_volume_dim is rays.optical_info['volume_shape'][0].
+    There no dependence on optical_info.
+    '''
+    rays = ray_trace_lfm_instance
+
+    test_ray_diff = np.array([[[ 0.9547,  0.9719,  0.9776,  0.9719,  0.9547],
+        [ 0.9719,  0.9889,  0.9944,  0.9889,  0.9719],
+        [ 0.9776,  0.9944,  1.    ,  0.9944,  0.9776],
+        [ 0.9719,  0.9889,  0.9944,  0.9889,  0.9719],
+        [ 0.9547,  0.9719,  0.9776,  0.9719,  0.9547]],
+
+       [[ 0.2105,  0.1053, -0.    , -0.1053, -0.2105],
+        [ 0.2105,  0.1053, -0.    , -0.1053, -0.2105],
+        [ 0.2105,  0.1053,  0.    , -0.1053, -0.2105],
+        [ 0.2105,  0.1053,  0.    , -0.1053, -0.2105],
+        [ 0.2105,  0.1053,  0.    , -0.1053, -0.2105]],
+
+       [[ 0.2105,  0.2105,  0.2105,  0.2105,  0.2105],
+        [ 0.1053,  0.1053,  0.1053,  0.1053,  0.1053],
+        [-0.    ,  0.    ,  0.    ,  0.    , -0.    ],
+        [-0.1053, -0.1053, -0.1053, -0.1053, -0.1053],
+        [-0.2105, -0.2105, -0.2105, -0.2105, -0.2105]]])
+
+    rays.optical_info['volume_shape'][0] = 11
+    rays.optical_info["pixels_per_ml"] = 5
+
+    # axial_volume_dim is rays.optical_info['volume_shape'][0]
+    axial_volume_dim = 11
+    voxel_span = rays._compute_lateral_ray_length_and_voxel_span(
+        test_ray_diff, axial_volume_dim
+        )
+    expected_voxel_span = 2.0
+
+    assert voxel_span == expected_voxel_span, \
+        f"Expected {expected_voxel_span}, got {voxel_span}"
 
 @pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
 def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):

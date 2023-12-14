@@ -417,6 +417,8 @@ class RayTraceLFM(OpticalElement):
                 ray_vol_colli_indices.
             self.ray_valid_direction  (list [n_valid_rays, 3]):
                 Stores the direction of ray n.
+            self.voxel_span_per_ml (float):
+                Maximum lateral reach of a ray from the center voxel.
         '''
         # If a filename is provided, check if it exists and load the whole ray tracer class from it.
         if self._load_geometry_from_file(filename):
@@ -458,20 +460,11 @@ class RayTraceLFM(OpticalElement):
             self.ray_exit = ray_exit
             self.ray_direction = ray_diff
 
-        # The maximum voxel-span is with respect to the middle voxel, let's shift that to the origin
-        # find first valid ray from one of the borders
-        half_ml_shape = ray_diff.shape[1] // 2
-        valid_ray_coord = 0
-        while np.isnan(ray_diff[0, valid_ray_coord, half_ml_shape]):
-            valid_ray_coord += 1
-        # Compute how long is the ray laterally
-        self.voxel_span_per_ml = vol_shape[0] * \
-            ray_diff[2,valid_ray_coord,half_ml_shape] / ray_diff[0,valid_ray_coord,half_ml_shape]
-        # Compensate for different voxel sizes axially vs laterally
-        # self.voxel_span_per_ml *= (self.optical_info['voxel_size_um'][1]
-        #                            / self.optical_info['voxel_size_um'][0])
-        # Compute what's the maximum reach of a ray from the center voxel
-        self.voxel_span_per_ml = np.ceil(self.voxel_span_per_ml / 2.0)
+        # The maximum voxel-span is with respect to the middle voxel,
+        #   let's shift that to the origin
+        self._compute_lateral_ray_length_and_voxel_span(
+            ray_diff, self.optical_info['volume_shape'][0]
+            )
 
         valid_ray_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
@@ -530,6 +523,41 @@ class RayTraceLFM(OpticalElement):
             print(f'Loaded RayTraceLFM object from {filename}')
             return data
         return False
+
+    def _compute_lateral_ray_length_and_voxel_span(self, ray_diff, axial_volume_dim):
+        '''
+        Computes the lateral length of the ray and the maximum voxel span.
+
+        Args:
+            ray_diff (np.array): The ray differential, an array containing 
+                                the direction of the rays through the volume.
+
+        Returns:
+            voxel_span_per_ml (float): The maximum voxel span per microlens.
+        '''
+        # Find the first valid ray from one of the borders
+        half_ml_shape = ray_diff.shape[1] // 2
+        valid_ray_coord = 0
+        while np.isnan(ray_diff[0, valid_ray_coord, half_ml_shape]):
+            valid_ray_coord += 1
+
+        # Compute how long is the ray laterally
+        lateral_ray_length = axial_volume_dim * \
+                            ray_diff[2, valid_ray_coord, half_ml_shape] / \
+                            ray_diff[0, valid_ray_coord, half_ml_shape]
+
+        # Compensate for different voxel sizes axially vs laterally
+        # Uncomment the next line if different voxel sizes need to be considered
+        # lateral_ray_length *= (self.optical_info['voxel_size_um'][1] /
+        #                        self.optical_info['voxel_size_um'][0])
+
+        # Compute the maximum reach of a ray from the center voxel
+        voxel_span_per_ml = np.ceil(lateral_ray_length / 2.0)
+
+        # Store the computed value in the class instance
+        self.voxel_span_per_ml = voxel_span_per_ml
+
+        return voxel_span_per_ml
 
     def _filter_invalid_rays(self, max_num_collisions, collision_lengths, valid_direction):
         '''
