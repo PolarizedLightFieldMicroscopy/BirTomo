@@ -428,39 +428,8 @@ class RayTraceLFM(OpticalElement):
         if self._load_geometry_from_file(filename):
             return self
 
-        # We may need to treat differently numpy and torch rays, as some
-        #   rays go outside the volume of interest.
-        valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
-
-        # Fetch needed variables
-        pixels_per_ml = self.optical_info['pixels_per_ml']
-        naObj = self.optical_info['na_obj']
-        nMedium = self.optical_info['n_medium']
-        voxel_size_um = self.optical_info['voxel_size_um']
-        vol_shape_restricted = [self.optical_info['volume_shape'][0],] + 2 * [valid_vol_shape]
-        # vox_ctr_idx is in index units
-        vox_ctr_idx_restricted = np.array(
-            [vol_shape_restricted[0] / 2,
-             vol_shape_restricted[1] / 2,
-             vol_shape_restricted[2] / 2]
-            )
-        # volume_ctr_um_restricted is in volume units (um)
-        volume_ctr_um_restricted = vox_ctr_idx_restricted * voxel_size_um
-
-        # Calculate the ray geometry
-        ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
-            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted
-            )
-
-        # Store locally
-        if self.backend == BackEnds.PYTORCH:
-            self.ray_entry = torch.from_numpy(ray_enter).float()
-            self.ray_exit = torch.from_numpy(ray_exit).float()
-            self.ray_direction = torch.from_numpy(ray_diff).float()
-        else:
-            self.ray_entry = ray_enter
-            self.ray_exit = ray_exit
-            self.ray_direction = ray_diff
+        # Identify the endpoints of the rays
+        ray_enter, ray_exit, ray_diff = self._initialize_ray_geometry()
 
         # The maximum voxel-span is with respect to the middle voxel,
         #   let's shift that to the origin
@@ -473,7 +442,7 @@ class RayTraceLFM(OpticalElement):
         valid_ray_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
             self.compute_ray_collisions(
-                ray_enter, ray_exit, self.optical_info['voxel_size_um'], vol_shape_restricted
+                ray_enter, ray_exit, self.optical_info['voxel_size_um'], self.vol_shape_restricted
                 )
 
         # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
@@ -528,6 +497,66 @@ class RayTraceLFM(OpticalElement):
             print(f'Loaded RayTraceLFM object from {filename}')
             return data
         return False
+
+    def _initialize_ray_geometry(self):
+        '''
+        Initializes and calculates the ray geometry for the RayTraceLFM 
+        class. Fetches necessary variables from `optical_info`, computes 
+        the restricted volume shape, and calculates the central voxel 
+        indices and their unit measurements. Determines ray entry, exit, 
+        and direction for the optical setup.
+
+        Adjusts for numpy and torch rays, especially when rays extend 
+        outside the volume of interest. Stores ray geometry locally 
+        based on the backend (numpy or pytorch).
+
+        Returns:
+            tuple: A tuple with three elements:
+                - ray_enter: Entry points of rays (np.array/torch.Tensor)
+                - ray_exit: Exit points of rays (np.array/torch.Tensor)
+                - ray_diff: Direction of rays (np.array/torch.Tensor)
+        
+        Note:
+            Updates attributes `vol_shape_restricted`, `ray_entry`, 
+            `ray_exit`, and `ray_direction`. Converts ray geometry 
+            to pytorch tensors for pytorch backend, otherwise uses 
+            numpy arrays.
+        '''
+        # We may need to treat differently numpy and torch rays, as some
+        # rays go outside the volume of interest.
+
+        # Fetch necessary variables from optical_info
+        pixels_per_ml = self.optical_info['pixels_per_ml']
+        naObj = self.optical_info['na_obj']
+        nMedium = self.optical_info['n_medium']
+        valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
+        self.vol_shape_restricted = [self.optical_info['volume_shape'][0],] + 2 * [valid_vol_shape]
+        # vox_ctr_idx is in index units
+        vox_ctr_idx_restricted = np.array(
+            [self.vol_shape_restricted[0] / 2,
+             self.vol_shape_restricted[1] / 2,
+             self.vol_shape_restricted[2] / 2]
+            )
+        voxel_size_um = self.optical_info['voxel_size_um']
+        # volume_ctr_um_restricted is in volume units (um)
+        volume_ctr_um_restricted = vox_ctr_idx_restricted * voxel_size_um
+
+        # Calculate the ray geometry
+        ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
+            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted
+            )
+
+        # Store locally
+        if self.backend == BackEnds.PYTORCH:
+            self.ray_entry = torch.from_numpy(ray_enter).float()
+            self.ray_exit = torch.from_numpy(ray_exit).float()
+            self.ray_direction = torch.from_numpy(ray_diff).float()
+        else:
+            self.ray_entry = ray_enter
+            self.ray_exit = ray_exit
+            self.ray_direction = ray_diff
+
+        return ray_enter, ray_exit, ray_diff
 
     @staticmethod
     def compute_lateral_ray_length_and_voxel_span(ray_diff, axial_volume_dim):
