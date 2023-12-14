@@ -417,8 +417,10 @@ class RayTraceLFM(OpticalElement):
                 ray_vol_colli_indices.
             self.ray_valid_direction  (list [n_valid_rays, 3]):
                 Stores the direction of ray n.
-            self.voxel_span_per_ml (float):
+            self.self.lateral_ray_length_from_center (float):
                 Maximum lateral reach of a ray from the center voxel.
+            self.voxel_span_per_ml (float):
+                Maximum lateral reach of a ray from the center voxel, rounded up.
         '''
         # If a filename is provided, check if it exists and load the whole ray tracer class from it.
         if self._load_geometry_from_file(filename):
@@ -462,9 +464,11 @@ class RayTraceLFM(OpticalElement):
 
         # The maximum voxel-span is with respect to the middle voxel,
         #   let's shift that to the origin
-        self._compute_lateral_ray_length_and_voxel_span(
+        lat_length, vox_span = RayTraceLFM.compute_lateral_ray_length_and_voxel_span(
             ray_diff, self.optical_info['volume_shape'][0]
             )
+        self.lateral_ray_length_from_center = lat_length
+        self.voxel_span_per_ml = vox_span
 
         valid_ray_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
@@ -472,19 +476,18 @@ class RayTraceLFM(OpticalElement):
 
         # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
         self.valid_ray_indices_by_ray_num = valid_ray_indices_by_ray_num
-        ray_valid_indices = valid_ray_indices_by_ray_num
 
         # Maximum number of ray-voxel interactions, to define
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
 
         # Create the information to store
         if self.backend == BackEnds.NUMPY:
-            self.ray_valid_indices = np.zeros((2, len(ray_valid_indices)), dtype=int)
+            self.ray_valid_indices = np.zeros((2, len(valid_ray_indices_by_ray_num)), dtype=int)
         elif self.backend == BackEnds.PYTORCH:
-            self.ray_valid_indices = torch.zeros(2, len(ray_valid_indices), dtype=int)
-        for ix in range(len(ray_valid_indices)):
-            self.ray_valid_indices[0, ix] = ray_valid_indices[ix][0]
-            self.ray_valid_indices[1, ix] = ray_valid_indices[ix][1]
+            self.ray_valid_indices = torch.zeros(2, len(valid_ray_indices_by_ray_num), dtype=int)
+        for ix in range(len(valid_ray_indices_by_ray_num)):
+            self.ray_valid_indices[0, ix] = valid_ray_indices_by_ray_num[ix][0]
+            self.ray_valid_indices[1, ix] = valid_ray_indices_by_ray_num[ix][1]
 
         self._filter_invalid_rays(max_ray_voxels_collision, ray_vol_colli_lengths, ray_valid_direction)
         
@@ -524,16 +527,19 @@ class RayTraceLFM(OpticalElement):
             return data
         return False
 
-    def _compute_lateral_ray_length_and_voxel_span(self, ray_diff, axial_volume_dim):
+    @staticmethod
+    def compute_lateral_ray_length_and_voxel_span(ray_diff, axial_volume_dim):
         '''
         Computes the lateral length of the ray and the maximum voxel span.
 
         Args:
             ray_diff (np.array): The ray differential, an array containing 
                                 the direction of the rays through the volume.
-
         Returns:
+            lateral_ray_length_from_center (float): The maximum lateral
+                reach of a ray from the center voxel.
             voxel_span_per_ml (float): The maximum voxel span per microlens.
+                This the the lateral_ray_length_from_center rounded up.
         '''
         # Find the first valid ray from one of the borders
         half_ml_shape = ray_diff.shape[1] // 2
@@ -554,10 +560,9 @@ class RayTraceLFM(OpticalElement):
         # Compute the maximum reach of a ray from the center voxel
         voxel_span_per_ml = np.ceil(lateral_ray_length / 2.0)
 
-        # Store the computed value in the class instance
-        self.voxel_span_per_ml = voxel_span_per_ml
+        lateral_ray_length_from_center = lateral_ray_length / 2.0
 
-        return voxel_span_per_ml
+        return lateral_ray_length_from_center, voxel_span_per_ml
 
     def _filter_invalid_rays(self, max_num_collisions, collision_lengths, valid_direction):
         '''

@@ -75,7 +75,7 @@ def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
 
     # axial_volume_dim is rays.optical_info['volume_shape'][0]
     axial_volume_dim = 11
-    voxel_span = rays._compute_lateral_ray_length_and_voxel_span(
+    lat_length, voxel_span = RayTraceLFM.compute_lateral_ray_length_and_voxel_span(
         test_ray_diff, axial_volume_dim
         )
     expected_voxel_span = 2.0
