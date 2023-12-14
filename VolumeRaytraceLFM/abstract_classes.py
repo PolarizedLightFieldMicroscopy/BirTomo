@@ -404,8 +404,10 @@ class RayTraceLFM(OpticalElement):
         Returns:
             None
         Computes:
-            self.vox_ctr_idx ([3]):     3D index of the central voxel.
-            self.volume_ctr_um ([3]):   3D coordinate in um of the central voxel
+            self.vox_ctr_idx (np.array [3]):
+                3D index of the central voxel.
+            self.volume_ctr_um (np.array [3]):
+                3D coordinate in um of the central voxel
             self.ray_valid_indices_by_ray_num (list of tuples n_rays*[(i,j),]):
                 Store the 2D ray index of a valid ray (without nan in entry/exit)
             self.ray_valid_indices: array of shape (2, n_valid_rays):
@@ -426,30 +428,28 @@ class RayTraceLFM(OpticalElement):
         if self._load_geometry_from_file(filename):
             return self
 
-        # todo: We treat differently numpy and torch rays, as some rays go outside the volume of
-        #   interest.
-        # We need to revisit this when we start computing images with more than one micro-lens in
-        #   numpy
-        # if False:#self.backend == BackEnds.NUMPY:
-        #     # The valid workspace is defined by the number of micro-lenses
-        # valid_vol_shape = self.optical_info['volume_shape'][1]
-        # elif self.backend == BackEnds.PYTORCH:
+        # We may need to treat differently numpy and torch rays, as some
+        #   rays go outside the volume of interest.
         valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
 
         # Fetch needed variables
         pixels_per_ml = self.optical_info['pixels_per_ml']
         naObj = self.optical_info['na_obj']
         nMedium = self.optical_info['n_medium']
-        vol_shape = [self.optical_info['volume_shape'][0],] + 2 * [valid_vol_shape]
         voxel_size_um = self.optical_info['voxel_size_um']
+        vol_shape_restricted = [self.optical_info['volume_shape'][0],] + 2 * [valid_vol_shape]
         # vox_ctr_idx is in index units
-        vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
-        self.vox_ctr_idx = vox_ctr_idx.astype(int)
-        self.volume_ctr_um = vox_ctr_idx * voxel_size_um # in vol units (um)
+        vox_ctr_idx_restricted = np.array(
+            [vol_shape_restricted[0] / 2,
+             vol_shape_restricted[1] / 2,
+             vol_shape_restricted[2] / 2]
+            )
+        # volume_ctr_um_restricted is in volume units (um)
+        volume_ctr_um_restricted = vox_ctr_idx_restricted * voxel_size_um
 
         # Calculate the ray geometry
         ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
-            pixels_per_ml, naObj, nMedium, self.volume_ctr_um
+            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted
             )
 
         # Store locally
@@ -472,7 +472,9 @@ class RayTraceLFM(OpticalElement):
 
         valid_ray_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
-            self.compute_ray_collisions(ray_enter, ray_exit, voxel_size_um, vol_shape)
+            self.compute_ray_collisions(
+                ray_enter, ray_exit, self.optical_info['voxel_size_um'], vol_shape_restricted
+                )
 
         # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
         self.valid_ray_indices_by_ray_num = valid_ray_indices_by_ray_num
@@ -500,7 +502,7 @@ class RayTraceLFM(OpticalElement):
         # in index units
         vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
         self.vox_ctr_idx = vox_ctr_idx.astype(int)
-        self.volume_ctr_um = vox_ctr_idx * voxel_size_um
+        self.volume_ctr_um = vox_ctr_idx * self.optical_info['voxel_size_um']
 
         if filename is not None:
             self.pickle(filename)
