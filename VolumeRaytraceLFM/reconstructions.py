@@ -128,7 +128,11 @@ class ReconstructionConfig:
 class Reconstructor:
     backend = BackEnds.PYTORCH
 
-    def __init__(self, recon_info: ReconstructionConfig, device='cpu'):
+    def __init__(self,
+                 recon_info: ReconstructionConfig,
+                 device='cpu',
+                 omit_rays_based_on_pixels=False
+                 ):
         """
         Initialize the Reconstructor with the provided parameters.
 
@@ -150,7 +154,10 @@ class Reconstructor:
             mip_image = convert_volume_to_2d_mip(self.birefringence_simulated.unsqueeze(0))
             self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
 
-        self.rays = self.setup_raytracer(device=device)
+        image_for_rays = None
+        if omit_rays_based_on_pixels:
+            image_for_rays = self.ret_img_meas
+        self.rays = self.setup_raytracer(image=image_for_rays, device=device)
 
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
@@ -201,17 +208,14 @@ class Reconstructor:
                 if ep == 0:
                     print(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors.")
 
-    def setup_raytracer(self, device='cpu'):
+    def setup_raytracer(self, image=None, device='cpu'):
         """Initialize Birefringent Raytracer."""
         print(f'For raytracing, using computing device {device}')
         rays = BirefringentRaytraceLFM(backend=Reconstructor.backend, optical_info=self.optical_info)
         rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
-        rays.compute_rays_geometry()
+        rays.compute_rays_geometry(filename=None, image=image)
         print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
-
-        # Ray filtering may need to be done in the middle of rays.compute_rays_geometry()
-        rays.filter_rays_based_on_pixels(self.ret_img_meas)
 
         return rays
 

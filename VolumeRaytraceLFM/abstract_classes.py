@@ -394,7 +394,7 @@ class RayTraceLFM(OpticalElement):
         ray_diff = ray_diff / np.linalg.norm(ray_diff, axis=0)
         return ray_enter, ray_exit, ray_diff
 
-    def compute_rays_geometry(self, filename=None):
+    def compute_rays_geometry(self, filename=None, image=None):
         '''Computes the ray-voxel collision based on the Siddon algorithm.
         Requires:
             calling self.rays_through_volumes to compute ray entry, exit and directions.
@@ -467,9 +467,12 @@ class RayTraceLFM(OpticalElement):
             self.ray_valid_indices[1, ix] = pixel_pos[1]
 
         self._filter_invalid_rays(max_ray_voxels_collision, ray_vol_colli_lengths, ray_valid_direction)
-        
+
         # Collisions indices does not get filtered
         self.ray_vol_colli_indices = ray_vol_colli_indices
+
+        if image is not None:
+            self.filter_rays_based_on_pixels(image)
 
         # Update volume shape information to account for the whole workspace
         self._update_volume_shape_info()
@@ -500,6 +503,9 @@ class RayTraceLFM(OpticalElement):
         # Create a boolean mask based on whether the image value at each index is not zero
         mask = np.array([image[index[0], index[1]] != 0 for index in reshaped_indices])
 
+        # Apply the mask to reshaped_indices
+        filtered_reshaped_indices = reshaped_indices[mask]
+
         # ray_valid_indices_by_ray_num is not adjusted
         #   because it is not used in the forward model
         colli_indices = self.ray_vol_colli_indices
@@ -513,6 +519,8 @@ class RayTraceLFM(OpticalElement):
         self.ray_vol_colli_indices = filtered_ray_vol_colli_indices
         self.ray_vol_colli_lengths = nn.Parameter(filtered_ray_vol_colli_lengths, requires_grad=False)
         self.ray_valid_direction = nn.Parameter(filtered_ray_valid_direction, requires_grad=False)
+        # Transpose back to get the filtered self.ray_valid_indices
+        self.ray_valid_indices = filtered_reshaped_indices.T
 
         return self
 
