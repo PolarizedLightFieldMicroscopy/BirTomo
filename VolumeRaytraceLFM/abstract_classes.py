@@ -484,6 +484,38 @@ class RayTraceLFM(OpticalElement):
 
         return self
 
+    def filter_rays_based_on_pixels(self, image):
+        """
+        Filters the rays based on the non-zero pixel values in the given image.
+
+        Args:
+            image (numpy.ndarray): The image used to filter the rays.
+
+        Returns:
+            self: The updated instance of the class with filtered ray attributes.
+        """
+        # Reshape self.ray_valid_indices to pair row and column indices
+        reshaped_indices = self.ray_valid_indices.T
+
+        # Create a boolean mask based on whether the image value at each index is not zero
+        mask = np.array([image[index[0], index[1]] != 0 for index in reshaped_indices])
+
+        # ray_valid_indices_by_ray_num is not adjusted
+        #   because it is not used in the forward model
+        colli_indices = self.ray_vol_colli_indices
+        filtered_ray_vol_colli_indices = [
+            idx for idx, mask_val in zip(colli_indices, mask) if mask_val
+        ]
+        filtered_ray_vol_colli_lengths = self.ray_vol_colli_lengths[mask]
+        filtered_ray_valid_direction = self.ray_valid_direction[mask]
+
+        # Re-assign instance attributes
+        self.ray_vol_colli_indices = filtered_ray_vol_colli_indices
+        self.ray_vol_colli_lengths = nn.Parameter(filtered_ray_vol_colli_lengths, requires_grad=False)
+        self.ray_valid_direction = nn.Parameter(filtered_ray_valid_direction, requires_grad=False)
+
+        return self
+
     def _load_geometry_from_file(self, filename):
         """Loads ray tracer class from a file if it exists."""
         if filename and exists(filename):

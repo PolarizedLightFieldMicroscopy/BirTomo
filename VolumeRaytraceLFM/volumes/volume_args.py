@@ -16,6 +16,14 @@ voxel_args = {
         }
     }
 
+voxel_shifted_args = {
+    'init_mode' : 'single_voxel',
+    'init_args' : {
+        'delta_n' : 0.05,
+        'offset' : [1, 0, 0]
+        }
+    }
+
 ellisoid_init_args = {
     'init_mode' : 'ellipsoid',
     }

@@ -209,6 +209,10 @@ class Reconstructor:
         start_time = time.time()
         rays.compute_rays_geometry()
         print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
+
+        # Ray filtering may need to be done in the middle of rays.compute_rays_geometry()
+        rays.filter_rays_based_on_pixels(self.ret_img_meas)
+
         return rays
 
     def setup_initial_volume(self):

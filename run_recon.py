@@ -61,7 +61,7 @@ def recon_gpu():
 
 def recon():
     optical_info = setup_optical_parameters("config_settings\optical_config_voxel.json")
-    simulate = False
+    simulate = True
     if simulate:
         optical_system = {'optical_info': optical_info}
         # Initialize the forward model. Raytracing is performed as part of the initialization.
@@ -70,9 +70,9 @@ def recon():
         volume_GT = BirefringentVolume(
             backend=BACKEND,
             optical_info=optical_info,
-            volume_creation_args=volume_args.voxel_args
+            volume_creation_args=volume_args.voxel_shifted_args
         )
-        visualize_volume(volume_GT, optical_info)
+        # visualize_volume(volume_GT, optical_info)
 
         simulator.forward_model(volume_GT)
         # simulator.view_images()
