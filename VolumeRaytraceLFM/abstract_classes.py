@@ -441,19 +441,19 @@ class RayTraceLFM(OpticalElement):
         self.lateral_ray_length_from_center = lat_length
         self.voxel_span_per_ml = vox_span
 
-        valid_ray_indices_by_ray_num, ray_vol_colli_indices, \
+        ray_valid_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
             self.compute_ray_collisions(
                 ray_enter, ray_exit, self.optical_info['voxel_size_um'], self.vol_shape_restricted
                 )
 
         # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
-        self.valid_ray_indices_by_ray_num = valid_ray_indices_by_ray_num
+        self.ray_valid_indices_by_ray_num = ray_valid_indices_by_ray_num
 
         # Maximum number of ray-voxel interactions, to define
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
 
-        n_valid_rays = len(valid_ray_indices_by_ray_num)
+        n_valid_rays = len(ray_valid_indices_by_ray_num)
 
         # Initialize storage for ray valid indices
         if self.backend == BackEnds.NUMPY:
@@ -462,7 +462,7 @@ class RayTraceLFM(OpticalElement):
             self.ray_valid_indices = torch.zeros(2, n_valid_rays, dtype=int)
 
         # Populate the ray valid indices array
-        for ix, pixel_pos in enumerate(valid_ray_indices_by_ray_num):
+        for ix, pixel_pos in enumerate(ray_valid_indices_by_ray_num):
             self.ray_valid_indices[0, ix] = pixel_pos[0]
             self.ray_valid_indices[1, ix] = pixel_pos[1]
 
@@ -614,10 +614,10 @@ class RayTraceLFM(OpticalElement):
         Notes:
         - The method distinguishes between handling data in NumPy and PyTorch
             based on the backend specified in the class.
-        - The instance variable `valid_ray_indices_by_ray_num` is expected
+        - The instance variable `ray_valid_indices_by_ray_num` is expected
             to be populated beforehand to indicate valid rays.
         '''
-        n_valid_rays = len(self.valid_ray_indices_by_ray_num)
+        n_valid_rays = len(self.ray_valid_indices_by_ray_num)
 
         # Initialize storage for ray-voxel collision lengths and ray valid directions
         if self.backend == BackEnds.NUMPY:
