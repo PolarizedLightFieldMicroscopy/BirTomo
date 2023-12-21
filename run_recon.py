@@ -100,7 +100,7 @@ def recon():
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=volume_GT)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
@@ -117,7 +117,7 @@ def main():
     )
     # visualize_volume(volume_GT, optical_info)
     simulator.forward_model(volume_GT)
-    # simulator.view_images()
+    simulator.view_images()
     ret_image_meas = simulator.ret_img
     azim_image_meas = simulator.azim_img
 

@@ -106,3 +106,58 @@ def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
     rays_shape = rays.ray_entry.shape
     assert rays_shape == rays.ray_exit.shape == rays.ray_direction.shape
     assert rays.optical_info['pixels_per_ml'] == rays_shape[1] == rays_shape[2]
+
+def create_array_with_set_nonzero(size, num_nonzero):
+    """
+    Creates a square numpy array of the given size with num_nonzero 5 non-zero elements.
+
+    Args:
+        size (int): The size of the square array.
+
+    Returns:
+        numpy.ndarray: The resulting array.
+    """
+    if size * size < num_nonzero:
+        raise ValueError(f"Size must be large enough to accommodate {num_nonzero} non-zero elements")
+
+    # Create an array of zeros
+    array = np.zeros((size, size), dtype=np.float32)
+
+    # Randomly select num_nonzero unique positions to set as non-zero
+    non_zero_positions = np.random.choice(size * size, num_nonzero, replace=False)
+    
+    # Set these positions to non-zero values
+    rows = non_zero_positions // size
+    cols = non_zero_positions % size
+    array[rows, cols] = np.random.uniform(0.01, 1.5, size=num_nonzero)
+
+    return array
+
+# @pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
+# def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
+def test_filter_nonzero_rays_single_lenslet():
+    optical_info = OpticalElement.get_optical_info_template()
+    optical_info['volume_shape'] = [3, 5, 5]
+    optical_info['axial_voxel_size_um'] = 1.0
+    optical_info['pixels_per_ml'] = 7
+    optical_info['na_obj'] = 1.2
+    optical_info['n_medium'] = 1.52
+    optical_info['wavelength'] = 0.550
+    optical_info['n_micro_lenses'] = 1
+    optical_info['n_voxels_per_ml'] = 1
+    rays = RayTraceLFM(backend=BackEnds.PYTORCH, torch_args={}, optical_info=optical_info)
+
+    filename = None
+    n_lenslets = rays.optical_info['n_micro_lenses']
+    n_pixels_per_ml = rays.optical_info['pixels_per_ml']
+    num_nonzero = 5
+    ret_image = create_array_with_set_nonzero(n_lenslets * n_pixels_per_ml, num_nonzero)
+
+    rays.compute_rays_geometry(filename=filename, image=ret_image)
+
+    for var in [len(rays.ray_valid_indices[1]),
+                len(rays.ray_vol_colli_indices),
+                len(rays.ray_vol_colli_lengths),
+                len(rays.ray_valid_direction)
+                ]:
+        assert var == num_nonzero

@@ -472,6 +472,8 @@ class RayTraceLFM(OpticalElement):
         self.ray_vol_colli_indices = ray_vol_colli_indices
 
         if image is not None:
+            if not np.any(image):
+                raise ValueError("The image cannot be all zeros.")
             self.filter_rays_based_on_pixels(image)
 
         # Update volume shape information to account for the whole workspace
