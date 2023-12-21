@@ -8,7 +8,7 @@ from VolumeRaytraceLFM.abstract_classes import *
 # from VolumeRaytraceLFM.birefringence_implementations import *
 
 @pytest.fixture(scope="module")
-def optical_info():
+def my_optical_info():
     # Fetch default optical info
     optical_info = OpticalElement.get_optical_info_template()
 
@@ -26,17 +26,16 @@ def optical_info():
     return optical_info
 
 @pytest.fixture
-def ray_trace_lfm_instance(request, optical_info):
+def ray_trace_lfm_instance(request, my_optical_info):
     if request.param == 'numpy':
-        return RayTraceLFM(backend=BackEnds.NUMPY, torch_args={}, optical_info=optical_info)
+        return RayTraceLFM(backend=BackEnds.NUMPY, torch_args={}, optical_info=my_optical_info)
     elif request.param == 'pytorch':
-        return RayTraceLFM(backend=BackEnds.PYTORCH, torch_args={}, optical_info=optical_info)
+        return RayTraceLFM(backend=BackEnds.PYTORCH, torch_args={}, optical_info=my_optical_info)
 
 def test_rays_through_vol(pixels_per_ml=5, naObj=60, nMedium=1.52, volume_ctr_um=np.array([0.5, 0.5, 0.5])):
     ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
         pixels_per_ml, naObj, nMedium, volume_ctr_um
         )
-    
     rays_shape = ray_enter.shape
     assert rays_shape == ray_exit.shape == ray_diff.shape
     assert pixels_per_ml == rays_shape[1] == rays_shape[2]
@@ -86,7 +85,6 @@ def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
 @pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
 def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
     filename = None
-    
     rays = ray_trace_lfm_instance
     rays.compute_rays_geometry(filename)
 
@@ -161,3 +159,20 @@ def test_filter_nonzero_rays_single_lenslet():
                 len(rays.ray_valid_direction)
                 ]:
         assert var == num_nonzero
+
+@pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
+def test_identify_rays_from_pixels_mla(ray_trace_lfm_instance):
+    rays = ray_trace_lfm_instance
+    num_lenslets = rays.optical_info['n_micro_lenses']
+    num_pixels_per_ml = rays.optical_info['pixels_per_ml']
+    num_nonzero = 5
+    ret_image = create_array_with_set_nonzero(num_lenslets * num_pixels_per_ml, num_nonzero)
+    nonzero_pixels = rays.identify_rays_from_pixels_mla(ret_image)
+
+    # Choose a corner of ret_image and test.
+
+    # nonzero_pixels needs to be able to be indexed by the lenslet position
+    #   and return a list of tuples
+    # dictionary? list?
+
+    assert nonzero_pixels.shape == (num_lenslets, num_lenslets)

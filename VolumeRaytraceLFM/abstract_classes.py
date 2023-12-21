@@ -526,6 +526,35 @@ class RayTraceLFM(OpticalElement):
 
         return self
 
+    def identify_rays_from_pixels_mla(self, mla_image):
+        """
+        Args:
+            mla_image (np.array): light field image
+        Return:
+            nonzero_pixels: indexed by lenslet position then pixel position
+        
+        """
+        num_mla = self.optical_info["n_micro_lenses"]
+        num_pixels = self.optical_info["pixels_per_ml"]
+        size = num_mla * num_pixels
+        nonzero_pixels = np.array((size, size))
+        # Reshape self.ray_valid_indices to pair row and column indices
+        reshaped_indices = self.ray_valid_indices.T
+
+        # Loop through sections of mla_image, and store indices.
+        for i in range(num_mla):
+            for j in range(num_mla):
+                lenslet_image = mla_image[
+                    i * num_pixels : (i + 1) * num_pixels,
+                    j * num_pixels : (j + 1) * num_pixels
+                    ]
+                # The following should be done for each lenslet. The input image needs to be cropped.
+                # Create a boolean mask based on whether the image value at each index is not zero
+                mask = np.array([lenslet_image[index[0], index[1]] != 0 for index in reshaped_indices])
+                # Fill values into varibles nonzero_pixels
+
+        return nonzero_pixels
+
     def _load_geometry_from_file(self, filename):
         """Loads ray tracer class from a file if it exists."""
         if filename and exists(filename):
