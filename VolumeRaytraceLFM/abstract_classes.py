@@ -519,41 +519,51 @@ class RayTraceLFM(OpticalElement):
 
         # Re-assign instance attributes
         self.ray_vol_colli_indices = filtered_ray_vol_colli_indices
-        self.ray_vol_colli_lengths = nn.Parameter(filtered_ray_vol_colli_lengths, requires_grad=False)
-        self.ray_valid_direction = nn.Parameter(filtered_ray_valid_direction, requires_grad=False)
+        self.ray_vol_colli_lengths = nn.Parameter(
+            filtered_ray_vol_colli_lengths, requires_grad=False
+            )
+        self.ray_valid_direction = nn.Parameter(
+            filtered_ray_valid_direction, requires_grad=False
+            )
         # Transpose back to get the filtered self.ray_valid_indices
         self.ray_valid_indices = filtered_reshaped_indices.T
 
         return self
 
-    def identify_rays_from_pixels_mla(self, mla_image):
+    def identify_rays_from_pixels_mla(self, mla_image, ray_valid_indices=None):
         """
         Args:
             mla_image (np.array): light field image
         Return:
-            nonzero_pixels: indexed by lenslet position then pixel position
-        
+            nonzero_pixels_dict: mask for which rays lead to nonzero pixels,
+                indexed by lenslet position then pixel position
         """
         num_mla = self.optical_info["n_micro_lenses"]
         num_pixels = self.optical_info["pixels_per_ml"]
-        size = num_mla * num_pixels
-        nonzero_pixels = np.array((size, size))
-        # Reshape self.ray_valid_indices to pair row and column indices
-        reshaped_indices = self.ray_valid_indices.T
+        # size = num_mla * num_pixels
+        nonzero_pixels_dict = {}
 
-        # Loop through sections of mla_image, and store indices.
+        if ray_valid_indices is None:
+            self.compute_rays_geometry()
+            # Reshape self.ray_valid_indices to pair row and column indices
+            reshaped_indices = self.ray_valid_indices.T
+        else:
+            reshaped_indices = ray_valid_indices.T
+
+        # Loop through sections of mla_image, and store a mask.
         for i in range(num_mla):
             for j in range(num_mla):
                 lenslet_image = mla_image[
                     i * num_pixels : (i + 1) * num_pixels,
                     j * num_pixels : (j + 1) * num_pixels
                     ]
-                # The following should be done for each lenslet. The input image needs to be cropped.
                 # Create a boolean mask based on whether the image value at each index is not zero
                 mask = np.array([lenslet_image[index[0], index[1]] != 0 for index in reshaped_indices])
                 # Fill values into varibles nonzero_pixels
+                # nonzero_pixels_dict[(i, j)] = reshaped_indices[mask]
+                nonzero_pixels_dict[(i, j)] = mask
 
-        return nonzero_pixels
+        return nonzero_pixels_dict
 
     def _load_geometry_from_file(self, filename):
         """Loads ray tracer class from a file if it exists."""

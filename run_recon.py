@@ -20,7 +20,7 @@ DEVICE = torch.device(
 
 def recon_gpu():
     '''Reconstruct a volume on the GPU.'''
-    optical_info = setup_optical_parameters("config_settings\optical_config3.json")
+    optical_info = setup_optical_parameters("config_settings/optical_config3.json")
     optical_system = {'optical_info': optical_info}
     # Initialize the forward model. Raytracing is performed as part of the initialization.
     simulator = ForwardModel(optical_system, backend=BACKEND, device=DEVICE)
@@ -40,7 +40,7 @@ def recon_gpu():
     azim_image_meas = simulator.azim_img
 
     recon_optical_info = optical_info
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
+    iteration_params = setup_iteration_parameters("config_settings/iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,
@@ -60,7 +60,7 @@ def recon_gpu():
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 def recon():
-    optical_info = setup_optical_parameters("config_settings\optical_config_voxel.json")
+    optical_info = setup_optical_parameters("config_settings/optical_config_voxel.json")
     simulate = True
     if simulate:
         optical_system = {'optical_info': optical_info}
@@ -88,7 +88,7 @@ def recon():
         azim_image_meas = np.load(os.path.join('forward_images', 'azim_voxel_pos_1mla.npy'))
 
     recon_optical_info = optical_info.copy()
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
+    iteration_params = setup_iteration_parameters("config_settings/iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,
@@ -105,7 +105,7 @@ def recon():
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 def main():
-    optical_info = setup_optical_parameters("config_settings\optical_config_largemla.json")
+    optical_info = setup_optical_parameters("config_settings/optical_config_largemla.json")
     optical_system = {'optical_info': optical_info}
     # Initialize the forward model. Raytracing is performed as part of the initialization.
     simulator = ForwardModel(optical_system, backend=BACKEND)
@@ -122,7 +122,7 @@ def main():
     azim_image_meas = simulator.azim_img
 
     recon_optical_info = optical_info.copy()
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
+    iteration_params = setup_iteration_parameters("config_settings/iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,

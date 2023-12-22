@@ -203,7 +203,9 @@ class Reconstructor:
         with torch.no_grad():
             num_nan_vecs = torch.sum(torch.isnan(volume.optic_axis[0, :]))
             if num_nan_vecs > 0:
-                replacement_vecs = torch.nn.functional.normalize(torch.rand(3, int(num_nan_vecs)), p=2, dim=0)
+                replacement_vecs = torch.nn.functional.normalize(
+                    torch.rand(3, int(num_nan_vecs)), p=2, dim=0
+                    )
                 volume.optic_axis[:, torch.isnan(volume.optic_axis[0, :])] = replacement_vecs
                 if ep == 0:
                     print(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors.")
@@ -211,12 +213,18 @@ class Reconstructor:
     def setup_raytracer(self, image=None, device='cpu'):
         """Initialize Birefringent Raytracer."""
         print(f'For raytracing, using computing device {device}')
-        rays = BirefringentRaytraceLFM(backend=Reconstructor.backend, optical_info=self.optical_info)
+        rays = BirefringentRaytraceLFM(
+            backend=Reconstructor.backend, optical_info=self.optical_info
+            )
         rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry(filename=None, image=image)
         print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
 
+        if False:
+            nonzero_pixels_dict = rays.identify_rays_from_pixels_mla(
+                self.ret_img_meas, rays.ray_valid_indices
+                )
         return rays
 
     def setup_initial_volume(self):
@@ -373,9 +381,13 @@ class Reconstructor:
 
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
-        
+
         if COMBINING_DELTA_N:
-            Delta_n_combined = torch.cat([volume_estimation.Delta_n_first_part, volume_estimation.Delta_n_second_part], dim=0)
+            Delta_n_combined = torch.cat(
+                [volume_estimation.Delta_n_first_part,
+                 volume_estimation.Delta_n_second_part],
+                dim=0
+                )
             # Attempt to update Delta_n of BirefringentVolume directly
             # The in-place operation causes problems with the gradient tracking
             # with torch.no_grad():  # Temporarily disable gradient tracking
@@ -467,7 +479,7 @@ class Reconstructor:
         # volume.Delta_n_second_half = torch.nn.Parameter(Delta_n[half_length:].clone(), requires_grad=False)
 
         Delta_n_reshaped = Delta_n.clone().view(3, 7, 7)
-        
+
         # Extract the middle row of each plane
         # The middle row index in each 7x7 plane is 3
         Delta_n_first_part = Delta_n_reshaped[:, 3, :]  # Shape: (3, 7)
@@ -477,7 +489,9 @@ class Reconstructor:
         Delta_n_second_part = torch.cat([Delta_n_reshaped[:, :3, :],  # Rows before the middle
                                         Delta_n_reshaped[:, 4:, :]],  # Rows after the middle
                                         dim=1)  # Concatenate along the row dimension
-        volume.Delta_n_second_part = torch.nn.Parameter(Delta_n_second_part.flatten(), requires_grad=False)
+        volume.Delta_n_second_part = torch.nn.Parameter(
+            Delta_n_second_part.flatten(), requires_grad=False
+            )
 
         # Unsure the affect of turning off the gradients for Delta_n
         Delta_n.requires_grad = False
@@ -533,12 +547,11 @@ class Reconstructor:
             my_plot = st.empty() # set up a place holder for the plot
             my_3D_plot = st.empty() # set up a place holder for the 3D plot
             progress_bar = st.progress(0)
-        
+
         # Iterations
         for ep in tqdm(range(n_epochs), "Minimizing"):
             self.one_iteration(optimizer, self.volume_pred)
-            
-            
+
             azim_damp_mask = self.ret_img_meas / self.ret_img_meas.max()
             self.azim_img_pred[azim_damp_mask==0] = 0
 
@@ -546,7 +559,6 @@ class Reconstructor:
                 self.__visualize_and_update_streamlit(
                     progress_bar, ep, n_epochs, my_recon_img_plot, my_loss
                     )
-            
             self.visualize_and_save(ep, figure, output_dir)
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))

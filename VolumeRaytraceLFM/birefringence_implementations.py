@@ -938,7 +938,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     for vox in self.ray_vol_colli_indices
                     ]
                 # Shift ray-pixel indices
-                if self.ray_valid_indices_all  is None:
+                if self.ray_valid_indices_all is None:
                     self.ray_valid_indices_all = self.ray_valid_indices.clone()
                 else:
                     self.ray_valid_indices_all = torch.cat(
@@ -1002,12 +1002,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # Initialize a list for storing concatenated images of the current row
             full_img_row_list = [None] * 5
 
-            # Iterate over each column of microlenses in teh current row (x direction)
+            # Iterate over each column of microlenses in the current row (x direction)
             for ml_jj in range(-n_ml_half, n_ml_half+odd_mla_shift):
 
                 # Calculate the offset to the top corner of the volume in front of
                 #   the current microlens (ml_ii, ml_jj)
-                current_offset = self._calculate_current_offset(ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses)
+                current_offset = self._calculate_current_offset(
+                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
+                    )
 
                 # Generate (intensity or ret/azim) images for the current microlens, by passing an offset to this function
                 #   depending on the microlens and the super resolution
@@ -1132,7 +1134,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Fetch precomputed Siddon parameters
         voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
         # rays are stored in a 1D array, let's look for index i,j
-        n_ray = j + i *  self.optical_info['pixels_per_ml']
+        n_ray = j + i * self.optical_info['pixels_per_ml']
         rayDir = self.ray_direction_basis[n_ray][:]
 
         JM_list = []
@@ -1170,12 +1172,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         Returns:
             torch.Tensor: The cumulative Jones Matrices for the rays.
                             torch.Size([n_rays_with_voxels, 2, 2])
-        """    
+        """
         # Fetch the lengths that each ray travels through every voxel
         ell_in_voxels = self.ray_vol_colli_lengths
 
-        # Determine voxel indices based on the processing mode. The voxel indices correspond
-        #   to the voxels that each ray segment traverses.
+        # Determine voxel indices based on the processing mode. The voxel
+        #    indices correspond to the voxels that each ray segment traverses.
         if all_rays_at_once:
             voxels_of_segs = self.vox_indices_ml_shifted_all
         else:
@@ -1216,7 +1218,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             rays_with_voxels = [len(vx) > m for vx in voxels_of_segs]
             # n_rays_with_voxels = sum(rays_with_voxels)
             # print(f"The number of rays with voxels to transverse at this step is {n_rays_with_voxels}")
-    
+
             # Get the lengths rays traveled through the m-th voxel
             ell = ell_in_voxels[rays_with_voxels, m]
 
@@ -1230,7 +1232,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 else:
                     Delta_n = volume_in.Delta_n[vox]
                 opticAxis = volume_in.optic_axis[:,vox].permute(1,0)
-                
+
                 # Subset of precomputed ray directions that interact with voxels in this step
                 filtered_ray_directions = self.ray_direction_basis[:, rays_with_voxels, :]
 
@@ -1343,6 +1345,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         ret_image.requires_grad = False
         azim_image.requires_grad = False
 
+        # TODO: fill the images using the ray indices specific to the lenslet
         # Fill the calculated values into the images at the valid ray indices
         ret_image[self.ray_valid_indices[0,:], self.ray_valid_indices[1,:]] = retardance
         azim_image[self.ray_valid_indices[0,:], self.ray_valid_indices[1,:]] = azimuth
@@ -1376,13 +1379,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 intensity = np.linalg.norm(E_out, axis=2) ** 2
                 intensity_image_list[setting] = intensity
             else:
-                intensity_image_list[setting] = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32, device=self.get_device())
+                intensity_image_list[setting] = torch.zeros(
+                    (pixels_per_ml, pixels_per_ml), dtype=torch.float32, device=self.get_device()
+                    )
                 pol_torch = torch.from_numpy(pol_hor).type(torch.complex64)
                 ana_torch =  torch.from_numpy(analyzer).type(torch.complex64)
                 E_out = ana_torch @ lenslet_JM @ pol_torch
                 intensity = torch.linalg.norm(E_out, axis=1) ** 2
                 intensity_image_list[setting][self.ray_valid_indices[0,:],self.ray_valid_indices[1,:]] = intensity
-            
+
         return intensity_image_list
 
     def calc_cummulative_JM_lenslet(self, volume_in : BirefringentVolume,
@@ -1458,7 +1463,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
             # TODO: check how the gradients are affected--might be a discontinuity
             adjust_azim = True
-            if adjust_azim == True:
+            if adjust_azim is True:
                 azim = azim_unadj.clone()
                 azim[Delta_n < 0] += torch.tensor(np.pi)
             else:

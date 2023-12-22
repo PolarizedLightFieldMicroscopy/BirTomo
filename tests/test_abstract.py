@@ -175,4 +175,4 @@ def test_identify_rays_from_pixels_mla(ray_trace_lfm_instance):
     #   and return a list of tuples
     # dictionary? list?
 
-    assert nonzero_pixels.shape == (num_lenslets, num_lenslets)
+    assert len(nonzero_pixels) == num_lenslets * num_lenslets
