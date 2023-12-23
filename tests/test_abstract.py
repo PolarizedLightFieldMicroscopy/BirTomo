@@ -163,16 +163,11 @@ def test_filter_nonzero_rays_single_lenslet():
 @pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
 def test_identify_rays_from_pixels_mla(ray_trace_lfm_instance):
     rays = ray_trace_lfm_instance
-    num_lenslets = rays.optical_info['n_micro_lenses']
-    num_pixels_per_ml = rays.optical_info['pixels_per_ml']
-    num_nonzero = 5
-    ret_image = create_array_with_set_nonzero(num_lenslets * num_pixels_per_ml, num_nonzero)
-    nonzero_pixels = rays.identify_rays_from_pixels_mla(ret_image)
-
-    # Choose a corner of ret_image and test.
-
-    # nonzero_pixels needs to be able to be indexed by the lenslet position
-    #   and return a list of tuples
-    # dictionary? list?
-
-    assert len(nonzero_pixels) == num_lenslets * num_lenslets
+    for num_lenslets in [1, 3]:
+        rays.optical_info['n_micro_lenses'] = num_lenslets
+        num_pixels_per_ml = rays.optical_info['pixels_per_ml']
+        num_nonzero = 5
+        ret_image = create_array_with_set_nonzero(num_lenslets * num_pixels_per_ml, num_nonzero)
+        nonzero_pixels_dict = rays.identify_rays_from_pixels_mla(ret_image)
+        # TODO: Choose a corner of ret_image and test.
+        assert len(nonzero_pixels_dict) == num_lenslets * num_lenslets

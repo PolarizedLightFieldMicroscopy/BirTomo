@@ -533,10 +533,11 @@ class RayTraceLFM(OpticalElement):
     def identify_rays_from_pixels_mla(self, mla_image, ray_valid_indices=None):
         """
         Args:
-            mla_image (np.array): light field image
+            mla_image (np.array): Light field image.
         Return:
-            nonzero_pixels_dict: mask for which rays lead to nonzero pixels,
-                indexed by lenslet position then pixel position
+            nonzero_pixels_dict: Mask for which rays lead to nonzero pixels.
+                Keys are tuples of (lenslet_row, lenslet_col).
+                Values are boolean arrays of shape (num_pixels, num_pixels).
         """
         num_mla = self.optical_info["n_micro_lenses"]
         num_pixels = self.optical_info["pixels_per_ml"]

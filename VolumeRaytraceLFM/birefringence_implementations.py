@@ -1311,22 +1311,25 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def ret_and_azim_images_torch(self, volume_in : BirefringentVolume, microlens_offset=[0,0]):
         """
-        Computes the retardance and azimuth images for a given volume and microlens offset using PyTorch.
+        Computes the retardance and azimuth images for a given volume and
+        microlens offset using PyTorch.
 
-        This function calculates the retardance and azimuth values for the (precomputed) rays
-        passing through a specific region of the volume, as determined by the microlens offset.
-        It generates two images: one for retardance and one for azimuth, for a single microlens.
-        This offset is included to move the center of the volume, as the ray collisions are
-        computed only for a single microlens.
+        This function calculates the retardance and azimuth values for the
+        (precomputed) rays passing through a specific region of the volume,
+        as determined by the microlens offset.
+        It generates two images: one for retardance and one for azimuth,
+        for a single microlens. This offset is included to move the center of
+        the volume, as the ray collisions are computed only for a single microlens.
 
         Args:
             volume_in (BirefringentVolume): The volume through which rays are passing.
-            microlens_offset (list): The offset [x, y] to the center of the volume for the specific microlens.
+            microlens_offset (list): The offset [x, y] to the center of the
+                                        volume for the specific microlens.
 
         Returns:
-            list: A list containing two PyTorch tensors, one for the retardance image and one for the azimuth image.
+            list: A list containing two PyTorch tensors, one for the retardance
+                    image and one for the azimuth image.
         """
-
         # Fetch the number of pixels per microlens array from the optic configuration
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
 
