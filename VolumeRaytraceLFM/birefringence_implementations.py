@@ -1083,8 +1083,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # based on the predefined central indices (vox_ctr_idx).
         central_offset = np.array(self.vox_ctr_idx[1:])
 
-        # Compute the midpoint of the total voxel space covered by the microlenses. This value is subtracted
-        # to center the offset around the middle of the microlens array
+        # Compute the midpoint of the total voxel space covered by the
+        #   microlenses. This value is subtracted to center the offset around
+        #   the middle of the microlens array.
         half_voxel_span = floor(num_voxels_per_ml * num_microlenses / 2.0)
 
         # Calculate and return the final offset for the current microlens
@@ -1210,18 +1211,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if all_rays_at_once:
             voxels_of_segs = self.vox_indices_ml_shifted_all
         else:
-            # Compute the 1D index for each microlens and store for later use
-            #   Accessing 1D arrays increases training speed by 25%
-            key = str(microlens_offset)
-            if key not in self.vox_indices_ml_shifted:
-                self.vox_indices_ml_shifted[key] = [
-                    [RayTraceLFM.ravel_index((vox[ix][0],
-                            vox[ix][1] + microlens_offset[0],
-                            vox[ix][2] + microlens_offset[1]),
-                    self.optical_info['volume_shape']) for ix in range(len(vox))]
-                    for vox in self.ray_vol_colli_indices
-                    ]
-            voxels_of_segs = self.vox_indices_ml_shifted[key]
+            voxels_of_segs = self._update_vox_indices_shifted(microlens_offset)
+
         # DEBUG
         # assert not all(element == voxels_of_segs[0] for element in voxels_of_segs)
         # Note: if all elements of voxels_of_segs are equal, then all of
@@ -1284,6 +1275,29 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 raise Exception("Error accessing the volume, try increasing the volume size in Y-Z")
 
         return material_JM
+
+    def _update_vox_indices_shifted(self, microlens_offset):
+        """
+        Updates or retrieves the shifted voxel indices based on the microlens offset.
+
+        Args:
+            microlens_offset (list): Offset [x, y] for the microlens.
+
+        Returns:
+            list: The shifted voxel indices.
+        """
+        # Compute the 1D index for each microlens and store for later use
+        #   Accessing 1D arrays increases training speed by 25%
+        key = str(microlens_offset)
+        if key not in self.vox_indices_ml_shifted:
+            self.vox_indices_ml_shifted[key] = [
+                [RayTraceLFM.ravel_index((vox[ix][0],
+                        vox[ix][1] + microlens_offset[0],
+                        vox[ix][2] + microlens_offset[1]),
+                self.optical_info['volume_shape']) for ix in range(len(vox))]
+                for vox in self.ray_vol_colli_indices
+                ]
+        return self.vox_indices_ml_shifted[key]
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume, microlens_offset=[0,0]):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
