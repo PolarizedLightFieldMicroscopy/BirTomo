@@ -1215,15 +1215,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Fetch the lengths that each ray travels through every voxel
         ell_in_voxels = self.ray_vol_colli_lengths
 
-        # Determine voxel indices based on the processing mode. The voxel
-        #    indices correspond to the voxels that each ray segment traverses.
-        if all_rays_at_once:
-            voxels_of_segs = self.vox_indices_ml_shifted_all
-        else:
-            voxels_of_segs = self._update_vox_indices_shifted(
-                    microlens_offset, self.ray_vol_colli_indices
-                    )
-
         # DEBUG
         # assert not all(element == voxels_of_segs[0] for element in voxels_of_segs)
         # Note: if all elements of voxels_of_segs are equal, then all of
@@ -1251,7 +1242,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             reshaped_indices = self.ray_valid_indices.T
 
             nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
-            # nonzero_pixels_grid[0:2, :] = False
+            nonzero_pixels_grid[0:2, :] = False
 
             # Create a boolean mask based on whether the image value at each index is not zero
             mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
@@ -1264,11 +1255,28 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             voxels_of_segs = self._update_vox_indices_shifted(
                     microlens_offset, filtered_ray_vol_colli_indices
                     )
+            err_message = "The list of voxels of segments should be the same " + \
+                "length as the list of filtered ray volume collision indices."
+            assert len(voxels_of_segs) == len(filtered_ray_vol_colli_indices), err_message
+            collision_lengths = self.ray_vol_colli_lengths[mask]
+            ray_dir_basis = self.ray_direction_basis[:, mask, :]
+        else:
+            collision_lengths = self.ray_vol_colli_lengths
+            ray_dir_basis = self.ray_direction_basis
+            # Determine voxel indices based on the processing mode. The voxel
+            #    indices correspond to the voxels that each ray segment traverses.
+            if all_rays_at_once:
+                voxels_of_segs = self.vox_indices_ml_shifted_all
+            else:
+                voxels_of_segs = self._update_vox_indices_shifted(
+                        microlens_offset, self.ray_vol_colli_indices
+                        )
 
         # Process interactions of all rays with each voxel
         # Iterate the interactions of all rays with the m-th voxel
-        # Some rays interact with less voxels, so we mask the rays valid with rays_with_voxels
-        for m in range(self.ray_vol_colli_lengths.shape[1]):
+        # Some rays interact with less voxels,
+        #   so we mask the rays valid with rays_with_voxels.
+        for m in range(collision_lengths.shape[1]):
             # Determine which rays have remaining voxels to traverse
             rays_with_voxels = [len(vx) > m for vx in voxels_of_segs]
             # n_rays_with_voxels = sum(rays_with_voxels)
@@ -1287,7 +1295,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 opticAxis = volume_in.optic_axis[:, vox].permute(1,0)
 
                 # Subset of precomputed ray directions that interact with voxels in this step
-                filtered_ray_directions = self.ray_direction_basis[:, rays_with_voxels, :]
+                filtered_ray_directions = ray_dir_basis[:, rays_with_voxels, :]
 
                 # Compute the interaction from the rays with their corresponding voxels
                 JM = self.voxRayJM(Delta_n=Delta_n, opticAxis=opticAxis,
@@ -1439,10 +1447,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         ret_image.requires_grad = False
         azim_image.requires_grad = False
 
-        # TODO: fill the images using the ray indices specific to the lenslet
+        # Fill the images using the ray indices specific to the lenslet
+        filter_lenslet_specific = False
+        if filter_lenslet_specific:
+            reshaped_indices = self.ray_valid_indices.T
+            nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
+            nonzero_pixels_grid[0:2, :] = False
+            mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
+            current_lenslet_indices = self.ray_valid_indices[:, mask]
+        else:
+            current_lenslet_indices = self.ray_valid_indices
         # Fill the calculated values into the images at the valid ray indices
-        ret_image[self.ray_valid_indices[0,:], self.ray_valid_indices[1,:]] = retardance
-        azim_image[self.ray_valid_indices[0,:], self.ray_valid_indices[1,:]] = azimuth
+        ret_image[current_lenslet_indices[0,:], current_lenslet_indices[1,:]] = retardance
+        azim_image[current_lenslet_indices[0,:], current_lenslet_indices[1,:]] = azimuth
 
         # Alternative implementation using sparse tensors (commented out)
         # ret_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices,
