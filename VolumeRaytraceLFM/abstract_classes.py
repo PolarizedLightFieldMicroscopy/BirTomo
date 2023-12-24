@@ -157,6 +157,7 @@ class RayTraceLFM(OpticalElement):
         self.ray_direction_basis = None
         self.lateral_ray_length_from_center = 0
         self.voxel_span_per_ml = 0
+        self.vol_shape_restricted = None
 
         self.nonzero_pixels_dict = self._create_default_nonzero_pixels_dict(
             optical_info['n_micro_lenses'], optical_info['pixels_per_ml']
@@ -503,6 +504,7 @@ class RayTraceLFM(OpticalElement):
             max_ray_voxels_collision, ray_vol_colli_lengths, ray_valid_direction
             )
 
+        # TODO: check if collision indices should be filtered too
         # Collisions indices does not get filtered
         self.ray_vol_colli_indices = ray_vol_colli_indices
 
@@ -531,10 +533,8 @@ class RayTraceLFM(OpticalElement):
     def filter_rays_based_on_pixels(self, image):
         """
         Filters the rays based on the non-zero pixel values in the given image.
-
         Args:
             image (numpy.ndarray): The image used to filter the rays.
-
         Returns:
             self: The updated instance of the class with filtered ray attributes.
         """
