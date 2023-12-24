@@ -151,7 +151,9 @@ def test_filter_nonzero_rays_single_lenslet():
     num_nonzero = 5
     ret_image = create_array_with_set_nonzero(n_lenslets * n_pixels_per_ml, num_nonzero)
 
-    rays.compute_rays_geometry(filename=filename, image=ret_image)
+    rays.compute_rays_geometry(
+        filename=filename, image=ret_image, apply_filter_to_rays=True
+        )
 
     for var in [len(rays.ray_valid_indices[1]),
                 len(rays.ray_vol_colli_indices),

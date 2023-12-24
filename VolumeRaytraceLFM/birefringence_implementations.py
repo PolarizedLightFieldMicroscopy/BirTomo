@@ -854,20 +854,36 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     '''This class extends RayTraceLFM, and implements the forward function,
     where voxels contribute to ray's Jones-matrices with a retardance and axis
     in a non-commutative matter'''
-    def __init__(
-            self, backend : BackEnds = BackEnds.NUMPY, torch_args={},#{'optic_config' : None, 'members_to_learn' : []},
-            optical_info={}):#{'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1}):
-        # optic_config contains mla_config and volume_config
+    def __init__(self, backend : BackEnds = BackEnds.NUMPY,
+                 torch_args={}, optical_info={}):
+        '''Initialize the class with attibriutes, including those from RayTraceLFM.'''
         super(BirefringentRaytraceLFM, self).__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
 
-        # Ray-voxel collisions for different microlenses,
-        #   this dictionary gets filled in: calc_cummulative_JM_of_ray_torch
         self.vox_indices_ml_shifted = {}
         self.vox_indices_ml_shifted_all = []
         self.ray_valid_indices_all = None
         self.MLA_volume_geometry_ready = False
+
+    def __str__(self):
+        info = (
+            f"BirefringentRaytraceLFM(backend={self.backend}, "
+            # f"torch_args={self.torch_args},
+            f"optical_info={self.optical_info})"
+            f"\nvox_indices_ml_shifted={self.vox_indices_ml_shifted}"
+            f"\nvox_indices_ml_shifted_all={self.vox_indices_ml_shifted_all}"
+            f"\nMLA_volume_geometry_ready={self.MLA_volume_geometry_ready}"
+            f"\nvox_ctr_idx={self.vox_ctr_idx}"
+            f"\nvoxel_span_per_ml={self.voxel_span_per_ml}"
+            f"\nray_valid_indices={self.ray_valid_indices}"
+            f"\nray_valid_indices_all={self.ray_valid_indices_all}"
+            f"\nray_direction_basis[0][0]={self.ray_direction_basis[0][0]}"
+            f"\nray_vol_colli_indices[0]={self.ray_vol_colli_indices[0]}"
+            f"\nray_vol_colli_lengths[0]={self.ray_vol_colli_lengths[0]}"
+            f"\nnonzero_pixels_dict[(0, 0)]={self.nonzero_pixels_dict[(0, 0)]}"
+        )
+        return info
 
     def get_volume_reachable_region(self):
         ''' Returns a binary mask where the MLA's can reach into the volume'''
@@ -969,7 +985,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         Returns:
             list[ImageType]: A list of images resulting from the ray tracing process.
         """
-
         # volume_shape defines the size of the workspace
         # the number of micro lenses defines the valid volume inside the workspace
         volume_shape = volume_in.optical_info['volume_shape']
@@ -983,9 +998,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         min_required_volume_size = self._calculate_min_volume_size(n_micro_lenses, n_voxels_per_ml)
         self._validate_volume_size(min_required_volume_size, volume_shape)
         # The following assert statement is redundant, but it is kept for clarity
-        assert min_required_volume_size <= volume_shape[1] and min_required_volume_size <= volume_shape[2], "The volume in front of the microlenses" + \
-             f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
-                f"Increase the volume_shape to at least [{min_required_volume_size+1},{min_required_volume_size+1}]"        
+        err_message = "The volume in front of the microlenses" + \
+            f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
+            f"Increase the volume_shape to at least [{min_required_volume_size+1},{min_required_volume_size+1}]"
+        assert min_required_volume_size <= volume_shape[1] and min_required_volume_size <= volume_shape[2], err_message
 
         # Traverse volume for every ray, and generate intensity images or retardance and azimuth images
 
@@ -1011,7 +1027,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
                     )
 
-                # Generate (intensity or ret/azim) images for the current microlens, by passing an offset to this function
+                # Generate (intensity or ret/azim) images for the current microlens,
+                #   by passing an offset to this function
                 #   depending on the microlens and the super resolution
                 img_list = self._generate_images(volume_in, current_offset, intensity)
 
@@ -1019,7 +1036,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 if full_img_row_list[0] is None:
                     full_img_row_list = img_list
                 else:
-                    full_img_row_list = self._concatenate_images(full_img_row_list, img_list, axis=0)
+                    full_img_row_list = self._concatenate_images(
+                        full_img_row_list, img_list, axis=0
+                        )
 
             # Concatenate the row images with the full image list
             if full_img_list[0] is None:
@@ -1036,23 +1055,29 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if min_required_volume_size > volume_shape[1] or min_required_volume_size > volume_shape[2]:
             raise ValueError(f"The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}.")
 
-    def _calculate_current_offset(self, row_index, col_index, num_voxels_per_ml, num_microlenses):
-        """Maps the position of a microlens in its array to the corresponding position
-        in the volumetric data, identified by its row and column indices. This function
-        calculates the offset to the top corner of the volume in front of the current microlens.
+    def _calculate_current_offset(self, row_index, col_index,
+                                  num_voxels_per_ml, num_microlenses):
+        """Maps the position of a microlens in its array to the corresponding
+        position in the volumetric data, identified by its row and column
+        indices. This function calculates the offset to the top corner of the
+        volume in front of the current microlens.
 
         Args:
-            row_index (int): The row index of the current microlens in the microlens array.
-            col_index (int): The column index of the current microlens in the microlens array.
-            num_voxels_per_ml (int): The number of voxels per microlens, indicating the
-                                    size of the voxel area each microlens covers.
-            num_microlenses (int): The total number of microlenses in one dimension of the microlens array.
-
+            row_index (int): The row index of the current microlens in the
+                             microlens array.
+            col_index (int): The column index of the current microlens in the
+                             microlens array.
+            num_voxels_per_ml (int): The number of voxels per microlens,
+                indicating the size of the voxel area each microlens covers.
+            num_microlenses (int): The total number of microlenses in one
+                                   dimension of the microlens array.
         Returns:
-            np.array: An array representing the calculated offset in the volumetric data for the current microlens.
+            np.array: An array representing the calculated offset in the
+                      volumetric data for the current microlens.
         """
         # Scale row and column indices to voxel space. This is important when using supersampling.
-        scaled_indices = np.array([num_voxels_per_ml * row_index, num_voxels_per_ml * col_index])
+        scaled_indices = np.array([num_voxels_per_ml * row_index,
+                                   num_voxels_per_ml * col_index])
 
         # Add central indices of the volume. This shifts the focus to the relevant part of the volume
         # based on the predefined central indices (vox_ctr_idx).
@@ -1124,6 +1149,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def calc_cummulative_JM_of_ray(self, volume_in : BirefringentVolume, microlens_offset=[0,0]):
         if self.backend==BackEnds.NUMPY:
+            # TODO: check if the function calling is appropriate
             return self.calc_cummulative_JM_of_ray_numpy(volume_in, microlens_offset)
         elif self.backend==BackEnds.PYTORCH:
             return self.calc_cummulative_JM_of_ray_torch(volume_in, microlens_offset)
@@ -1165,9 +1191,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         and process them in parallel.
 
         Args:
-            volume_in (BirefringentVolume): The volume through which rays are passing.
-            microlens_offset (list, optional): Offset [x, y] for the microlens. Defaults to [0, 0].
-            all_rays_at_once (bool, optional): If True, processes all rays simultaneously. Defaults to False.
+            volume_in (BirefringentVolume):
+                The volume through which rays are passing.
+            microlens_offset (list, optional): Offset [x, y] for the microlens.
+                Defaults to [0, 0].
+            all_rays_at_once (bool, optional): If True, processes all rays
+                simultaneously. Defaults to False.
 
         Returns:
             torch.Tensor: The cumulative Jones Matrices for the rays.
@@ -1193,6 +1222,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     for vox in self.ray_vol_colli_indices
                     ]
             voxels_of_segs = self.vox_indices_ml_shifted[key]
+        # DEBUG
+        # assert not all(element == voxels_of_segs[0] for element in voxels_of_segs)
+        # Note: if all elements of voxels_of_segs are equal, then all of
+        #   self.ray_vol_colli_indices may be equal
 
         # DEBUG
         # print("DEBUG: making the optical info of volume and self the same")
@@ -1231,7 +1264,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     Delta_n = volume_in.Delta_n_combined[vox]
                 else:
                     Delta_n = volume_in.Delta_n[vox]
-                opticAxis = volume_in.optic_axis[:,vox].permute(1,0)
+                opticAxis = volume_in.optic_axis[:, vox].permute(1,0)
 
                 # Subset of precomputed ray directions that interact with voxels in this step
                 filtered_ray_directions = self.ray_direction_basis[:, rays_with_voxels, :]
@@ -1341,10 +1374,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         azimuth = self.azimuth(effective_JM)
 
         # Initialize output images for retardance and azimuth on the appropriate device
-        ret_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32,
-                                requires_grad=True, device=self.get_device())
-        azim_image = torch.zeros((pixels_per_ml, pixels_per_ml), dtype=torch.float32,
-                                 requires_grad=True, device=self.get_device())
+        ret_image = torch.zeros(
+            (pixels_per_ml, pixels_per_ml), dtype=torch.float32,
+             requires_grad=True, device=self.get_device()
+             )
+        azim_image = torch.zeros(
+            (pixels_per_ml, pixels_per_ml), dtype=torch.float32,
+             requires_grad=True, device=self.get_device()
+             )
         ret_image.requires_grad = False
         azim_image.requires_grad = False
 
@@ -1389,7 +1426,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 ana_torch =  torch.from_numpy(analyzer).type(torch.complex64)
                 E_out = ana_torch @ lenslet_JM @ pol_torch
                 intensity = torch.linalg.norm(E_out, axis=1) ** 2
-                intensity_image_list[setting][self.ray_valid_indices[0,:],self.ray_valid_indices[1,:]] = intensity
+                intensity_image_list[setting][self.ray_valid_indices[0,:], self.ray_valid_indices[1,:]] = intensity
 
         return intensity_image_list
 
