@@ -124,18 +124,23 @@ class OpticalElement(OpticBlock):
 
 ###########################################################################################
 class RayTraceLFM(OpticalElement):
-    '''This is a base class that takes a volume geometry and LFM geometry and calculates which
-    arrive to each of the pixels behind each micro-lense, and discards the rest.
-    This class also pre-computes how each rays traverses the volume with the Siddon algorithm.
-    The interaction between the voxels and the rays is defined by each specialization of this class.
+    '''This is a base class that takes a volume geometry and LFM geometry and
+    calculates which arrive to each of the pixels behind each microlens, and
+    discards the rest. This class also pre-computes how each rays traverses the
+    volume with the Siddon algorithm. The interaction between the voxels and
+    the rays is defined by each instance of this class.
     '''
     def __init__(
         self,
-        backend : BackEnds = BackEnds.NUMPY, torch_args={},
-        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17,
-                      'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1,
-                      'n_voxels_per_ml' : 1}
+        backend : BackEnds = BackEnds.NUMPY,
+        torch_args={},
+        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0],
+                      'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52,
+                      'wavelength' : 0.550, 'n_micro_lenses' : 1,
+                      'n_voxels_per_ml' : 1
+                      }
             ):
+        # Initialize the OpticalElement class
         super(RayTraceLFM, self).__init__(
             backend=backend,
             torch_args=torch_args,
@@ -158,6 +163,7 @@ class RayTraceLFM(OpticalElement):
         self.lateral_ray_length_from_center = 0
         self.voxel_span_per_ml = 0
         self.vol_shape_restricted = None
+        self.use_lenslet_based_filtering = True
 
         self.nonzero_pixels_dict = self._create_default_nonzero_pixels_dict(
             optical_info['n_micro_lenses'], optical_info['pixels_per_ml']

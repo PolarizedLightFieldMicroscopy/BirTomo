@@ -882,6 +882,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             f"\nray_vol_colli_indices[0]={self.ray_vol_colli_indices[0]}"
             f"\nray_vol_colli_lengths[0]={self.ray_vol_colli_lengths[0]}"
             f"\nnonzero_pixels_dict[(0, 0)].shape={self.nonzero_pixels_dict[(0, 0)].shape}"
+            f"\nuse_lenslet_based_filtering={self.use_lenslet_based_filtering}"
         )
         return info
 
@@ -1237,12 +1238,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         material_JM = None
 
         ###### Mask out the rays that lead to nonzero pixels
-        filter_lenslet_specific = False
-        if filter_lenslet_specific:
+        if self.use_lenslet_based_filtering:
             reshaped_indices = self.ray_valid_indices.T
 
             nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
-            nonzero_pixels_grid[0:2, :] = False
+            # DEBUG
+            # nonzero_pixels_grid[0:2, :] = False
 
             # Create a boolean mask based on whether the image value at each index is not zero
             mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
@@ -1448,11 +1449,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         azim_image.requires_grad = False
 
         # Fill the images using the ray indices specific to the lenslet
-        filter_lenslet_specific = False
-        if filter_lenslet_specific:
+        if self.use_lenslet_based_filtering:
             reshaped_indices = self.ray_valid_indices.T
             nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
-            nonzero_pixels_grid[0:2, :] = False
+            # DEBUG
+            # nonzero_pixels_grid[0:2, :] = False
             mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
             current_lenslet_indices = self.ray_valid_indices[:, mask]
         else:

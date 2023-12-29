@@ -111,7 +111,9 @@ class ForwardModel:
     def setup_raytracer(self, device='cpu'):
         """Initialize Birefringent Raytracer."""
         print(f'For raytracing, using computing device {device}')
-        rays = BirefringentRaytraceLFM(backend=self.backend, optical_info=self.optical_info)
+        rays = BirefringentRaytraceLFM(
+            backend=self.backend, optical_info=self.optical_info
+            )
         if self.is_pytorch_backend():
             rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
@@ -199,4 +201,6 @@ class ForwardModel:
         self.azim_img = azim_image
 
         if intensity and self.is_numpy_backend():
-            self.img_list = self.rays.ray_trace_through_volume(volume, intensity=True)
+            self.img_list = self.rays.ray_trace_through_volume(
+                volume, intensity=True
+                )
