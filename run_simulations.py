@@ -1,9 +1,9 @@
 """This script uses numpy/pytorch back-end to:
-    - Compute the ray geometry depending on the light field microscope and volume configuration.
-    - Create a volume with different birefringent shapes.
-    - Traverse the rays through the volume.
-    - Compute the retardance and azimuth for every ray.
-    - Generate 2D images.
+- Compute the ray geometry depending on the light field microscope and volume configuration.
+- Create a volume with different birefringent shapes.
+- Traverse the rays through the volume.
+- Compute the retardance and azimuth for every ray.
+- Generate 2D images.
 """
 import torch
 from VolumeRaytraceLFM.abstract_classes import BackEnds
@@ -34,7 +34,7 @@ def adjust_volume(volume: BirefringentVolume):
     return volume
 
 if __name__ == '__main__':
-    optical_info = setup_optical_parameters("config_settings\optical_config1.json")
+    optical_info = setup_optical_parameters("config_settings/optical_config_voxel.json")
     optical_system = {'optical_info': optical_info}
     simulator = ForwardModel(optical_system, backend=BACKEND)
     volume_GT = BirefringentVolume(
@@ -44,6 +44,7 @@ if __name__ == '__main__':
                     )
     # volume_GT = adjust_volume(volume_GT)
     # volume_GT.save_as_file('volume_gt.h5', description="")
-    visualize_volume(volume_GT, optical_info)
+    # visualize_volume(volume_GT, optical_info)
+
     simulator.forward_model(volume_GT)
     simulator.view_images()
