@@ -1196,11 +1196,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def calc_cummulative_JM_of_ray_torch(self, volume_in : BirefringentVolume,
             microlens_offset=[0,0], all_rays_at_once=False, mla_index=(0, 0)):
-        """
-        Computes the cumulative Jones Matrices (JM) for all rays defined in a BirefringentVolume
-        object using PyTorch. This function can process rays either all at once or individually
-        based on the `all_rays_at_once` flag. It uses pytorch's batch dimension to store each ray,
-        and process them in parallel.
+        """ Computes the cumulative Jones Matrices (JM) for all rays defined in
+        a BirefringentVolume object using PyTorch. This function can process
+        rays either all at once or individually based on the `all_rays_at_once`
+        flag. It uses pytorch's batch dimension to store each ray, and process
+        them in parallel.
 
         Args:
             volume_in (BirefringentVolume): The volume through which rays pass.
@@ -1213,9 +1213,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             torch.Tensor: The cumulative Jones Matrices for the rays.
                             torch.Size([n_rays_with_voxels, 2, 2])
         """
-        # Fetch the lengths that each ray travels through every voxel
-        ell_in_voxels = self.ray_vol_colli_lengths
-
         # DEBUG
         # assert not all(element == voxels_of_segs[0] for element in voxels_of_segs)
         # Note: if all elements of voxels_of_segs are equal, then all of
@@ -1239,30 +1236,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         ###### Mask out the rays that lead to nonzero pixels
         if self.use_lenslet_based_filtering:
-            reshaped_indices = self.ray_valid_indices.T
-
-            nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
-            # DEBUG
-            # nonzero_pixels_grid[0:2, :] = False
-
-            # Create a boolean mask based on whether the image value at each index is not zero
-            mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
-
-            ell_in_voxels = ell_in_voxels[mask]
-            colli_indices = self.ray_vol_colli_indices
-            filtered_ray_vol_colli_indices = [
-                idx for idx, mask_val in zip(colli_indices, mask) if mask_val
-            ]
+            ell_in_voxels, ray_dir_basis, collision_indices = self._filter_ray_data(mla_index)
+            if all_rays_at_once:
+                err_message = ("all_rays_at_once not implemented " +
+                               "for lenslet-based filtering of rays")
+                raise NotImplementedError(err_message)
             voxels_of_segs = self._update_vox_indices_shifted(
-                    microlens_offset, filtered_ray_vol_colli_indices
+                    microlens_offset, collision_indices
                     )
             err_message = "The list of voxels of segments should be the same " + \
                 "length as the list of filtered ray volume collision indices."
-            assert len(voxels_of_segs) == len(filtered_ray_vol_colli_indices), err_message
-            collision_lengths = self.ray_vol_colli_lengths[mask]
-            ray_dir_basis = self.ray_direction_basis[:, mask, :]
+            assert len(voxels_of_segs) == len(collision_indices), err_message
+
         else:
-            collision_lengths = self.ray_vol_colli_lengths
+            ell_in_voxels = self.ray_vol_colli_lengths
             ray_dir_basis = self.ray_direction_basis
             # Determine voxel indices based on the processing mode. The voxel
             #    indices correspond to the voxels that each ray segment traverses.
@@ -1277,13 +1264,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels,
         #   so we mask the rays valid with rays_with_voxels.
-        for m in range(collision_lengths.shape[1]):
+        for m in range(ell_in_voxels.shape[1]):
             # Determine which rays have remaining voxels to traverse
             rays_with_voxels = [len(vx) > m for vx in voxels_of_segs]
             # n_rays_with_voxels = sum(rays_with_voxels)
             # print(f"The number of rays with voxels to transverse at this step is {n_rays_with_voxels}")
 
-            # Get the lengths rays traveled through the m-th voxel
+            # Get the length that each ray travels through the m-th voxel
             ell = ell_in_voxels[rays_with_voxels, m]
 
             # Get the voxel coordinates each ray interacts with
@@ -1338,6 +1325,46 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 for vox in collision_indices
                 ]
         return self.vox_indices_ml_shifted[key]
+
+    def _filter_ray_data(self, mla_index):
+        """
+        Extract the ray tracing variables that contribute to the image.
+        This is done by applying a mask to the ray tracing varibles. No class
+        attributes are modified, but several are accessed.
+
+        Args:
+            mla_index: Index to identify the relevant non-zero pixel grid from 
+                       the class attribute `nonzero_pixels_dict`.
+
+        Returns:
+            tuple: A tuple containing filtered ell_in_voxels, ray direction
+                   basis, and ray volume collision indices.
+
+        Class Attributes Accessed:
+        - self.ray_valid_indices: Contains the rays that reach the detector.
+        - self.nonzero_pixels_dict: A dictionary containing grids of non-zero
+                                    pixels, accessed using `mla_index`.
+        - self.ray_vol_colli_lengths: Contains lengths of rays through voxels.
+        - self.ray_direction_basis: Contains the directions of the rays.
+        - self.ray_vol_colli_indices: Contains ray volume collision indices.
+        """
+        reshaped_indices = self.ray_valid_indices.T
+        nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
+        # DEBUG
+        # nonzero_pixels_grid[0:2, :] = False
+
+        # Create a boolean mask based on whether the image value at each index is not zero
+        mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
+
+        # Apply mask to ray data
+        ell_in_voxels_filtered = self.ray_vol_colli_lengths[mask]
+        ray_dir_basis_filtered = self.ray_direction_basis[:, mask, :]
+        colli_indices = self.ray_vol_colli_indices
+        ray_vol_colli_indices_filtered = [
+            idx for idx, mask_val in zip(colli_indices, mask) if mask_val
+        ]
+
+        return ell_in_voxels_filtered, ray_dir_basis_filtered, ray_vol_colli_indices_filtered
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume,
                             microlens_offset=[0,0], mla_index=(0, 0)):
@@ -1471,8 +1498,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return [ret_image, azim_image]
 
     def intensity_images(self, volume_in : BirefringentVolume, microlens_offset=[0,0]):
-        '''Calculate intensity images using Jones Calculus. The polarizer and analyzer
-        are applied to the cummulated Jones matrices.'''
+        '''Calculate intensity images using Jones Calculus. The polarizer and
+        analyzer are applied to the cummulated Jones matrices.'''
         analyzer = self.optical_info['analyzer']
         swing = self.optical_info['polarizer_swing']
         pixels_per_ml = self.optical_info['pixels_per_ml']
@@ -1498,7 +1525,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 ana_torch =  torch.from_numpy(analyzer).type(torch.complex64)
                 E_out = ana_torch @ lenslet_JM @ pol_torch
                 intensity = torch.linalg.norm(E_out, axis=1) ** 2
-                intensity_image_list[setting][self.ray_valid_indices[0,:], self.ray_valid_indices[1,:]] = intensity
+                intensity_image_list[setting][self.ray_valid_indices[0,:],
+                                              self.ray_valid_indices[1,:]
+                                             ] = intensity
 
         return intensity_image_list
 
