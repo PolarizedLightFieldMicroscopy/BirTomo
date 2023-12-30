@@ -1,3 +1,7 @@
+"""Birefringence implementations for VolumeRaytraceLFM.
+This module contains the BirefringentVolume class
+and BirefringentRaytraceLFM class
+"""
 from math import floor
 from tqdm import tqdm
 from VolumeRaytraceLFM.abstract_classes import *
@@ -9,42 +13,46 @@ from utils import errors
 NORM_PROJ = False   # normalize the projection of the ray onto the optic axis
 OPTIMIZING_MODE = False # use the birefringence stored in Delta_n_combined
 
-###########################################################################################
+######################################################################
 class BirefringentVolume(BirefringentElement):
     '''This class stores a 3D array of voxels with birefringence properties,
     either with a numpy or pytorch back-end.'''
-    def __init__(self, backend=BackEnds.NUMPY, torch_args={}, #{'optic_config' : None, 'members_to_learn' : []},
-        optical_info={}, #{'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1},
+    def __init__(self, backend=BackEnds.NUMPY, torch_args={},
+        optical_info={}, #,
         Delta_n=0.0,
         optic_axis=[1.0, 0.0, 0.0],
         volume_creation_args=None):
         '''BirefringentVolume
         Args:
             backend (BackEnd):
-                    A computation BackEnd (Numpy vs Pytorch). If Pytorch is used,
-                        torch_args are required to initialize the head class OpticBlock.
+                A computation BackEnd (Numpy vs Pytorch). If Pytorch is used,
+                    torch_args are required to initialize the head class OpticBlock.
             torch_args (dict):
-                    Required for PYTORCH backend. Contains optic_config object and members_to_learn.
+                Required for PYTORCH backend. Contains optic_config object and members_to_learn.
+                Ex: {'optic_config' : None, 'members_to_learn' : []}
             optical_info (dict):
-                    volume_shape ([3]:[sz,sy,sz]):
-                                            Shape of the volume in voxel numbers per dimension.
-                    voxel_size_um ([3]):    Size of a voxel in micrometers.
-                    pixels_per_ml (int):    Number of pixels covered by a microlens
-                                                in a light-field system
-                    na_obj (float):         Numerical aperture of the objective.
-                    n_medium (float):       Refractive index of immersion medium.
-                    wavelength (float):     Wavelength of light used.
+                volume_shape ([3]:[sz,sy,sz]):
+                                        Shape of the volume in voxel numbers per dimension.
+                voxel_size_um ([3]):    Size of a voxel in micrometers.
+                pixels_per_ml (int):    Number of pixels covered by a microlens
+                                            in a light-field system
+                na_obj (float):         Numerical aperture of the objective.
+                n_medium (float):       Refractive index of immersion medium.
+                wavelength (float):     Wavelength of light used.
+                Ex: {'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0],
+                'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52,
+                'wavelength' : 0.550, 'n_micro_lenses' : 1}
             Delta_n (float or [sz,sy,sz] array):        
-                    Defines the birefringence magnitude of the voxels.
-                    If a float is passed, all the voxels will have the same Delta_n.
+                Defines the birefringence magnitude of the voxels.
+                If a float is passed, all the voxels will have the same Delta_n.
             optic_axis ([3] or [3,sz,sy,sz]:             
-                    Defines the optic axis per voxel.
-                    If a single 3D vector is passed all the voxels will share this optic axis.
+                Defines the optic axis per voxel.
+                If a single 3D vector is passed all the voxels will share this optic axis.
             volume_creation_args (dict): 
-                    Containing information on how to init a volume, such as:
-                        init_type (str): zeros, nplanes, where n is a number, ellipsoid...
-                        init_args (dic): see self.init_volume function for specific arguments
-                        per init_type.
+                Containing information on how to init a volume, such as:
+                    init_type (str): zeros, nplanes, where n is a number, ellipsoid...
+                    init_args (dic): see self.init_volume function for specific arguments
+                    per init_type.
             '''
         super(BirefringentVolume, self).__init__(backend=backend,
                                                  torch_args=torch_args,
@@ -158,6 +166,7 @@ class BirefringentVolume(BirefringentElement):
             return self.optic_axis
 
     def normalize_optic_axis(self):
+        """Normalize the optic axis per voxel."""
         if self.backend == BackEnds.PYTORCH:
             with torch.no_grad():
                 self.optic_axis.requires_grad = False
@@ -197,7 +206,7 @@ class BirefringentVolume(BirefringentElement):
         return self
 
     def plot_lines_plotly(self, colormap='Bluered_r', size_scaler=5,
-                          fig=None, draw_spheres=True, delta_n_ths=0.5, 
+                          fig=None, draw_spheres=True, delta_n_ths=0.5,
                           use_ticks=False
                           ):
         '''Plots the optic axis as lines and the birefringence as sphere
@@ -322,7 +331,8 @@ class BirefringentVolume(BirefringentElement):
         return fig
 
     @staticmethod
-    def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5, colormap='gray', fig=None):
+    def plot_volume_plotly(optical_info, voxels_in=None, opacity=0.5,
+                           colormap='gray', fig=None):
         '''Plots a 3D array with the non-zero voxels shaded.'''
         voxels = voxels_in * 1.0
         # Check if this is a torch tensor
@@ -520,8 +530,10 @@ class BirefringentVolume(BirefringentElement):
 
 ########### Generate different birefringent volumes ############
     def init_volume(self, init_mode='zeros', init_args={}):
-        ''' This function creates predefined volumes and shapes, such as planes, ellipsoids, random, etc
-            TODO: use init_args for random and planes'''
+        ''' This function creates predefined volumes and shapes, such as
+        planes, ellipsoids, random, etc
+        TODO: use init_args for random and planes
+        '''
         volume_shape = self.optical_info['volume_shape']
         if init_mode=='zeros':
             if self.backend == BackEnds.NUMPY:
@@ -568,7 +580,8 @@ class BirefringentVolume(BirefringentElement):
         self.optic_axis = volume_ref.optic_axis
 
     @staticmethod
-    def generate_single_voxel_volume(volume_shape, delta_n=0.01, optic_axis=[1,0,0], offset=[0,0,0]):
+    def generate_single_voxel_volume(volume_shape, delta_n=0.01,
+                                     optic_axis=[1,0,0], offset=[0,0,0]):
         # Identity the center of the volume after the shifts
         vox_idx = [
             volume_shape[0] // 2 + offset[0],
@@ -589,9 +602,11 @@ class BirefringentVolume(BirefringentElement):
                                     init_args['Delta_n_range'][1],
                                     volume_shape)
         # Random axis
-        a_0 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
-        a_1 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
-        a_2 = np.random.uniform(init_args['axes_range'][0], init_args['axes_range'][1], volume_shape)
+        min_axis = init_args['axes_range'][0]
+        max_axis = init_args['axes_range'][1]
+        a_0 = np.random.uniform(min_axis, max_axis, volume_shape)
+        a_1 = np.random.uniform(min_axis, max_axis, volume_shape)
+        a_2 = np.random.uniform(min_axis, max_axis, volume_shape)
         norm_A = np.sqrt(a_0**2 + a_1**2 + a_2**2)
         return np.concatenate(
                         (np.expand_dims(Delta_n, axis=0), np.expand_dims(a_0/norm_A, axis=0),
@@ -599,7 +614,8 @@ class BirefringentVolume(BirefringentElement):
                         0)
 
     @staticmethod
-    def generate_planes_volume(volume_shape, n_planes=1, z_offset=0, delta_n=0.01):
+    def generate_planes_volume(volume_shape, n_planes=1, z_offset=0,
+                               delta_n=0.01):
         vol = np.zeros([4,] + volume_shape)
         z_size = volume_shape[0]
         z_ranges = np.linspace(0, z_size-1, n_planes*2).astype(int)
@@ -626,21 +642,25 @@ class BirefringentVolume(BirefringentElement):
     @staticmethod
     def generate_ellipsoid_volume(volume_shape, center=[0.5,0.5,0.5],
                                   radius=[10,10,10], alpha=1, delta_n=0.01):
-        ''' generate_ellipsoid_volume: Creates an ellipsoid with optical axis normal to the ellipsoid surface.
-            Args:
-                Center [3]: [cz,cy,cx] from 0 to 1 where 0.5 is the center of the volume_shape.
-                radius [3]: in voxels, the radius in z,y,x for this ellipsoid.
-                alpha (float): Border thickness.
-                delta_n (float): Delta_n value of birefringence in the volume
-            Returns:
-                vol (np.array): 4D array where the first dimension represents the birefringence and
-                                optic axis properties, and the last three dims represents the 3D
-                                spatial locations.
+        '''Creates an ellipsoid with optical axis normal to the ellipsoid surface.
+        Args:
+            center [3]: [cz,cy,cx] from 0 to 1 where 0.5 is the center of the volume_shape.
+            radius [3]: in voxels, the radius in z,y,x for this ellipsoid.
+            alpha (float): Border thickness.
+            delta_n (float): Delta_n value of birefringence in the volume
+        Returns:
+            vol (np.array): 4D array where the first dimension represents the
+                birefringence and optic axis properties, and the last three
+                dims represents the 3D spatial locations.
             '''
         # Originally grabbed from https://math.stackexchange.com/questions/2931909/normal-of-a-point-on-the-surface-of-an-ellipsoid,
         #   then modified to do the subtraction of two ellipsoids instead.
         vol = np.zeros([4,] + volume_shape)
-        kk,jj,ii = np.meshgrid(np.arange(volume_shape[0]), np.arange(volume_shape[1]), np.arange(volume_shape[2]), indexing='ij')
+        kk, jj, ii = np.meshgrid(np.arange(volume_shape[0]),
+                                 np.arange(volume_shape[1]),
+                                 np.arange(volume_shape[2]),
+                                 indexing='ij'
+                                 )
         # shift to center
         kk = floor(center[0]*volume_shape[0]) - kk.astype(float)
         jj = floor(center[1]*volume_shape[1]) - jj.astype(float)
@@ -681,9 +701,10 @@ class BirefringentVolume(BirefringentElement):
         return vol
 
     @staticmethod
-    def create_dummy_volume(backend=BackEnds.NUMPY, optical_info=None, vol_type="shell",
-                            volume_axial_offset=0):
-        '''Create different volumes, some of them randomized... Feel free to add your volumes here
+    def create_dummy_volume(backend=BackEnds.NUMPY, optical_info=None,
+                            vol_type="shell", volume_axial_offset=0):
+        '''Create different volumes, some of them randomized. Feel free to add
+        your volumes here.
         Parameters:
             backend: BackEnds.NUMPY or BackEnds.PYTORCH
             optical_info (dict): Stores optical properties, primarily the volume shape.
@@ -814,7 +835,7 @@ class BirefringentVolume(BirefringentElement):
                 backend=backend,
                 optical_info=optical_info,
                 volume_creation_args={'init_mode' : 'ellipsoid', 'init_args' : sphere_args}
-                )   
+                )
         elif vol_type == 'small_sphere_pos':
             min_x = 0.5 - 0.125
             max_x = 0.5 + 0.124
@@ -964,8 +985,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                                                iix * n_pixels_per_ml]).unsqueeze(1)),
                         1)
         # Replicate ray info for all the microlenses
-        self.ray_vol_colli_lengths = nn.Parameter(self.ray_vol_colli_lengths.repeat(n_micro_lenses ** 2, 1))
-        self.ray_direction_basis = nn.Parameter(self.ray_direction_basis.repeat(1, n_micro_lenses ** 2, 1))
+        self.ray_vol_colli_lengths = nn.Parameter(
+            self.ray_vol_colli_lengths.repeat(n_micro_lenses ** 2, 1)
+            )
+        self.ray_direction_basis = nn.Parameter(
+            self.ray_direction_basis.repeat(1, n_micro_lenses ** 2, 1)
+            )
 
         self.MLA_volume_geometry_ready = True
         return
@@ -1363,7 +1388,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def ret_and_azim_images(self, volume_in : BirefringentVolume,
                             microlens_offset=[0,0], mla_index=(0, 0)):
-        '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
+        '''Calculate retardance and azimuth values for a ray with a Jones Matrix.'''
+        # TODO: pass mla_index argument into the numpy and pytorch functions
         if self.backend==BackEnds.NUMPY:
             return self.ret_and_azim_images_numpy(volume_in, microlens_offset)
         elif self.backend==BackEnds.PYTORCH:
@@ -1372,7 +1398,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def ret_and_azim_images_numpy(self, volume_in : BirefringentVolume,
                                   microlens_offset=[0,0]):
-        '''Calculate retardance and azimuth values for a ray with a Jones Matrix'''
+        '''Calculate retardance and azimuth values for a ray with a Jones Matrix.'''
         pixels_per_ml = self.optical_info['pixels_per_ml']
         ret_image = np.zeros((pixels_per_ml, pixels_per_ml))
         azim_image = np.zeros((pixels_per_ml, pixels_per_ml))
@@ -1394,10 +1420,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def ret_and_azim_images_mla_torch(self, volume_in : BirefringentVolume):
         '''This function computes the retardance and azimuth images
-        of the precomputed rays going through a volume for all rays at once'''
+        of the precomputed rays going through a volume for all rays at once.'''
 
-        # Fetch needed variables
-        pixels_per_mla = self.optical_info['pixels_per_ml'] * self.optical_info['n_micro_lenses']
+        # Calculate the number of pixels in the microlens array
+        pix_per_lenslet = self.optical_info['pixels_per_ml']
+        num_micro_lenses = self.optical_info['n_micro_lenses']
+        pixels_per_mla = pix_per_lenslet * num_micro_lenses
 
         # Calculate Jones Matrices for all rays
         effective_JM = self.calc_cummulative_JM_of_ray_torch(
@@ -1416,8 +1444,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         azim_image.requires_grad = False
 
         # Fill the values in the images
-        ret_image[self.ray_valid_indices_all[0, :], self.ray_valid_indices_all[1, :]] = retardance
-        azim_image[self.ray_valid_indices_all[0, :], self.ray_valid_indices_all[1, :]] = azimuth
+        ray_indices_all = self.ray_valid_indices_all
+        ret_image[ray_indices_all[0, :], ray_indices_all[1, :]] = retardance
+        azim_image[ray_indices_all[0, :], ray_indices_all[1, :]] = azimuth
         # Alternative version
         # ret_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices,
         #                       values = retardance, size=(pixels_per_ml, pixels_per_ml)).to_dense()
@@ -1627,7 +1656,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # JM = np.array([[diag1, offdiag], [offdiag, diag2]])
             JM = JonesMatrixGenerators.linear_retarder(ret, azim)
         elif self.backend == BackEnds.PYTORCH:
-            n_voxels = opticAxis.shape[0]
+            number_of_voxels = opticAxis.shape[0]
             if not torch.is_tensor(opticAxis):
                 opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
             # Dot product of optical axis and 3 ray-direction vectors
@@ -1652,13 +1681,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             else:
                 azim = azim_unadj
 
-            # The following series of operations is an equivalent, but more efficient method as
+            # The following series of operations is an equivalent, but more
+            # efficient method than:
             #   JM = JonesMatrixGenerators.linear_retarder(ret, azim, self.backend)
             offdiag = 1j * torch.sin(azim) * torch.sin(ret)
             diag1 = torch.cos(ret) + 1j * torch.cos(azim) * torch.sin(ret)
             diag2 = torch.conj(diag1)
             # Construct Jones Matrix
-            JM = torch.zeros([Delta_n.shape[0], 2, 2], dtype=torch.complex64, device=Delta_n.device)
+            JM = torch.zeros([Delta_n.shape[0], 2, 2],
+                             dtype=torch.complex64,
+                             device=Delta_n.device)
             JM[:,0,0] = diag1
             JM[:,0,1] = offdiag
             JM[:,1,0] = offdiag

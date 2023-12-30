@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 
+
 def setup_visualization():
     plt.ion()
     fig_size = (10, 9)

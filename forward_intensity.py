@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
 from VolumeRaytraceLFM.visualization.plotting_intensity import plot_intensity_images
 from VolumeRaytraceLFM.abstract_classes import BackEnds
-from VolumeRaytraceLFM.birefringence_implementations import  (
+from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentVolume,
     BirefringentRaytraceLFM
 )
@@ -36,7 +36,9 @@ for backend in backends:
     # number is the shift from the end of the volume, change it as you wish,
     #       do single_voxel{volume_shape[0]//2} for a voxel in the center
     shift_from_center = 0
-    volume_axial_offset = optical_info['volume_shape'][0] // 2 + shift_from_center # for center
+    # for center
+    volume_axial_offset = optical_info['volume_shape'][0] // 2 + \
+        shift_from_center
 
     # Create a Birefringent Raytracer!
     rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
@@ -50,15 +52,17 @@ for backend in backends:
     print('Ray-tracing time in seconds: ' + str(executionTime))
 
     # Load volume from a file
-    loaded_volume = BirefringentVolume.init_from_file("objects/single_voxel.h5", backend, optical_info)
-    loaded_volume = BirefringentVolume.init_from_file("objects/shell.h5", backend, optical_info)
+    loaded_volume = BirefringentVolume.init_from_file(
+        "objects/single_voxel.h5", backend, optical_info)
+    loaded_volume = BirefringentVolume.init_from_file(
+        "objects/shell.h5", backend, optical_info)
     my_volume = loaded_volume
 
     image_list = rays.ray_trace_through_volume(my_volume, intensity=True)
     executionTime = time.time() - startTime
     print(f'Execution time in seconds with backend {backend}: ' + str(executionTime))
 
-    if backend==BackEnds.PYTORCH:
+    if backend == BackEnds.PYTORCH:
         image_list = [img.detach().cpu().numpy() for img in image_list]
     results.append(image_list)
     my_fig = plot_intensity_images(image_list, str(backend))

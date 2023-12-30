@@ -5,6 +5,7 @@ import os
 from unittest.mock import Mock
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 
+
 def mock_h5_file(return_value):
     def mock(*args, **kwargs):
         class MockH5File:
@@ -20,6 +21,7 @@ def mock_h5_file(return_value):
         return MockH5File()
 
     return mock
+
 
 def test_extract_data_from_h5(monkeypatch):
     test_file_path = 'test_file.h5'
@@ -37,6 +39,7 @@ def test_extract_data_from_h5(monkeypatch):
 
     assert np.array_equal(delta_n, expected_delta_n)
     assert np.array_equal(optic_axis, expected_optic_axis)
+
 
 def test_extract_all_data_from_h5(monkeypatch):
     """Verify that the extract_all_data_from_h5 method correctly
@@ -56,12 +59,14 @@ def test_extract_all_data_from_h5(monkeypatch):
     }))
 
     vfm = VolumeFileManager()
-    delta_n, optic_axis, volume_shape, voxel_size_um = vfm.extract_all_data_from_h5(test_file_path)
+    delta_n, optic_axis, volume_shape, voxel_size_um = vfm.extract_all_data_from_h5(
+        test_file_path)
 
     assert np.array_equal(delta_n, expected_delta_n)
     assert np.array_equal(optic_axis, expected_optic_axis)
     assert np.array_equal(volume_shape, expected_volume_shape)
     assert np.array_equal(voxel_size_um, expected_voxel_size_um)
+
 
 def test_save_as_channel_stack_tiff(monkeypatch):
     filename = 'test.tiff'
@@ -89,8 +94,11 @@ def test_save_as_channel_stack_tiff(monkeypatch):
     assert actual_filename == filename, "Filename does not match"
 
     # Check if the data matches within a tolerance
-    expected_data = np.stack([delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0)
-    assert np.allclose(actual_data, expected_data), "Data does not match within tolerance"
+    expected_data = np.stack(
+        [delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0)
+    assert np.allclose(
+        actual_data, expected_data), "Data does not match within tolerance"
+
 
 def test_save_as_h5():
     # Mock data for testing

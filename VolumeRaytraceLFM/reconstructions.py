@@ -11,12 +11,12 @@ from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentVolume,
     BirefringentRaytraceLFM
-    )
+)
 from VolumeRaytraceLFM.visualization.plotting_ret_azim import plot_retardance_orientation
 from VolumeRaytraceLFM.visualization.plotting_volume import (
     convert_volume_to_2d_mip,
     prepare_plot_mip,
-    )
+)
 from VolumeRaytraceLFM.visualization.plt_util import setup_visualization
 from VolumeRaytraceLFM.visualization.plotting_iterations import plot_iteration_update_gridspec
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
@@ -24,10 +24,11 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     get_region_of_ones_shape,
     reshape_and_crop,
     store_as_pytorch_parameter
-    )
+)
 
 COMBINING_DELTA_N = False
 DEBUG = False
+
 
 class ReconstructionConfig:
     def __init__(self, optical_info, ret_image, azim_image, initial_vol, iteration_params, loss_fcn=None, gt_vol=None):
@@ -39,15 +40,21 @@ class ReconstructionConfig:
         azimuth_image: Measured azimuth image.
         initial_volume: An initial estimation of the volume.
         """
-        assert isinstance(optical_info, dict), "Expected optical_info to be a dictionary"
-        assert isinstance(ret_image, (torch.Tensor, np.ndarray)), "Expected ret_image to be a PyTorch Tensor or a numpy array"
-        assert isinstance(azim_image, (torch.Tensor, np.ndarray)), "Expected azim_image to be a PyTorch Tensor or a numpy array"
-        assert isinstance(initial_vol, BirefringentVolume), "Expected initial_volume to be of type BirefringentVolume"
-        assert isinstance(iteration_params, dict), "Expected iteration_params to be a dictionary"
+        assert isinstance(
+            optical_info, dict), "Expected optical_info to be a dictionary"
+        assert isinstance(ret_image, (torch.Tensor, np.ndarray)
+                          ), "Expected ret_image to be a PyTorch Tensor or a numpy array"
+        assert isinstance(azim_image, (torch.Tensor, np.ndarray)
+                          ), "Expected azim_image to be a PyTorch Tensor or a numpy array"
+        assert isinstance(
+            initial_vol, BirefringentVolume), "Expected initial_volume to be of type BirefringentVolume"
+        assert isinstance(iteration_params,
+                          dict), "Expected iteration_params to be a dictionary"
         if loss_fcn:
             assert callable(loss_fcn), "Expected loss_function to be callable"
         if gt_vol:
-            assert isinstance(gt_vol, BirefringentVolume), "Expected gt_vol to be of type BirefringentVolume"
+            assert isinstance(
+                gt_vol, BirefringentVolume), "Expected gt_vol to be of type BirefringentVolume"
 
         self.optical_info = optical_info
         self.retardance_image = self._to_numpy(ret_image)
@@ -56,6 +63,8 @@ class ReconstructionConfig:
         self.interation_parameters = iteration_params
         self.loss_function = loss_fcn
         self.gt_volume = gt_vol
+        self.ret_img_pred = None
+        self.azim_img_pred = None
 
     def _to_numpy(self, image):
         """Convert image to a numpy array, if it's not already."""
@@ -75,8 +84,10 @@ class ReconstructionConfig:
         np.save(os.path.join(directory, 'ret_image.npy'), self.retardance_image)
         np.save(os.path.join(directory, 'azim_image.npy'), self.azimuth_image)
         plt.ioff()
-        my_fig = plot_retardance_orientation(self.retardance_image, self.azimuth_image, 'hsv', include_labels=True)
-        my_fig.savefig(os.path.join(directory, 'ret_azim.png'), bbox_inches='tight', dpi=300)
+        my_fig = plot_retardance_orientation(
+            self.retardance_image, self.azimuth_image, 'hsv', include_labels=True)
+        my_fig.savefig(os.path.join(directory, 'ret_azim.png'),
+                       bbox_inches='tight', dpi=300)
         plt.close(my_fig)
         # Save the dictionaries
         with open(os.path.join(directory, 'optical_info.json'), 'w') as f:
@@ -89,13 +100,13 @@ class ReconstructionConfig:
             self.initial_volume.save_as_file(
                 os.path.join(directory, 'initial_volume.h5'),
                 description=my_description
-                )
+            )
         if self.gt_volume and hasattr(self.gt_volume, 'save_as_file'):
             my_description = "Ground truth volume used for reconstruction."
             self.gt_volume.save_as_file(
                 os.path.join(directory, 'gt_volume.h5'),
                 description=my_description
-                )
+            )
 
     @classmethod
     def load(cls, parent_directory):
@@ -113,11 +124,13 @@ class ReconstructionConfig:
         initial_volume_file = os.path.join(directory, 'initial_volume.h5')
         gt_volume_file = os.path.join(directory, 'gt_volume.h5')
         if os.path.exists(initial_volume_file):
-            initial_volume = BirefringentVolume.load_from_file(initial_volume_file, backend_type='torch')
+            initial_volume = BirefringentVolume.load_from_file(
+                initial_volume_file, backend_type='torch')
         else:
             initial_volume = None
         if os.path.exists(gt_volume_file):
-            gt_volume = BirefringentVolume.load_from_file(gt_volume_file, backend_type='torch')
+            gt_volume = BirefringentVolume.load_from_file(
+                gt_volume_file, backend_type='torch')
         else:
             gt_volume = None
         # The loss_function is not saved and should be redefined
@@ -141,18 +154,23 @@ class Reconstructor:
         self.optical_info = recon_info.optical_info
         self.ret_img_meas = recon_info.retardance_image
         self.azim_img_meas = recon_info.azimuth_image
-        self.volume_initial_guess = recon_info.initial_volume # if initial_volume is not None else self._initialize_volume()
+        # if initial_volume is not None else self._initialize_volume()
+        self.volume_initial_guess = recon_info.initial_volume
         self.iteration_params = recon_info.interation_parameters
         self.volume_ground_truth = recon_info.gt_volume
         if self.volume_ground_truth is not None:
             self.birefringence_simulated = self.volume_ground_truth.get_delta_n().detach()
-            mip_image = convert_volume_to_2d_mip(self.birefringence_simulated.unsqueeze(0))
-            self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
+            mip_image = convert_volume_to_2d_mip(
+                self.birefringence_simulated.unsqueeze(0))
+            self.birefringence_mip_sim = prepare_plot_mip(
+                mip_image, plot=False)
         else:
             # Use the initial volume as a placeholder for plotting purposes
             self.birefringence_simulated = self.volume_initial_guess.get_delta_n().detach()
-            mip_image = convert_volume_to_2d_mip(self.birefringence_simulated.unsqueeze(0))
-            self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
+            mip_image = convert_volume_to_2d_mip(
+                self.birefringence_simulated.unsqueeze(0))
+            self.birefringence_mip_sim = prepare_plot_mip(
+                mip_image, plot=False)
 
         image_for_rays = None
         if omit_rays_based_on_pixels:
@@ -193,9 +211,9 @@ class Reconstructor:
         Args:
             volume_type (dict): example volume_args.random_args
         """
-        torch.save({'optical_info' : self.optical_info,
-            'training_params' : self.training_params,
-            'volume_type' : volume_type}, f'{output_dir}/parameters.pt')
+        torch.save({'optical_info': self.optical_info,
+                    'training_params': self.iteration_params,
+                    'volume_type': volume_type}, f'{output_dir}/parameters.pt')
 
     @staticmethod
     def replace_nans(volume, ep):
@@ -205,7 +223,7 @@ class Reconstructor:
             if num_nan_vecs > 0:
                 replacement_vecs = torch.nn.functional.normalize(
                     torch.rand(3, int(num_nan_vecs)), p=2, dim=0
-                    )
+                )
                 volume.optic_axis[:, torch.isnan(volume.optic_axis[0, :])] = replacement_vecs
                 if ep == 0:
                     print(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors.")
@@ -215,7 +233,7 @@ class Reconstructor:
         print(f'For raytracing, using computing device {device}')
         rays = BirefringentRaytraceLFM(
             backend=Reconstructor.backend, optical_info=self.optical_info
-            )
+        )
         rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry(filename=None, image=image)
@@ -224,14 +242,15 @@ class Reconstructor:
         if False:
             nonzero_pixels_dict = rays.identify_rays_from_pixels_mla(
                 self.ret_img_meas, rays.ray_valid_indices
-                )
+            )
         return rays
 
     def setup_initial_volume(self):
         """Setup initial estimated volume."""
         initial_volume = BirefringentVolume(backend=BackEnds.PYTORCH,
                                             optical_info=self.optical_info,
-                                            volume_creation_args = {'init_mode' : 'random'}
+                                            volume_creation_args={
+                                                'init_mode': 'random'}
                                             )
         # Let's rescale the random to initialize the volume
         initial_volume.Delta_n.requires_grad = False
@@ -239,7 +258,7 @@ class Reconstructor:
         initial_volume.Delta_n *= -0.01
         # # And mask out volume that is outside FOV of the microscope
         mask = self.rays.get_volume_reachable_region()
-        initial_volume.Delta_n[mask.view(-1)==0] = 0
+        initial_volume.Delta_n[mask.view(-1) == 0] = 0
         initial_volume.Delta_n.requires_grad = True
         initial_volume.optic_axis.requires_grad = True
         # Indicate to this object that we are going to optimize Delta_n and optic_axis
@@ -254,7 +273,7 @@ class Reconstructor:
         """
         mask = self.rays.get_volume_reachable_region()
         with torch.no_grad():
-            self.volume_pred.Delta_n[mask.view(-1)==0] = 0
+            self.volume_pred.Delta_n[mask.view(-1) == 0] = 0
             # Masking the optic axis caused NaNs in the Jones Matrix. So, we don't mask it.
             # self.volume_pred.optic_axis[:, mask.view(-1)==0] = 0
 
@@ -270,10 +289,14 @@ class Reconstructor:
         birefringence = self.volume_pred.Delta_n
         optic_axis = self.volume_pred.optic_axis
         with torch.no_grad():
-            cropped_birefringence = reshape_and_crop(birefringence, original_shape, region_shape)
-            self.volume_pred.Delta_n = store_as_pytorch_parameter(cropped_birefringence, 'scalar')
-            cropped_optic_axis = reshape_and_crop(optic_axis, [3, *original_shape], region_shape)
-            self.volume_pred.optic_axis = store_as_pytorch_parameter(cropped_optic_axis, 'vector')
+            cropped_birefringence = reshape_and_crop(
+                birefringence, original_shape, region_shape)
+            self.volume_pred.Delta_n = store_as_pytorch_parameter(
+                cropped_birefringence, 'scalar')
+            cropped_optic_axis = reshape_and_crop(
+                optic_axis, [3, *original_shape], region_shape)
+            self.volume_pred.optic_axis = store_as_pytorch_parameter(
+                cropped_optic_axis, 'vector')
 
     def restrict_volume_to_reachable_region(self):
         """Restrict the volume to the region that is reachable by the microscope.
@@ -281,7 +304,7 @@ class Reconstructor:
         """
         self.crop_pred_volume_to_reachable_region()
         self.rays = self.setup_raytracer()
-            
+
     def _turn_off_initial_volume_gradients(self):
         """Turn off the gradients for the initial volume guess."""
         self.volume_initial_guess.Delta_n.requires_grad = False
@@ -302,22 +325,22 @@ class Reconstructor:
             learning_vars = ['Delta_n', 'optic_axis']
         for var in learning_vars:
             if var not in volume.members_to_learn:
-                volume.members_to_learn.append(var)  
+                volume.members_to_learn.append(var)
 
     def optimizer_setup(self, volume_estimation, training_params):
         """Setup optimizer."""
         trainable_parameters = volume_estimation.get_trainable_variables()
         return torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
 
-    def compute_losses(self, ret_image_measured, azim_image_measured, ret_image_current, azim_image_current, volume_estimation, training_params):
-        if not torch.is_tensor(ret_image_measured):
-            ret_image_measured = torch.tensor(ret_image_measured)
-        if not torch.is_tensor(azim_image_measured):
-            azim_image_measured = torch.tensor(azim_image_measured)
+    def compute_losses(self, ret_meas, azim_meas, ret_image_current, azim_current, volume_estimation, training_params):
+        if not torch.is_tensor(ret_meas):
+            ret_meas = torch.tensor(ret_meas)
+        if not torch.is_tensor(azim_meas):
+            azim_meas = torch.tensor(azim_meas)
         # Vector difference GT
-        co_gt, ca_gt = ret_image_measured * torch.cos(azim_image_measured), ret_image_measured * torch.sin(azim_image_measured)
+        co_gt, ca_gt = ret_meas * torch.cos(azim_meas), ret_meas * torch.sin(azim_meas)
         # Compute data term loss
-        co_pred, ca_pred = ret_image_current * torch.cos(azim_image_current), ret_image_current * torch.sin(azim_image_current)
+        co_pred, ca_pred = ret_image_current * torch.cos(azim_current), ret_image_current * torch.sin(azim_current)
         data_term = ((co_gt - co_pred) ** 2 + (ca_gt - ca_pred) ** 2).mean()
 
         # Compute regularization term
@@ -387,7 +410,7 @@ class Reconstructor:
                 [volume_estimation.Delta_n_first_part,
                  volume_estimation.Delta_n_second_part],
                 dim=0
-                )
+            )
             # Attempt to update Delta_n of BirefringentVolume directly
             # The in-place operation causes problems with the gradient tracking
             # with torch.no_grad():  # Temporarily disable gradient tracking
@@ -400,15 +423,21 @@ class Reconstructor:
         # Verify the gradients before and after the backward pass
         if DEBUG:
             print("\nBefore backward pass:")
-            print("requires_grad:", volume_estimation.Delta_n_first_part.requires_grad)
-            print("Gradient for Delta_n_first_part:", volume_estimation.Delta_n_first_part.grad)
-            print("Gradient for Delta_n_second_part:", volume_estimation.Delta_n_second_part.grad)
+            print("requires_grad:",
+                  volume_estimation.Delta_n_first_part.requires_grad)
+            print("Gradient for Delta_n_first_part:",
+                  volume_estimation.Delta_n_first_part.grad)
+            print("Gradient for Delta_n_second_part:",
+                  volume_estimation.Delta_n_second_part.grad)
         loss.backward()
         if DEBUG:
             print("\nAfter backward pass:")
-            print("requires_grad:", volume_estimation.Delta_n_first_part.requires_grad)
-            print("Gradient for Delta_n_first_part:", volume_estimation.Delta_n_first_part.grad)
-            print("Gradient for Delta_n_second_part:", volume_estimation.Delta_n_second_part.grad)
+            print("requires_grad:",
+                  volume_estimation.Delta_n_first_part.requires_grad)
+            print("Gradient for Delta_n_first_part:",
+                  volume_estimation.Delta_n_first_part.grad)
+            print("Gradient for Delta_n_second_part:",
+                  volume_estimation.Delta_n_second_part.grad)
 
         # One method would be to set the gradients of the second half to zero
         if False:
@@ -434,7 +463,8 @@ class Reconstructor:
         if ep % 1 == 0:
             # plt.clf()
             if COMBINING_DELTA_N:
-                Delta_n = volume_estimation.Delta_n_combined.view(self.optical_info['volume_shape']).detach().unsqueeze(0)
+                Delta_n = volume_estimation.Delta_n_combined.view(
+                    self.optical_info['volume_shape']).detach().unsqueeze(0)
             else:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             mip_image = convert_volume_to_2d_mip(Delta_n)
@@ -455,14 +485,17 @@ class Reconstructor:
             fig.canvas.flush_events()
             time.sleep(0.1)
             if ep % 10 == 0:
-                plt.savefig(os.path.join(output_dir, f"optim_ep_{'{:02d}'.format(ep)}.pdf"))
+                plt.savefig(os.path.join(
+                    output_dir, f"optim_ep_{'{:02d}'.format(ep)}.pdf"))
             time.sleep(0.1)
         if ep % 100 == 0:
-            my_description = "Volume estimation after " + str(ep) + " iterations."
+            my_description = "Volume estimation after " + \
+                str(ep) + " iterations."
             volume_estimation.save_as_file(
-                os.path.join(output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"),
+                os.path.join(
+                    output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"),
                 description=my_description
-                )
+            )
         return
 
     def modify_volume(self):
@@ -483,7 +516,8 @@ class Reconstructor:
         # Extract the middle row of each plane
         # The middle row index in each 7x7 plane is 3
         Delta_n_first_part = Delta_n_reshaped[:, 3, :]  # Shape: (3, 7)
-        volume.Delta_n_first_part = torch.nn.Parameter(Delta_n_first_part.flatten())
+        volume.Delta_n_first_part = torch.nn.Parameter(
+            Delta_n_first_part.flatten())
 
         # Concatenate slices before and after the middle row for each plane
         Delta_n_second_part = torch.cat([Delta_n_reshaped[:, :3, :],  # Rows before the middle
@@ -491,7 +525,7 @@ class Reconstructor:
                                         dim=1)  # Concatenate along the row dimension
         volume.Delta_n_second_part = torch.nn.Parameter(
             Delta_n_second_part.flatten(), requires_grad=False
-            )
+        )
 
         # Unsure the affect of turning off the gradients for Delta_n
         Delta_n.requires_grad = False
@@ -501,19 +535,19 @@ class Reconstructor:
         import pandas as pd
         percent_complete = int(ep / n_epochs * 100)
         progress_bar.progress(percent_complete + 1)
-        if ep%2==0:
+        if ep % 2 == 0:
             plt.close()
             recon_img_fig = plot_retardance_orientation(
-                    self.ret_img_pred,
-                    self.azim_img_pred,
-                    'hsv'
-                )
+                self.ret_img_pred,
+                self.azim_img_pred,
+                'hsv'
+            )
             recon_img_plot.pyplot(recon_img_fig)
             df_loss = pd.DataFrame(
-                    {'Total loss': self.loss_total_list,
-                    'Data fidelity': self.loss_data_term_list,
-                    'Regularization': self.loss_reg_term_list
-                    })
+                {'Total loss': self.loss_total_list,
+                 'Data fidelity': self.loss_data_term_list,
+                 'Regularization': self.loss_reg_term_list
+                 })
             my_loss.line_chart(df_loss)
 
     def reconstruct(self, output_dir=None, use_streamlit=False):
@@ -544,8 +578,8 @@ class Reconstructor:
             st.write("Working on these ", n_epochs, "iterations...")
             my_recon_img_plot = st.empty()
             my_loss = st.empty()
-            my_plot = st.empty() # set up a place holder for the plot
-            my_3D_plot = st.empty() # set up a place holder for the 3D plot
+            my_plot = st.empty()  # set up a place holder for the plot
+            my_3D_plot = st.empty()  # set up a place holder for the 3D plot
             progress_bar = st.progress(0)
 
         # Iterations
@@ -553,12 +587,12 @@ class Reconstructor:
             self.one_iteration(optimizer, self.volume_pred)
 
             azim_damp_mask = self.ret_img_meas / self.ret_img_meas.max()
-            self.azim_img_pred[azim_damp_mask==0] = 0
+            self.azim_img_pred[azim_damp_mask == 0] = 0
 
             if use_streamlit:
                 self.__visualize_and_update_streamlit(
                     progress_bar, ep, n_epochs, my_recon_img_plot, my_loss
-                    )
+                )
             self.visualize_and_save(ep, figure, output_dir)
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))

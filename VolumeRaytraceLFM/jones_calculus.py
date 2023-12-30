@@ -13,8 +13,9 @@ from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 class JonesMatrixGenerators(BirefringentElement):
     '''2x2 Jones matrices representing various of polariztion elements'''
 
-    def __init__(self, backend : BackEnds = BackEnds.NUMPY):
-        super(BirefringentElement, self).__init__(backend=backend, torch_args={}, optical_info={})
+    def __init__(self, backend: BackEnds = BackEnds.NUMPY):
+        super(BirefringentElement, self).__init__(
+            backend=backend, torch_args={}, optical_info={})
 
     @staticmethod
     def rotator(angle, backend=BackEnds.NUMPY):
@@ -40,7 +41,8 @@ class JonesMatrixGenerators(BirefringentElement):
             azim (float): azimuth angle of fast axis [radians]
         Return: Jones matrix    
         '''
-        retarder_azim0 = JonesMatrixGenerators.linear_retarder_azim0(ret, backend=backend)
+        retarder_azim0 = JonesMatrixGenerators.linear_retarder_azim0(
+            ret, backend=backend)
         R = JonesMatrixGenerators.rotator(azim, backend=backend)
         Rinv = JonesMatrixGenerators.rotator(-azim, backend=backend)
         return R @ retarder_azim0 @ Rinv
@@ -52,8 +54,8 @@ class JonesMatrixGenerators(BirefringentElement):
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
             return torch.cat(
-                (torch.cat((torch.exp(1j * ret / 2).unsqueeze(1), torch.zeros(len(ret),1)),1).unsqueeze(2),
-                torch.cat((torch.zeros(len(ret),1), torch.exp(-1j * ret / 2).unsqueeze(1)),1).unsqueeze(2)),
+                (torch.cat((torch.exp(1j * ret / 2).unsqueeze(1), torch.zeros(len(ret), 1)), 1).unsqueeze(2),
+                 torch.cat((torch.zeros(len(ret), 1), torch.exp(-1j * ret / 2).unsqueeze(1)), 1).unsqueeze(2)),
                 2
             )
 
@@ -111,10 +113,12 @@ class JonesMatrixGenerators(BirefringentElement):
     def left_circular_polarizer():
         '''Left Circular Polarizer'''
         return 1 / 2 * np.array([[1, 1j], [-1j, 1]])
+
     @staticmethod
     def right_circular_retarder(ret):
         '''Right Circular Retarder'''
         return JonesMatrixGenerators.rotator(-ret / 2)
+
     @staticmethod
     def left_circular_retarder(ret):
         '''Left Circular Retarder'''
@@ -166,8 +170,10 @@ class JonesMatrixGenerators(BirefringentElement):
 
 class JonesVectorGenerators(BirefringentElement):
     '''2x1 Jones vectors representing various states of polarized light'''
-    def __init__(self, backend : BackEnds = BackEnds.NUMPY):
-        super(BirefringentElement, self).__init__(backend=backend, torch_args={}, optical_info={})
+
+    def __init__(self, backend: BackEnds = BackEnds.NUMPY):
+        super(BirefringentElement, self).__init__(
+            backend=backend, torch_args={}, optical_info={})
 
     @staticmethod
     def right_circular():

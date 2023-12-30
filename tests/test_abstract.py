@@ -122,8 +122,10 @@ def create_array_with_set_nonzero(size, num_nonzero):
     array = np.zeros((size, size), dtype=np.float32)
 
     # Randomly select num_nonzero unique positions to set as non-zero
-    non_zero_positions = np.random.choice(size * size, num_nonzero, replace=False)
-    
+    non_zero_positions = np.random.choice(
+        size * size, num_nonzero, replace=False
+        )
+
     # Set these positions to non-zero values
     rows = non_zero_positions // size
     cols = non_zero_positions % size

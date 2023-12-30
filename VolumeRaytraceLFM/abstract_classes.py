@@ -603,10 +603,12 @@ class RayTraceLFM(OpticalElement):
                     i * num_pixels : (i + 1) * num_pixels,
                     j * num_pixels : (j + 1) * num_pixels
                     ]
-                # Create a boolean mask based on whether the image value at each index is not zero
-                mask = np.array([lenslet_image[index[0], index[1]] != 0 for index in reshaped_indices])
-                # Fill values into varibles nonzero_pixels
-                # nonzero_pixels_dict[(i, j)] = reshaped_indices[mask]
+                # Create a boolean mask based on whether or not the image value
+                #   at each index is zero.
+                mask = np.array(
+                    [lenslet_image[idx[0], idx[1]] != 0 for idx in reshaped_indices]
+                )
+                # Fill values into variables nonzero_pixels
                 nonzero_pixels_dict[(i, j)] = mask
 
         return nonzero_pixels_dict

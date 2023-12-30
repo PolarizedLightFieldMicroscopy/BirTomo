@@ -11,6 +11,7 @@ from VolumeRaytraceLFM.visualization.plotting_ret_azim import (
 )
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
 
+
 class ForwardModel:
     """
     Simulates optical behavior of birefringent materials.
@@ -46,6 +47,7 @@ class ForwardModel:
         create_savedir: Creates directories for saving.
         forward_model: Computes, updates simulation images.
     """
+
     def __init__(self, optical_system, backend, device='cpu'):
         self.backend = backend
         # Linking with the optical system
@@ -113,7 +115,7 @@ class ForwardModel:
         print(f'For raytracing, using computing device {device}')
         rays = BirefringentRaytraceLFM(
             backend=self.backend, optical_info=self.optical_info
-            )
+        )
         if self.is_pytorch_backend():
             rays.to(device)  # Move the rays to the specified device
         start_time = time.time()
@@ -132,7 +134,7 @@ class ForwardModel:
         azim_image = self.convert_to_numpy(self.azim_img)
         my_fig = plot_retardance_orientation(
             ret_image, azim_image, azimuth_plot_type, include_labels=True
-            )
+        )
         my_fig.tight_layout()
         plt.pause(0.2)
         plt.show(block=True)
@@ -146,8 +148,10 @@ class ForwardModel:
         self.create_savedir()
         ret_image = self.convert_to_numpy(self.ret_img)
         azim_image = self.convert_to_numpy(self.azim_img)
-        my_fig = plot_retardance_orientation(ret_image, azim_image, 'hsv', include_labels=True)
-        my_fig.savefig(self.savedir + '/ret_azim.png', bbox_inches='tight', dpi=300)
+        my_fig = plot_retardance_orientation(
+            ret_image, azim_image, 'hsv', include_labels=True)
+        my_fig.savefig(self.savedir + '/ret_azim.png',
+                       bbox_inches='tight', dpi=300)
 
     def save_intensity_images(self):
         """Save the simulated intensity images."""
@@ -157,7 +161,8 @@ class ForwardModel:
         """Add the polarizers and analyzers to the optical system. Non-identity
         polarizers and analyzers are used that model the LC-PolScope setup."""
         self.optical_info['polarizer'] = JonesMatrixGenerators.polscope_analyzer()
-        self.optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator_modes(setting=0, swing=0)
+        self.optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator_modes(
+            setting=0, swing=0)
 
     def plot_rays(self):
         """Plot the rays in 3D."""
@@ -203,4 +208,4 @@ class ForwardModel:
         if intensity and self.is_numpy_backend():
             self.img_list = self.rays.ray_trace_through_volume(
                 volume, intensity=True
-                )
+            )
