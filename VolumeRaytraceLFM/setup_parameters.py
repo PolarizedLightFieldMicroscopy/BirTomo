@@ -1,6 +1,7 @@
 import json
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 
+
 def setup_optical_parameters(config_file=None):
     """Setup optical parameters based on a configuration file."""
     optical_info = BirefringentVolume.get_optical_info_template()
@@ -9,6 +10,7 @@ def setup_optical_parameters(config_file=None):
             config = json.load(f)
         optical_info.update(config)
     return optical_info
+
 
 def setup_iteration_parameters(config_file=None):
     """Setup iteration parameters based on a configuration file."""
@@ -22,5 +24,5 @@ def setup_iteration_parameters(config_file=None):
             'regularization_weight': 0.1,
             'lr': 1e-3,
             'output_posfix': ''
-            }
+        }
     return iteration_params

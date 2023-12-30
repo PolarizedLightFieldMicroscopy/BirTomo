@@ -10,7 +10,7 @@ import streamlit as st
 st.set_page_config(
     page_title="Hello Rudolf",
     page_icon="👋",
-    layout="wide", # centered
+    layout="wide",
 )
 
 st.title("Polarization Light Field Microscopy Simulations")

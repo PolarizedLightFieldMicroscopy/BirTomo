@@ -1,8 +1,10 @@
 import torch
 import numpy as np
 
+
 def check_valid_JM(arr):
     pass
+
 
 def check_for_inf_or_nan(arr):
     if torch.is_tensor(arr):

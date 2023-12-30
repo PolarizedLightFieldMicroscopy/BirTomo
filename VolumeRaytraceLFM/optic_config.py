@@ -1,10 +1,13 @@
 # Third party libraries imports
 try:
+    import numpy as np
+    import torch.nn as nn
+    import math
     import torch.nn as nn
     import torch
-    import torch.nn.functional as F
 except:
     pass
+
 
 class OpticBlock(nn.Module):
     """Base class containing all the basic functionality of an optic block"""
@@ -44,33 +47,28 @@ class OpticBlock(nn.Module):
         return self.device_dummy.device
 
 
-# Python imports
-import math
-
-# Third party libraries imports
-import torch.nn as nn
-import numpy as np
-
-
 class PSFConfig:
     pass
+
 
 class scattering:
     pass
 
+
 class MLAConfig:
     pass
+
 
 class CameraConfig:
     pass
 
+
 class PolConfig:
     pass
 
+
 class VolumeConfig:
     pass
-
-
 
 
 class OpticConfig(nn.Module):
@@ -93,7 +91,8 @@ class OpticConfig(nn.Module):
         psf_config.ni0 = 1  # Immersion medium RI design value
         psf_config.ni = 1  # Immersion medium RI experimental value
         psf_config.ti0 = (
-            150  # Microns, working distance (immersion medium thickness) design value
+            # Microns, working distance (immersion medium thickness) design value
+            150
         )
         psf_config.tg0 = 170  # Microns, coverslip thickness design value
         psf_config.tg = 170  # Microns, coverslip thickness experimental value
@@ -103,11 +102,14 @@ class OpticConfig(nn.Module):
         psf_config.wvl = 0.63  # Wavelength of emission
 
         # Sample space information
-        psf_config.voxel_size = [6.5/60, 6.5/60, 0.43] # Axial step size in sample space
-        psf_config.depths = list(np.arange(-10*psf_config.voxel_size[-1], 10*psf_config.voxel_size[-1], psf_config.voxel_size[-1])) # Axial depths where we compute the PSF
-            
+        # Axial step size in sample space
+        psf_config.voxel_size = [6.5/60, 6.5/60, 0.43]
+        # Axial depths where we compute the PSF
+        psf_config.depths = list(
+            np.arange(-10*psf_config.voxel_size[-1], 10*psf_config.voxel_size[-1], psf_config.voxel_size[-1]))
+
         return psf_config
-    
+
     @staticmethod
     def get_default_MLA_config():
         mla_config = MLAConfig()
@@ -116,7 +118,7 @@ class OpticConfig(nn.Module):
         mla_config.camera_distance = 2500
         mla_config.focal_length = 2500
         mla_config.arrangement_type = "periodic"
-        mla_config.n_voxels_per_ml = 1 # How many voxels per micro-lens
+        mla_config.n_voxels_per_ml = 1  # How many voxels per micro-lens
         mla_config.n_micro_lenses = 1
 
         return mla_config
@@ -125,13 +127,17 @@ class OpticConfig(nn.Module):
         # Setup last PSF parameters
         self.PSF_config.fobj = self.PSF_config.Ftl / self.PSF_config.M
         # Calculate MLA number of pixels behind a lenslet
-        self.mla_config.n_pixels_per_mla = 2 * [self.mla_config.pitch // self.camera_config.sensor_pitch]
-        self.mla_config.n_pixels_per_mla = [int(n + (1 if (n % 2 == 0) else 0)) for n in self.mla_config.n_pixels_per_mla]
+        self.mla_config.n_pixels_per_mla = 2 * \
+            [self.mla_config.pitch // self.camera_config.sensor_pitch]
+        self.mla_config.n_pixels_per_mla = [
+            int(n + (1 if (n % 2 == 0) else 0)) for n in self.mla_config.n_pixels_per_mla]
         # Calculate voxel size
         voxel_size_xy = self.camera_config.sensor_pitch / self.PSF_config.M
-        self.PSF_config.voxel_size = [voxel_size_xy, voxel_size_xy, self.PSF_config.voxel_size[-1]]
+        self.PSF_config.voxel_size = [
+            voxel_size_xy, voxel_size_xy, self.PSF_config.voxel_size[-1]]
 
         return
+
     @staticmethod
     def get_default_camera_config():
         camera_config = CameraConfig()
@@ -144,7 +150,7 @@ class OpticConfig(nn.Module):
         pol_config.polarizer = np.array([[1, 0], [0, 1]])
         pol_config.analyzer = np.array([[1, 0], [0, 1]])
         return pol_config
-    
+
     def __init__(self, PSF_config=None):
         super(OpticConfig, self).__init__()
         if PSF_config is None:
@@ -157,7 +163,6 @@ class OpticConfig(nn.Module):
         self.pol_config = self.get_polarizers()
         self.volume_config = VolumeConfig()
 
-
     def get_wavelenght(self):
         return self.PSF_config.wvl
 
@@ -167,6 +172,6 @@ class OpticConfig(nn.Module):
     def set_k(self):
         # Wave Number
         self.k = 2 * math.pi * self.PSF_config.ni / self.PSF_config.wvl  # wave number
-        
+
     def get_k(self):
         return self.k

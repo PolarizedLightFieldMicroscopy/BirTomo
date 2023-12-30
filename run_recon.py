@@ -8,19 +8,21 @@ from VolumeRaytraceLFM.volumes import volume_args
 from VolumeRaytraceLFM.setup_parameters import (
     setup_optical_parameters,
     setup_iteration_parameters
-    )
+)
 from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructor
 from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
 
 BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
+
 
 def recon_gpu():
     '''Reconstruct a volume on the GPU.'''
-    optical_info = setup_optical_parameters("config_settings\optical_config3.json")
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config3.json")
     optical_system = {'optical_info': optical_info}
     # Initialize the forward model. Raytracing is performed as part of the initialization.
     simulator = ForwardModel(optical_system, backend=BACKEND, device=DEVICE)
@@ -40,11 +42,12 @@ def recon_gpu():
     azim_image_meas = simulator.azim_img
 
     recon_optical_info = optical_info
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,
-        volume_creation_args = volume_args.random_args
+        volume_creation_args=volume_args.random_args
     )
     initial_volume.to(DEVICE)  # Move the volume to the GPU
 
@@ -59,9 +62,11 @@ def recon_gpu():
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
+
 def recon():
-    optical_info = setup_optical_parameters("config_settings\optical_config_voxel.json")
-    simulate = False
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config_voxel.json")
+    simulate = True
     if simulate:
         optical_system = {'optical_info': optical_info}
         # Initialize the forward model. Raytracing is performed as part of the initialization.
@@ -70,12 +75,12 @@ def recon():
         volume_GT = BirefringentVolume(
             backend=BACKEND,
             optical_info=optical_info,
-            volume_creation_args=volume_args.voxel_args
+            volume_creation_args=volume_args.voxel_shifted_args
         )
-        visualize_volume(volume_GT, optical_info)
+        # visualize_volume(volume_GT, optical_info)
 
         simulator.forward_model(volume_GT)
-        # simulator.view_images()
+        simulator.view_images()
         ret_image_meas = simulator.ret_img
         azim_image_meas = simulator.azim_img
         # Save the images as numpy arrays
@@ -84,15 +89,18 @@ def recon():
         # azim_numpy = azim_image_meas.detach().numpy()
         # np.save('forward_images/azim_voxel_pos_1mla.npy', azim_numpy)
     else:
-        ret_image_meas = np.load(os.path.join('forward_images', 'ret_voxel_pos_1mla.npy'))
-        azim_image_meas = np.load(os.path.join('forward_images', 'azim_voxel_pos_1mla.npy'))
+        ret_image_meas = np.load(os.path.join(
+            'forward_images', 'ret_voxel_pos_1mla.npy'))
+        azim_image_meas = np.load(os.path.join(
+            'forward_images', 'azim_voxel_pos_1mla.npy'))
 
     recon_optical_info = optical_info.copy()
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,
-        volume_creation_args = volume_args.random_args
+        volume_creation_args=volume_args.random_args
     )
     recon_directory = create_unique_directory("reconstructions")
     if not simulate:
@@ -100,12 +108,14 @@ def recon():
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=volume_GT)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
+
 def main():
-    optical_info = setup_optical_parameters("config_settings\optical_config_largemla.json")
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config_largemla.json")
     optical_system = {'optical_info': optical_info}
     # Initialize the forward model. Raytracing is performed as part of the initialization.
     simulator = ForwardModel(optical_system, backend=BACKEND)
@@ -113,20 +123,21 @@ def main():
     volume_GT = BirefringentVolume(
         backend=BACKEND,
         optical_info=optical_info,
-        volume_creation_args=volume_args.sphere_args5 #ellipsoid_args2 #voxel_args
+        volume_creation_args=volume_args.sphere_args5  # ellipsoid_args2 #voxel_args
     )
     # visualize_volume(volume_GT, optical_info)
     simulator.forward_model(volume_GT)
-    # simulator.view_images()
+    simulator.view_images()
     ret_image_meas = simulator.ret_img
     azim_image_meas = simulator.azim_img
 
     recon_optical_info = optical_info.copy()
-    iteration_params = setup_iteration_parameters("config_settings\iter_config.json")
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config.json")
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=recon_optical_info,
-        volume_creation_args = volume_args.random_args
+        volume_creation_args=volume_args.random_args
     )
     recon_directory = create_unique_directory("reconstructions")
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
@@ -136,6 +147,7 @@ def main():
     reconstructor = Reconstructor(recon_config)
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
 
 if __name__ == '__main__':
     recon()

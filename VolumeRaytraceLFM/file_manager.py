@@ -2,6 +2,7 @@ import numpy as np
 import h5py
 import tifffile
 
+
 class VolumeFileManager:
     def __init__(self):
         """Initializes the VolumeFileManager class."""
@@ -60,7 +61,8 @@ class VolumeFileManager:
         """
         try:
             print(f'Saving volume to file: {filename}')
-            combined_data = np.stack([delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0)
+            combined_data = np.stack(
+                [delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0)
             tifffile.imwrite(filename, combined_data)
             print('Volume saved successfully.')
         except Exception as e:
@@ -112,9 +114,11 @@ class VolumeFileManager:
             vol_shape = optical_info.get('volume_shape', None)
             voxel_size_um = optical_info.get('voxel_size_um', None)
             if vol_shape is not None:
-                optics_grp.create_dataset('volume_shape', data=np.array(vol_shape))
+                optics_grp.create_dataset(
+                    'volume_shape', data=np.array(vol_shape))
             if voxel_size_um is not None:
-                optics_grp.create_dataset('voxel_size_um', data=np.array(voxel_size_um))
+                optics_grp.create_dataset(
+                    'voxel_size_um', data=np.array(voxel_size_um))
         else:
             for k, v in optical_info.items():
                 optics_grp.create_dataset(k, data=np.array(v))
@@ -132,4 +136,5 @@ class VolumeFileManager:
         """
         data_grp = file_handle.create_group('data')
         data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n)
-        data_grp.create_dataset("optic_axis", optic_axis.shape, data=optic_axis)
+        data_grp.create_dataset(
+            "optic_axis", optic_axis.shape, data=optic_axis)

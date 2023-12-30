@@ -1,6 +1,4 @@
-import os
 import numpy as np
-import torch
 import pytest
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
@@ -9,37 +7,38 @@ from VolumeRaytraceLFM.reconstructions import (
     Reconstructor,
 )
 
+
 @pytest.fixture
 def recon_info():
     optical_info = {
-        "volume_shape"      : [3, 5, 5],
-        "axial_voxel_size_um"     : 1.0,
-        "cube_voxels"       : True,
-        "pixels_per_ml"     : 17,
-        "n_micro_lenses"    : 1,
-        "n_voxels_per_ml"   : 1,
-        "M_obj"             : 60,
-        "na_obj"            : 1.2,
-        "n_medium"          : 1.35,
-        "wavelength"        : 0.550,
-        "camera_pix_pitch"  : 6.5,
-        "polarizer"         : [[1, 0], [0, 1]],
-        "analyzer"          : [[1, 0], [0, 1]],
-        "polarizer_swing"   : 0.03
-        }
+        "volume_shape": [3, 5, 5],
+        "axial_voxel_size_um": 1.0,
+        "cube_voxels": True,
+        "pixels_per_ml": 17,
+        "n_micro_lenses": 1,
+        "n_voxels_per_ml": 1,
+        "M_obj": 60,
+        "na_obj": 1.2,
+        "n_medium": 1.35,
+        "wavelength": 0.550,
+        "camera_pix_pitch": 6.5,
+        "polarizer": [[1, 0], [0, 1]],
+        "analyzer": [[1, 0], [0, 1]],
+        "polarizer_swing": 0.03
+    }
     ret_image_meas = np.random.rand(17, 17)
     azim_image_meas = np.random.rand(17, 17)
     initial_volume = BirefringentVolume(
         backend=BackEnds.PYTORCH,
         optical_info=optical_info,
-        volume_creation_args={    
-            'init_mode' : 'single_voxel',
-            'init_args' : {
-                'delta_n' : -0.05,
-                'offset' : [0, 0, 0]
-                }
+        volume_creation_args={
+            'init_mode': 'single_voxel',
+            'init_args': {
+                'delta_n': -0.05,
+                'offset': [0, 0, 0]
             }
-        )
+        }
+    )
     iteration_params = {
         "n_epochs": 31,
         "azimuth_weight": 0.5,
@@ -51,9 +50,11 @@ def recon_info():
                                         initial_volume, iteration_params)
     return recon_config
 
+
 @pytest.fixture
 def reconstructor(recon_info):
     return Reconstructor(recon_info)
+
 
 def test_reconstructor_initialization(reconstructor):
     assert isinstance(reconstructor, Reconstructor)

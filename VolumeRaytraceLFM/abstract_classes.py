@@ -6,6 +6,7 @@ from os.path import exists
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools
 
 # Packages needed for siddon algorithm calculations
 from VolumeRaytraceLFM.my_siddon import (siddon_params, siddon_midpoints,
@@ -123,30 +124,50 @@ class OpticalElement(OpticBlock):
 
 ###########################################################################################
 class RayTraceLFM(OpticalElement):
-    '''This is a base class that takes a volume geometry and LFM geometry and calculates which
-    arrive to each of the pixels behind each micro-lense, and discards the rest.
-    This class also pre-computes how each rays traverses the volume with the Siddon algorithm.
-    The interaction between the voxels and the rays is defined by each specialization of this class.
+    '''This is a base class that takes a volume geometry and LFM geometry and
+    calculates which arrive to each of the pixels behind each microlens, and
+    discards the rest. This class also pre-computes how each rays traverses the
+    volume with the Siddon algorithm. The interaction between the voxels and
+    the rays is defined by each instance of this class.
     '''
     def __init__(
         self,
-        backend : BackEnds = BackEnds.NUMPY, torch_args={},
-        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17,
-                      'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1,
-                      'n_voxels_per_ml' : 1}
+        backend : BackEnds = BackEnds.NUMPY,
+        torch_args={},
+        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0],
+                      'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52,
+                      'wavelength' : 0.550, 'n_micro_lenses' : 1,
+                      'n_voxels_per_ml' : 1
+                      }
             ):
+        # Initialize the OpticalElement class
         super(RayTraceLFM, self).__init__(
             backend=backend,
             torch_args=torch_args,
             optical_info=optical_info
             )
 
-        # Create dummy variables for pre-computed rays and paths through the volume
-        # This are defined in compute_rays_geometry
+        # Create dummy variables for pre-computed rays and paths through the volume.
+        # Many of these are defined in compute_rays_geometry.
         self.ray_valid_indices = None
         self.ray_vol_colli_indices = None
         self.ray_vol_colli_lengths = None
         self.ray_direction_basis = None
+        self.ray_valid_direction = None
+        self.ray_valid_indices_by_ray_num = None
+        self.vox_ctr_idx = None
+        self.volume_ctr_um = None
+        self.ray_vol_colli_lengths = None
+        self.ray_vol_colli_indices = None
+        self.ray_direction_basis = None
+        self.lateral_ray_length_from_center = 0
+        self.voxel_span_per_ml = 0
+        self.vol_shape_restricted = None
+        self.use_lenslet_based_filtering = True
+
+        self.nonzero_pixels_dict = self._create_default_nonzero_pixels_dict(
+            optical_info['n_micro_lenses'], optical_info['pixels_per_ml']
+            )
 
     def forward(self, volume_in ):
         '''Perform the forward model calculations.'''
@@ -157,6 +178,14 @@ class RayTraceLFM(OpticalElement):
         #           {volume_in.simul_type} was provided"
         return self.ray_trace_through_volume(volume_in)
 
+    def _create_default_nonzero_pixels_dict(self, num_mla, num_pixels):
+        '''Creates a dictionary that stores the mask for which rays lead to 
+        nonzero pixels. This dictionary is a placeholder for the actual mask.'''
+        default_value = lambda: np.ones((num_pixels, num_pixels), dtype=bool)
+        # Generate all (i,j) pairs using itertools.product
+        iter_product = itertools.product(range(num_mla), repeat=2)
+        nonzero_pixels_dict = {(i, j): default_value() for i, j in iter_product}
+        return nonzero_pixels_dict
 
 ###########################################################################################
     # Helper functions
@@ -394,13 +423,21 @@ class RayTraceLFM(OpticalElement):
         ray_diff = ray_diff / np.linalg.norm(ray_diff, axis=0)
         return ray_enter, ray_exit, ray_diff
 
-    def compute_rays_geometry(self, filename=None):
+    def compute_rays_geometry(self,
+                              filename=None,
+                              image=None,
+                              apply_filter_to_rays=False
+                             ):
         '''Computes the ray-voxel collision based on the Siddon algorithm.
         Requires:
             calling self.rays_through_volumes to compute ray entry, exit and directions.
         Args:
             filename (str) optional: Saves the geometry to a pickle file,
                 and loads the geometry from a file if the file exists.
+            image (np.array) optional:
+                The image used to create a mask for the rays.
+            apply_filter_to_rays (bool) optional: Whether to apply the mask to
+                the rays. Only works when using a 1x1 microlens array.
         Returns:
             self: The RayTraceLFM instance with updated geometry.
         Computes:
@@ -425,6 +462,9 @@ class RayTraceLFM(OpticalElement):
                 Maximum lateral reach of a ray from the center voxel, rounded up.
             self.ray_direction_basis (list [3]):
                 List size 3, where each element is a torch tensor shaped [n_rays, 3]
+            self.nonzero_pixels_dict (dict):
+                Mask for which rays lead to nonzero pixels for each lenslet.
+                Computed if an image is provided.
         '''
         # If a filename is provided, check if it exists and load the whole ray tracer class from it.
         if self._load_geometry_from_file(filename):
@@ -441,19 +481,19 @@ class RayTraceLFM(OpticalElement):
         self.lateral_ray_length_from_center = lat_length
         self.voxel_span_per_ml = vox_span
 
-        valid_ray_indices_by_ray_num, ray_vol_colli_indices, \
+        ray_valid_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
             self.compute_ray_collisions(
                 ray_enter, ray_exit, self.optical_info['voxel_size_um'], self.vol_shape_restricted
                 )
 
         # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
-        self.valid_ray_indices_by_ray_num = valid_ray_indices_by_ray_num
+        self.ray_valid_indices_by_ray_num = ray_valid_indices_by_ray_num
 
         # Maximum number of ray-voxel interactions, to define
         max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
 
-        n_valid_rays = len(valid_ray_indices_by_ray_num)
+        n_valid_rays = len(ray_valid_indices_by_ray_num)
 
         # Initialize storage for ray valid indices
         if self.backend == BackEnds.NUMPY:
@@ -462,14 +502,26 @@ class RayTraceLFM(OpticalElement):
             self.ray_valid_indices = torch.zeros(2, n_valid_rays, dtype=int)
 
         # Populate the ray valid indices array
-        for ix, pixel_pos in enumerate(valid_ray_indices_by_ray_num):
+        for ix, pixel_pos in enumerate(ray_valid_indices_by_ray_num):
             self.ray_valid_indices[0, ix] = pixel_pos[0]
             self.ray_valid_indices[1, ix] = pixel_pos[1]
 
-        self._filter_invalid_rays(max_ray_voxels_collision, ray_vol_colli_lengths, ray_valid_direction)
-        
+        self._filter_invalid_rays(
+            max_ray_voxels_collision, ray_vol_colli_lengths, ray_valid_direction
+            )
+
+        # TODO: check if collision indices should be filtered too
         # Collisions indices does not get filtered
         self.ray_vol_colli_indices = ray_vol_colli_indices
+
+        if image is not None:
+            if not np.any(image):
+                raise ValueError("The image cannot be all zeros.")
+            if apply_filter_to_rays:
+                self.filter_rays_based_on_pixels(image)
+            self.nonzero_pixels_dict = self.identify_rays_from_pixels_mla(
+                image, ray_valid_indices=self.ray_valid_indices
+                )
 
         # Update volume shape information to account for the whole workspace
         self._update_volume_shape_info()
@@ -483,6 +535,83 @@ class RayTraceLFM(OpticalElement):
             print(f'Saved RayTraceLFM object from {filename}')
 
         return self
+
+    def filter_rays_based_on_pixels(self, image):
+        """
+        Filters the rays based on the non-zero pixel values in the given image.
+        Args:
+            image (numpy.ndarray): The image used to filter the rays.
+        Returns:
+            self: The updated instance of the class with filtered ray attributes.
+        """
+        # Reshape self.ray_valid_indices to pair row and column indices
+        reshaped_indices = self.ray_valid_indices.T
+
+        # Create a boolean mask based on whether the image value at each index is not zero
+        mask = np.array([image[index[0], index[1]] != 0 for index in reshaped_indices])
+
+        # Apply the mask to reshaped_indices
+        filtered_reshaped_indices = reshaped_indices[mask]
+
+        # ray_valid_indices_by_ray_num is not adjusted
+        #   because it is not used in the forward model
+        colli_indices = self.ray_vol_colli_indices
+        filtered_ray_vol_colli_indices = [
+            idx for idx, mask_val in zip(colli_indices, mask) if mask_val
+        ]
+        filtered_ray_vol_colli_lengths = self.ray_vol_colli_lengths[mask]
+        filtered_ray_valid_direction = self.ray_valid_direction[mask]
+
+        # Re-assign instance attributes
+        self.ray_vol_colli_indices = filtered_ray_vol_colli_indices
+        self.ray_vol_colli_lengths = nn.Parameter(
+            filtered_ray_vol_colli_lengths, requires_grad=False
+            )
+        self.ray_valid_direction = nn.Parameter(
+            filtered_ray_valid_direction, requires_grad=False
+            )
+        # Transpose back to get the filtered self.ray_valid_indices
+        self.ray_valid_indices = filtered_reshaped_indices.T
+
+        return self
+
+    def identify_rays_from_pixels_mla(self, mla_image, ray_valid_indices=None):
+        """
+        Args:
+            mla_image (np.array): Light field image.
+        Return:
+            nonzero_pixels_dict: Mask for which rays lead to nonzero pixels.
+                Keys are tuples of (lenslet_row, lenslet_col).
+                Values are boolean arrays of shape (num_pixels, num_pixels).
+        """
+        num_mla = self.optical_info["n_micro_lenses"]
+        num_pixels = self.optical_info["pixels_per_ml"]
+        # size = num_mla * num_pixels
+        nonzero_pixels_dict = {}
+
+        if ray_valid_indices is None:
+            self.compute_rays_geometry()
+            # Reshape self.ray_valid_indices to pair row and column indices
+            reshaped_indices = self.ray_valid_indices.T
+        else:
+            reshaped_indices = ray_valid_indices.T
+
+        # Loop through sections of mla_image, and store a mask.
+        for i in range(num_mla):
+            for j in range(num_mla):
+                lenslet_image = mla_image[
+                    i * num_pixels : (i + 1) * num_pixels,
+                    j * num_pixels : (j + 1) * num_pixels
+                    ]
+                # Create a boolean mask based on whether or not the image value
+                #   at each index is zero.
+                mask = np.array(
+                    [lenslet_image[idx[0], idx[1]] != 0 for idx in reshaped_indices]
+                )
+                # Fill values into variables nonzero_pixels
+                nonzero_pixels_dict[(i, j)] = mask
+
+        return nonzero_pixels_dict
 
     def _load_geometry_from_file(self, filename):
         """Loads ray tracer class from a file if it exists."""
@@ -614,10 +743,10 @@ class RayTraceLFM(OpticalElement):
         Notes:
         - The method distinguishes between handling data in NumPy and PyTorch
             based on the backend specified in the class.
-        - The instance variable `valid_ray_indices_by_ray_num` is expected
+        - The instance variable `ray_valid_indices_by_ray_num` is expected
             to be populated beforehand to indicate valid rays.
         '''
-        n_valid_rays = len(self.valid_ray_indices_by_ray_num)
+        n_valid_rays = len(self.ray_valid_indices_by_ray_num)
 
         # Initialize storage for ray-voxel collision lengths and ray valid directions
         if self.backend == BackEnds.NUMPY:
