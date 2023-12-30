@@ -1188,8 +1188,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             return self.calc_cummulative_JM_of_ray_numpy(volume_in, microlens_offset)
         elif self.backend==BackEnds.PYTORCH:
             return self.calc_cummulative_JM_of_ray_torch(volume_in,
-                                                         microlens_offset,
-                                                         mla_index=(0, 0))
+                                        microlens_offset, mla_index=mla_index)
 
     def calc_cummulative_JM_of_ray_numpy(self, i, j,
                                          volume_in : BirefringentVolume, microlens_offset=[0,0]):
@@ -1483,7 +1482,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Calculate Jones Matrices for all rays given the volume and microlens offset
         effective_JM = self.calc_cummulative_JM_of_ray(volume_in,
-                                            microlens_offset, mla_index=(0, 0))
+                                        microlens_offset, mla_index=mla_index)
 
         # Calculate retardance and azimuth from the effective Jones Matrices
         retardance = self.retardance(effective_JM)
