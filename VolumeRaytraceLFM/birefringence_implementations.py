@@ -1340,22 +1340,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             tuple: A tuple containing filtered ell_in_voxels, ray direction
                    basis, and ray volume collision indices.
 
-        Class Attributes Accessed:
-        - self.ray_valid_indices: Contains the rays that reach the detector.
-        - self.nonzero_pixels_dict: A dictionary containing grids of non-zero
-                                    pixels, accessed using `mla_index`.
+        Class attributes accessed:
+        (directly)
         - self.ray_vol_colli_lengths: Contains lengths of rays through voxels.
         - self.ray_direction_basis: Contains the directions of the rays.
         - self.ray_vol_colli_indices: Contains ray volume collision indices.
+        (indirectly)
+        - self.ray_valid_indices: Contains the rays that reach the detector.
+        - self.nonzero_pixels_dict: A dictionary containing grids of non-zero
+                                    pixels, accessed using `mla_index`.
         """
-        reshaped_indices = self.ray_valid_indices.T
-        nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
-        # DEBUG
-        # nonzero_pixels_grid[0:2, :] = False
-
-        # Create a boolean mask based on whether the image value at each index is not zero
-        mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
-
+        mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
         # Apply mask to ray data
         ell_in_voxels_filtered = self.ray_vol_colli_lengths[mask]
         ray_dir_basis_filtered = self.ray_direction_basis[:, mask, :]
@@ -1405,7 +1400,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         pixels_per_mla = self.optical_info['pixels_per_ml'] * self.optical_info['n_micro_lenses']
 
         # Calculate Jones Matrices for all rays
-        effective_JM = self.calc_cummulative_JM_of_ray_torch(volume_in, all_rays_at_once=True)
+        effective_JM = self.calc_cummulative_JM_of_ray_torch(
+            volume_in, all_rays_at_once=True
+            )
         # Calculate retardance and azimuth
         retardance = self.retardance(effective_JM)
         azimuth = self.azimuth(effective_JM)
@@ -1501,7 +1498,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         Returns:
             current_lenslet_indices (array): The indices of the rays.
         
-        Class Attributes Accessed:
+        Class attributes accessed:
         - self.ray_valid_indices: Contains the rays that reach the detector.
         - self.nonzero_pixels_dict: A dictionary containing grids of non-zero
                                     pixels, accessed using `mla_index`.
@@ -1511,15 +1508,36 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """
         if self.use_lenslet_based_filtering:
             # Collect the valid indices specific to the lenslet
-            reshaped_indices = self.ray_valid_indices.T
-            nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
-            # DEBUG
-            # nonzero_pixels_grid[0:2, :] = False
-            mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
+            mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
             current_lenslet_indices = self.ray_valid_indices[:, mask]
         else:
             current_lenslet_indices = self.ray_valid_indices
         return current_lenslet_indices
+
+    def _form_mask_from_nonzero_pixels_dict(self, mla_index):
+        """Create a boolean mask based on whether or not the image value at
+        each index is zero.
+        Debugging tips: If the grid is all True, then a subset of the grid
+            can be set to False to test the mask.
+            Ex 1: nonzero_pixels_grid[0:2, :] = False
+            Ex 2: self.nonzero_pixels_dict[(0, 0)][0:2, :] = False
+
+        Args:
+            mla_index (tuple): The index of the microlens.
+        Returns:
+            mask (array): A boolean mask to filter out rays that do not reach
+                          the detector or lead to nonzero pixels.
+        Class attributes accessed:
+        - self.ray_valid_indices: Contains the rays that reach the detector.
+        - self.nonzero_pixels_dict: A dictionary containing Boolean grids that
+                specify which pixles are nonzero, accessed using `mla_index`.
+        """
+        reshaped_indices = self.ray_valid_indices.T
+        nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
+        mask = np.array(
+            [nonzero_pixels_grid[idx[0], idx[1]] for idx in reshaped_indices]
+        )
+        return mask
 
     def intensity_images(self, volume_in : BirefringentVolume, microlens_offset=[0,0]):
         '''Calculate intensity images using Jones Calculus. The polarizer and
