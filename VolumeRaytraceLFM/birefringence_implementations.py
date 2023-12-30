@@ -1389,12 +1389,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def ret_and_azim_images(self, volume_in : BirefringentVolume,
                             microlens_offset=[0,0], mla_index=(0, 0)):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix.'''
-        # TODO: pass mla_index argument into the numpy and pytorch functions
         if self.backend==BackEnds.NUMPY:
+            # TODO: pass mla_index argument into the numpy function
             return self.ret_and_azim_images_numpy(volume_in, microlens_offset)
         elif self.backend==BackEnds.PYTORCH:
             return self.ret_and_azim_images_torch(volume_in, microlens_offset,
-                                                  mla_index=(0, 0))
+                                                  mla_index=mla_index)
 
     def ret_and_azim_images_numpy(self, volume_in : BirefringentVolume,
                                   microlens_offset=[0,0]):
