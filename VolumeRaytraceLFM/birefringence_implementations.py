@@ -1475,17 +1475,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         ret_image.requires_grad = False
         azim_image.requires_grad = False
 
-        # Fill the images using the ray indices specific to the lenslet
-        if self.use_lenslet_based_filtering:
-            reshaped_indices = self.ray_valid_indices.T
-            nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
-            # DEBUG
-            # nonzero_pixels_grid[0:2, :] = False
-            mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
-            current_lenslet_indices = self.ray_valid_indices[:, mask]
-        else:
-            current_lenslet_indices = self.ray_valid_indices
-        # Fill the calculated values into the images at the valid ray indices
+        # Retrieve the ray indices specific to the lenslet
+        current_lenslet_indices = self._retrieve_lenslet_indices(mla_index)
+        # Fill the calculated values into the images at the lenslet indices
         ret_image[current_lenslet_indices[0,:], current_lenslet_indices[1,:]] = retardance
         azim_image[current_lenslet_indices[0,:], current_lenslet_indices[1,:]] = azimuth
 
@@ -1496,6 +1488,38 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         #                       values = azimuth, size=(pixels_per_ml, pixels_per_ml)).to_dense()
 
         return [ret_image, azim_image]
+
+    def _retrieve_lenslet_indices(self, mla_index):
+        """
+        Retrieves the indices of the rays that reach the detector for a given
+        microlens. This function will filter out the rays specific to the
+        microlens if `use_lenslet_based_filtering` is True.
+
+        Args:
+            mla_index (tuple): The index of the microlens.
+        
+        Returns:
+            current_lenslet_indices (array): The indices of the rays.
+        
+        Class Attributes Accessed:
+        - self.ray_valid_indices: Contains the rays that reach the detector.
+        - self.nonzero_pixels_dict: A dictionary containing grids of non-zero
+                                    pixels, accessed using `mla_index`.
+        - self.use_lenslet_based_filtering: A flag to indicate whether to
+                                            filter out rays specific to the
+                                            microlens.
+        """
+        if self.use_lenslet_based_filtering:
+            # Collect the valid indices specific to the lenslet
+            reshaped_indices = self.ray_valid_indices.T
+            nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
+            # DEBUG
+            # nonzero_pixels_grid[0:2, :] = False
+            mask = np.array([nonzero_pixels_grid[index[0], index[1]] for index in reshaped_indices])
+            current_lenslet_indices = self.ray_valid_indices[:, mask]
+        else:
+            current_lenslet_indices = self.ray_valid_indices
+        return current_lenslet_indices
 
     def intensity_images(self, volume_in : BirefringentVolume, microlens_offset=[0,0]):
         '''Calculate intensity images using Jones Calculus. The polarizer and
