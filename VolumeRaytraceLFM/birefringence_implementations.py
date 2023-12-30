@@ -1128,7 +1128,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if intensity:
             return self.intensity_images(volume, microlens_offset=offset)
         else:
-            return self.ret_and_azim_images(volume, microlens_offset=offset, mla_index=mla_index)
+            return self.ret_and_azim_images(volume, microlens_offset=offset,
+                                            mla_index=mla_index)
 
     def _concatenate_images(self, img_list1, img_list2, axis):
         if self.backend == BackEnds.NUMPY:
