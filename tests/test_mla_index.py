@@ -1,17 +1,9 @@
 import pytest
+from tests.test_fixtures import backend_fixture
 from unittest.mock import patch, call
 from VolumeRaytraceLFM.simulations import (
     ForwardModel, BackEnds, BirefringentRaytraceLFM, BirefringentVolume
 )
-
-@pytest.fixture(scope="module")
-def backend_fixture(request):
-    if request.param == 'numpy':
-        return BackEnds.NUMPY
-    elif request.param == 'pytorch':
-        return BackEnds.PYTORCH
-    else:
-        raise Exception("Invalid backend")
 
 
 @pytest.fixture
@@ -37,7 +29,7 @@ def forward_model(backend_fixture):
     return ForwardModel(optical_system, backend_fixture)
 
 
-@pytest.mark.parametrize("backend", ['numpy', 'pytorch'], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ['numpy', 'pytorch'], indirect=True)
 def test_mla_index(forward_model, backend_fixture):
     assert forward_model.backend == backend_fixture
     optical_info = {
