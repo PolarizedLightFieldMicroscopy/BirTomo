@@ -1,50 +1,17 @@
 import pytest
 from unittest.mock import patch, call
 from tests.fixtures_backend import backend_fixture
+from tests.fixtures_forward_model import forward_model_fixture
+from tests.fixtures_optical_info import set_optical_info
 from VolumeRaytraceLFM.simulations import (
-    ForwardModel, BackEnds, BirefringentRaytraceLFM, BirefringentVolume
+    BackEnds, BirefringentRaytraceLFM, BirefringentVolume
 )
 
 
-@pytest.fixture
-def forward_model(backend_fixture):
-    optical_system = {
-        "optical_info": {
-            "volume_shape": [3, 5, 5],
-            "axial_voxel_size_um": 1.0,
-            "cube_voxels": True,
-            "pixels_per_ml": 17,
-            "n_micro_lenses": 1,
-            "n_voxels_per_ml": 1,
-            "M_obj": 60,
-            "na_obj": 1.2,
-            "n_medium": 1.35,
-            "wavelength": 0.550,
-            "camera_pix_pitch": 6.5,
-            "polarizer": [[1, 0], [0, 1]],
-            "analyzer": [[1, 0], [0, 1]],
-            "polarizer_swing": 0.03
-        }
-    }
-    return ForwardModel(optical_system, backend_fixture)
-
-
 @pytest.mark.parametrize("backend_fixture", ['numpy', 'pytorch'], indirect=True)
-def test_mla_index(forward_model, backend_fixture):
-    assert forward_model.backend == backend_fixture
-    optical_info = {
-        "volume_shape": [3, 7, 7],
-        "axial_voxel_size_um": 1.0,
-        "cube_voxels": True,
-        "pixels_per_ml": 17,
-        "n_micro_lenses": 1,
-        "n_voxels_per_ml": 1,
-        "M_obj": 60,
-        "na_obj": 1.2,
-        "wavelength": 0.550,
-        "n_medium": 1.35,
-        "camera_pix_pitch": 6.5,
-    }
+def test_mla_index(forward_model_fixture, backend_fixture):
+    assert forward_model_fixture.backend == backend_fixture
+    optical_info = set_optical_info([3, 7, 7], 17, 1)
     volume = BirefringentVolume(
         backend=backend_fixture,
         optical_info=optical_info,
@@ -56,30 +23,14 @@ def test_mla_index(forward_model, backend_fixture):
             }
         }
     )
-    forward_model.forward_model(volume, backend_fixture)
-    assert forward_model.ret_img is not None
-    assert forward_model.azim_img is not None
+    forward_model_fixture.forward_model(volume, backend_fixture)
+    assert forward_model_fixture.ret_img is not None
+    assert forward_model_fixture.azim_img is not None
 
 
 @pytest.fixture
 def birefringent_raytrace_lfm():
-    # Setup for BirefringentRaytraceLFM instance
-    optical_info = {
-        "volume_shape": [3, 5, 5],
-        "axial_voxel_size_um": 1.0,
-        "cube_voxels": True,
-        "pixels_per_ml": 17,
-        "n_micro_lenses": 1,
-        "n_voxels_per_ml": 1,
-        "M_obj": 60,
-        "na_obj": 1.2,
-        "n_medium": 1.35,
-        "wavelength": 0.550,
-        "camera_pix_pitch": 6.5,
-        "polarizer": [[1, 0], [0, 1]],
-        "analyzer": [[1, 0], [0, 1]],
-        "polarizer_swing": 0.03
-    }
+    optical_info = set_optical_info([3, 5, 5], 17, 1)
     BF_raytrace_torch = BirefringentRaytraceLFM(
         backend=BackEnds.PYTORCH, optical_info=optical_info
     )

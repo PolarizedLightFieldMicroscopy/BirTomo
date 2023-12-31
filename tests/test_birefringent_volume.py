@@ -5,26 +5,9 @@ import pytest
 import h5py
 from plotly.graph_objs import Figure
 from tests.fixtures_backend import backend_fixture
-from VolumeRaytraceLFM.birefringence_implementations import *
-
-
-@pytest.fixture(scope="module")
-def optical_info_vol11():
-    # Fetch default optical info
-    optical_info = OpticalElement.get_optical_info_template()
-
-    optical_info['volume_shape'] = [11, 11, 11]
-    optical_info['axial_voxel_size_um'] = 1.0
-    optical_info['pixels_per_ml'] = 5
-    optical_info['na_obj'] = 1.2
-    optical_info['n_medium'] = 1.52
-    optical_info['wavelength'] = 0.550
-    optical_info['n_micro_lenses'] = 1
-    optical_info['n_voxels_per_ml'] = 1
-    optical_info['polarizer'] = np.array([[1, 0], [0, 1]])
-    optical_info['analyzer'] = np.array([[1, 0], [0, 1]])
-
-    return optical_info
+from tests.fixtures_optical_info import optical_info_vol11
+from VolumeRaytraceLFM.abstract_classes import BackEnds
+from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 
 
 @pytest.mark.parametrize("backend_fixture", ['numpy', 'pytorch'], indirect=True)

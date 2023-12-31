@@ -2,31 +2,13 @@
 import numpy as np
 import pytest
 from tests.fixtures_backend import backend_fixture
-from VolumeRaytraceLFM.abstract_classes import *
-
-
-@pytest.fixture(scope="module")
-def my_optical_info():
-    # Fetch default optical info
-    optical_info = OpticalElement.get_optical_info_template()
-
-    optical_info['volume_shape'] = [11, 11, 11]
-    optical_info['axial_voxel_size_um'] = 1.0
-    optical_info['pixels_per_ml'] = 5
-    optical_info['na_obj'] = 1.2
-    optical_info['n_medium'] = 1.52
-    optical_info['wavelength'] = 0.550
-    optical_info['n_micro_lenses'] = 1
-    optical_info['n_voxels_per_ml'] = 1
-    optical_info['polarizer'] = np.array([[1, 0], [0, 1]])
-    optical_info['analyzer'] = np.array([[1, 0], [0, 1]])
-
-    return optical_info
+from tests.fixtures_optical_info import optical_info_vol11
+from VolumeRaytraceLFM.abstract_classes import OpticalElement, RayTraceLFM
 
 
 @pytest.fixture
-def ray_trace_lfm_instance(backend_fixture, my_optical_info):
-    return RayTraceLFM(backend=backend_fixture, torch_args={}, optical_info=my_optical_info)
+def ray_trace_lfm_instance(backend_fixture, optical_info_vol11):
+    return RayTraceLFM(backend=backend_fixture, torch_args={}, optical_info=optical_info_vol11)
 
 
 def test_rays_through_vol(pixels_per_ml=5, naObj=60, nMedium=1.52, volume_ctr_um=np.array([0.5, 0.5, 0.5])):

@@ -1,7 +1,13 @@
+import numpy as np
+import torch
 import pytest
 import matplotlib.pyplot as plt
 import copy
-from VolumeRaytraceLFM.birefringence_implementations import *
+from tests.fixtures_optical_info import set_optical_info
+from VolumeRaytraceLFM.abstract_classes import BackEnds
+from VolumeRaytraceLFM.birefringence_implementations import (
+    BirefringentVolume, BirefringentRaytraceLFM
+)
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
 
 
@@ -15,19 +21,8 @@ def global_data():
     # Set torch precision to Double to match numpy
     torch.set_default_dtype(torch.float64)
 
-    # Fetch default optical info
-    optical_info = OpticalElement.get_optical_info_template()
-
-    optical_info['volume_shape'] = [11, 11, 11]
-    optical_info['axial_voxel_size_um'] = 1.0
-    optical_info['pixels_per_ml'] = 5
-    optical_info['na_obj'] = 1.2
+    optical_info = set_optical_info([11, 11, 11], 5, 1)
     optical_info['n_medium'] = 1.52
-    optical_info['wavelength'] = 0.550
-    optical_info['n_micro_lenses'] = 1
-    optical_info['n_voxels_per_ml'] = 1
-    optical_info['polarizer'] = np.array([[1, 0], [0, 1]])
-    optical_info['analyzer'] = np.array([[1, 0], [0, 1]])
 
     return {'optical_info': optical_info}
 
