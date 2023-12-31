@@ -1,11 +1,9 @@
 '''Tests for RayTraceLFM class'''
 import numpy as np
-import torch
 import pytest
-import h5py
-from plotly.graph_objs import Figure
+from tests.test_fixtures import backend_fixture
 from VolumeRaytraceLFM.abstract_classes import *
-# from VolumeRaytraceLFM.birefringence_implementations import *
+
 
 @pytest.fixture(scope="module")
 def my_optical_info():
@@ -25,12 +23,11 @@ def my_optical_info():
 
     return optical_info
 
+
 @pytest.fixture
-def ray_trace_lfm_instance(request, my_optical_info):
-    if request.param == 'numpy':
-        return RayTraceLFM(backend=BackEnds.NUMPY, torch_args={}, optical_info=my_optical_info)
-    elif request.param == 'pytorch':
-        return RayTraceLFM(backend=BackEnds.PYTORCH, torch_args={}, optical_info=my_optical_info)
+def ray_trace_lfm_instance(backend_fixture, my_optical_info):
+    return RayTraceLFM(backend=backend_fixture, torch_args={}, optical_info=my_optical_info)
+
 
 def test_rays_through_vol(pixels_per_ml=5, naObj=60, nMedium=1.52, volume_ctr_um=np.array([0.5, 0.5, 0.5])):
     ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
@@ -40,7 +37,8 @@ def test_rays_through_vol(pixels_per_ml=5, naObj=60, nMedium=1.52, volume_ctr_um
     assert rays_shape == ray_exit.shape == ray_diff.shape
     assert pixels_per_ml == rays_shape[1] == rays_shape[2]
 
-@pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
+
+@pytest.mark.parametrize("backend_fixture", ['numpy', 'pytorch'], indirect=True)
 def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
     '''
     Test that the voxel span is computed correctly.
@@ -82,7 +80,8 @@ def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
     assert voxel_span == expected_voxel_span, \
         f"Expected {expected_voxel_span}, got {voxel_span}"
 
-@pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
+
+@pytest.mark.parametrize("backend_fixture", ['numpy', 'pytorch'], indirect=True)
 def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
     filename = None
     rays = ray_trace_lfm_instance
@@ -104,6 +103,7 @@ def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
     rays_shape = rays.ray_entry.shape
     assert rays_shape == rays.ray_exit.shape == rays.ray_direction.shape
     assert rays.optical_info['pixels_per_ml'] == rays_shape[1] == rays_shape[2]
+
 
 def create_array_with_set_nonzero(size, num_nonzero):
     """
@@ -133,9 +133,9 @@ def create_array_with_set_nonzero(size, num_nonzero):
 
     return array
 
-# @pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
-# def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
-def test_filter_nonzero_rays_single_lenslet():
+
+@pytest.mark.parametrize("backend_fixture", ['pytorch'], indirect=True)
+def test_filter_nonzero_rays_single_lenslet(backend_fixture):
     optical_info = OpticalElement.get_optical_info_template()
     optical_info['volume_shape'] = [3, 5, 5]
     optical_info['axial_voxel_size_um'] = 1.0
@@ -145,7 +145,7 @@ def test_filter_nonzero_rays_single_lenslet():
     optical_info['wavelength'] = 0.550
     optical_info['n_micro_lenses'] = 1
     optical_info['n_voxels_per_ml'] = 1
-    rays = RayTraceLFM(backend=BackEnds.PYTORCH, torch_args={}, optical_info=optical_info)
+    rays = RayTraceLFM(backend=backend_fixture, torch_args={}, optical_info=optical_info)
 
     filename = None
     n_lenslets = rays.optical_info['n_micro_lenses']
@@ -164,7 +164,8 @@ def test_filter_nonzero_rays_single_lenslet():
                 ]:
         assert var == num_nonzero
 
-@pytest.mark.parametrize("ray_trace_lfm_instance", ['numpy', 'pytorch'], indirect=True)
+
+@pytest.mark.parametrize("backend_fixture", ['numpy', 'pytorch'], indirect=True)
 def test_identify_rays_from_pixels_mla(ray_trace_lfm_instance):
     rays = ray_trace_lfm_instance
     for num_lenslets in [1, 3]:
