@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from tests.test_fixtures import backend_fixture
+from tests.fixtures_backend import backend_fixture
 from VolumeRaytraceLFM.simulations import (
     ForwardModel, BackEnds, BirefringentRaytraceLFM, BirefringentVolume
 )

@@ -4,7 +4,7 @@ import torch
 import pytest
 import h5py
 from plotly.graph_objs import Figure
-from tests.test_fixtures import backend_fixture
+from tests.fixtures_backend import backend_fixture
 from VolumeRaytraceLFM.birefringence_implementations import *
 
 

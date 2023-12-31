@@ -1,7 +1,7 @@
 '''Tests for RayTraceLFM class'''
 import numpy as np
 import pytest
-from tests.test_fixtures import backend_fixture
+from tests.fixtures_backend import backend_fixture
 from VolumeRaytraceLFM.abstract_classes import *
 
 

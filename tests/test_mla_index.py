@@ -1,6 +1,6 @@
 import pytest
-from tests.test_fixtures import backend_fixture
 from unittest.mock import patch, call
+from tests.fixtures_backend import backend_fixture
 from VolumeRaytraceLFM.simulations import (
     ForwardModel, BackEnds, BirefringentRaytraceLFM, BirefringentVolume
 )
