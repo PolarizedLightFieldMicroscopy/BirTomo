@@ -1376,6 +1376,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                     pixels, accessed using `mla_index`.
         """
         mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
+
+        assert self.ray_vol_colli_lengths is not None, "Ray data must be populated first."
+        assert self.ray_direction_basis is not None, "Ray data must be populated first."
+        assert self.ray_vol_colli_indices is not None, "Ray data must be populated first."
+
         # Apply mask to ray data
         ell_in_voxels_filtered = self.ray_vol_colli_lengths[mask]
         ray_dir_basis_filtered = self.ray_direction_basis[:, mask, :]

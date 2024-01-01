@@ -38,19 +38,20 @@ def birefringent_raytrace_lfm():
 
 
 def test_form_mask_from_nonzero_pixels_dict_unique_index(birefringent_raytrace_lfm):
-    with patch.object(BirefringentRaytraceLFM, '_form_mask_from_nonzero_pixels_dict') as mock_method:
+    rays = birefringent_raytrace_lfm
+    rays.compute_rays_geometry()
+    method_as_str = '_form_mask_from_nonzero_pixels_dict'
+    with patch.object(BirefringentRaytraceLFM, method_as_str) as mock_method:
         # Simulate calling the method with different indices
-        # birefringent_raytrace_lfm._form_mask_from_nonzero_pixels_dict((0, 0))
-        # birefringent_raytrace_lfm._form_mask_from_nonzero_pixels_dict((1, 0))
-        # birefringent_raytrace_lfm._form_mask_from_nonzero_pixels_dict((0, 1))
         indices_to_test = [(0, 0), (1, 0), (0, 1)]
         for idx in indices_to_test:
-            birefringent_raytrace_lfm._filter_ray_data(idx)
+            rays._filter_ray_data(idx)
 
         # Verify that all calls to the method had unique indices
         call_args_list = mock_method.call_args_list
         indices = [call_args[0][0] for call_args in call_args_list]
-        assert len(indices) == len(set(indices)), "Duplicate indices found in method calls"
+        err_message = "Duplicate indices found in method calls"
+        assert len(indices) == len(set(indices)), err_message
 
 
 def test_filter_ray_data_unique_index(birefringent_raytrace_lfm):
