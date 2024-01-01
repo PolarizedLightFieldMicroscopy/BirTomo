@@ -37,25 +37,20 @@ def birefringent_raytrace_lfm():
     return BF_raytrace_torch
 
 
+@pytest.fixture
+def rays_fixture(params):
+    """Attempt to create the rays as a fixture with inputs."""
+    optical_info = set_optical_info(**params)
+    BF_raytrace_torch = BirefringentRaytraceLFM(
+        backend=BackEnds.PYTORCH, optical_info=optical_info
+    )
+    return BF_raytrace_torch
+
+# @pytest.mark.parametrize("rays_fixture", "['[3, 5, 5], 17, 1']")
 def test_form_mask_from_nonzero_pixels_dict_unique_index(birefringent_raytrace_lfm):
     rays = birefringent_raytrace_lfm
+    rays.optical_info['n_micro_lenses'] = 5
     rays.compute_rays_geometry()
-    method_as_str = '_form_mask_from_nonzero_pixels_dict'
-    with patch.object(BirefringentRaytraceLFM, method_as_str) as mock_method:
-        # Simulate calling the method with different indices
-        indices_to_test = [(0, 0), (1, 0), (0, 1)]
-        for idx in indices_to_test:
-            rays._filter_ray_data(idx)
-
-        # Verify that all calls to the method had unique indices
-        call_args_list = mock_method.call_args_list
-        indices = [call_args[0][0] for call_args in call_args_list]
-        err_message = "Duplicate indices found in method calls"
-        assert len(indices) == len(set(indices)), err_message
-
-
-def test_filter_ray_data_unique_index(birefringent_raytrace_lfm):
-    rays = birefringent_raytrace_lfm
     volume = BirefringentVolume(
         backend=rays.backend,
         optical_info=rays.optical_info,
@@ -67,15 +62,28 @@ def test_filter_ray_data_unique_index(birefringent_raytrace_lfm):
             }
         }
     )
-    with patch.object(BirefringentRaytraceLFM, '_filter_ray_data') as mock_method:
+    method_as_str = '_form_mask_from_nonzero_pixels_dict'
+    with patch.object(BirefringentRaytraceLFM, method_as_str) as mock_method:
         # Simulate calling the method with different indices
-
         indices_to_test = [(0, 0), (1, 0), (0, 1)]
         for idx in indices_to_test:
-            if True:
-                rays._filter_ray_data(idx)
-            else:
-                rays.calc_cummulative_JM_of_ray_torch(volume_in=volume, mla_index=idx)
+            # rays._filter_ray_data(idx)
+            rays.calc_cummulative_JM_of_ray_torch(volume_in=volume, mla_index=idx)
+
+        # Verify that all calls to the method had unique indices
+        call_args_list = mock_method.call_args_list
+        indices = [call_args[0][0] for call_args in call_args_list]
+        err_message = "Duplicate indices found in method calls"
+        assert len(indices) == len(set(indices)), err_message
+
+
+def test_filter_ray_data_unique_index(birefringent_raytrace_lfm):
+    rays = birefringent_raytrace_lfm
+    with patch.object(BirefringentRaytraceLFM, '_filter_ray_data') as mock_method:
+        # Simulate calling the method with different indices
+        indices_to_test = [(0, 0), (1, 0), (0, 1)]
+        for idx in indices_to_test:
+            rays._filter_ray_data(idx)
 
         # Verify that all calls to the method had unique indices
         call_args_list = mock_method.call_args_list

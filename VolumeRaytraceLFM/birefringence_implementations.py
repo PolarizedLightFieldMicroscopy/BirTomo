@@ -1261,6 +1261,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         ###### Mask out the rays that lead to nonzero pixels
         if self.use_lenslet_based_filtering:
+            # DEBUG
+            # err_message = f"mla_index {mla_index} is not in nonzero_pixels_dict"
+            # assert mla_index in self.nonzero_pixels_dict, err_message
             ell_in_voxels, ray_dir_basis, collision_indices = self._filter_ray_data(mla_index)
             if all_rays_at_once:
                 err_message = ("all_rays_at_once not implemented " +
@@ -1566,6 +1569,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         - self.nonzero_pixels_dict: A dictionary containing Boolean grids that
                 specify which pixles are nonzero, accessed using `mla_index`.
         """
+        err_message = f"mla_index {mla_index} is not in nonzero_pixels_dict"
+        assert mla_index in self.nonzero_pixels_dict, err_message
         reshaped_indices = self.ray_valid_indices.T
         nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
         mask = np.array(
