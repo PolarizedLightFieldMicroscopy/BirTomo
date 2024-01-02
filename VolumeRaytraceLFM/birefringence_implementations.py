@@ -1038,14 +1038,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         odd_mla_shift = np.mod(n_micro_lenses, 2)
 
         ml_ii_idx = 0
-        ml_jj_idx = 0
         # Iterate over each row of microlenses (y direction)
         for ml_ii in tqdm(range(-n_ml_half, n_ml_half + odd_mla_shift),
                           f'Computing rows of microlenses {self.backend}'):
 
             # Initialize a list for storing concatenated images of the current row
             full_img_row_list = [None] * 5
-
+            ml_jj_idx = 0
             # Iterate over each column of microlenses in the current row (x direction)
             for ml_jj in range(-n_ml_half, n_ml_half+odd_mla_shift):
 
