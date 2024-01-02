@@ -886,6 +886,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.vox_indices_ml_shifted_all = []
         self.ray_valid_indices_all = None
         self.MLA_volume_geometry_ready = False
+        self.verbose = True
 
     def __str__(self):
         info = (
@@ -1039,9 +1040,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         ml_ii_idx = 0
         # Iterate over each row of microlenses (y direction)
-        for ml_ii in tqdm(range(-n_ml_half, n_ml_half + odd_mla_shift),
-                          f'Computing rows of microlenses {self.backend}'):
+        if self.verbose:
+            row_iterable = tqdm(
+                range(-n_ml_half, n_ml_half + odd_mla_shift),
+                desc=f'Computing rows of microlenses {self.backend}'
+            )
+        else:
+            row_iterable = range(-n_ml_half, n_ml_half + odd_mla_shift)
 
+        for ml_ii in row_iterable:
             # Initialize a list for storing concatenated images of the current row
             full_img_row_list = [None] * 5
             ml_jj_idx = 0
