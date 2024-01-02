@@ -1151,7 +1151,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             retardance = np.abs(phase_diff)
         elif self.backend == BackEnds.PYTORCH:
             x = torch.linalg.eigvals(JM)
-            retardance = (torch.angle(x[:,1]) - torch.angle(x[:,0])).abs()
+            if JM.ndim == 2:
+                # JM is a single 2x2 matrix
+                retardance = (torch.angle(x[1]) - torch.angle(x[0])).abs()
+            elif JM.ndim == 3:
+                # JM is a batch of 2x2 matrices
+                retardance = (torch.angle(x[:, 1]) - torch.angle(x[:, 0])).abs()
+            else:
+                raise ValueError("JM must be either a 2x2 matrix or a batch of 2x2 matrices.")
+            # retardance = (torch.angle(x[:,1]) - torch.angle(x[:,0])).abs()
         else:
             raise NotImplementedError
         return retardance
@@ -1172,15 +1180,42 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # if np.isclose(azimuth,np.pi):
             #     azimuth = 0.0
         elif self.backend == BackEnds.PYTORCH:
-            diag_sum = (JM[:, 0, 0] + JM[:, 1, 1])
-            diag_diff = (JM[:, 1, 1] - JM[: ,0, 0])
-            off_diag_sum = JM[:, 0, 1] + JM[:, 1, 0]
+            if JM.ndim == 2:
+                # JM is a single 2x2 matrix
+                diag_sum = JM[0, 0] + JM[1, 1]
+                diag_diff = JM[1, 1] - JM[0, 0]
+                off_diag_sum = JM[0, 1] + JM[1, 0]     
+            elif JM.ndim == 3:
+                # JM is a batch of 2x2 matrices           
+                diag_sum = (JM[:, 0, 0] + JM[:, 1, 1])
+                diag_diff = (JM[:, 1, 1] - JM[: ,0, 0])
+                off_diag_sum = JM[:, 0, 1] + JM[:, 1, 0]
+
             a = (diag_diff / diag_sum).imag
             b = (off_diag_sum / diag_sum).imag
+
             # atan2 with zero entries causes nan in backward, so let's filter them out
-            azimuth = torch.zeros_like(a)
-            zero_a_b = torch.isclose(a,torch.zeros([1],dtype=a.dtype, device=a.device)).bitwise_and(torch.isclose(b,torch.zeros([1],dtype=b.dtype, device=a.device)))
-            azimuth[~zero_a_b] = torch.arctan2(-b[~zero_a_b], -a[~zero_a_b]) / 2.0 + torch.pi / 2.0
+
+            # Intermediate variables for zero tensor
+            zero_a = torch.tensor(0.0, dtype=a.dtype, device=a.device)
+            zero_b = torch.tensor(0.0, dtype=b.dtype, device=b.device)
+            zero_for_a = torch.zeros([1], dtype=a.dtype, device=a.device)
+            zero_for_b = torch.zeros([1], dtype=b.dtype, device=b.device)
+
+            # Check if a and b are scalar values (zero-dimensional)
+            if a.ndim == 0 and b.ndim == 0:
+                # Handle the scalar case
+                azimuth = zero_a
+                if not torch.isclose(a, zero_a) or not torch.isclose(b, zero_b):
+                    azimuth = torch.arctan2(-b, -a) / 2.0 + torch.pi / 2.0
+            else:
+                # Handle the non-scalar case
+                azimuth = torch.zeros_like(a)
+                close_to_zero_a = torch.isclose(a, zero_for_a)
+                close_to_zero_b = torch.isclose(b, zero_for_b)
+                zero_a_b = close_to_zero_a.bitwise_and(close_to_zero_b)
+                azimuth[~zero_a_b] = torch.arctan2(-b[~zero_a_b], -a[~zero_a_b]) / 2.0 + torch.pi / 2.0
+
             # TODO: if output azimuth is pi, make it 0 and vice-versa (arctan2 bug)
             # zero_index = torch.isclose(azimuth, torch.zeros([1]), atol=1e-5)
             # pi_index = torch.isclose(azimuth, torch.tensor(torch.pi), atol=1e-5)
@@ -1298,6 +1333,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels,
         #   so we mask the rays valid with rays_with_voxels.
+        material_JM = self._get_default_JM()
         for m in range(ell_in_voxels.shape[1]):
             # Determine which rays have remaining voxels to traverse
             rays_with_voxels = [len(vx) > m for vx in voxels_of_segs]
@@ -1336,6 +1372,18 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         return material_JM
 
+    def _get_default_JM(self):
+        """Returns the default Jones Matrix for a ray that does not
+        interact with any voxels. This is the identity matrix.
+        """
+        if self.backend == BackEnds.NUMPY:
+            return np.array([[1, 0], [0, 1]])
+        elif self.backend == BackEnds.PYTORCH:
+            # .repeat(ell_in_voxels.shape[0], 1, 1)
+            return torch.eye(2, dtype=torch.complex64)
+        else:
+            raise ValueError("Unsupported backend")
+        
     def _update_vox_indices_shifted(self, microlens_offset, collision_indices):
         """
         Updates or retrieves the shifted voxel indices based on the microlens offset.
@@ -1390,13 +1438,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         assert self.ray_direction_basis is not None, "Ray data must be populated first."
         assert self.ray_vol_colli_indices is not None, "Ray data must be populated first."
 
-        # Apply mask to ray data
-        ell_in_voxels_filtered = self.ray_vol_colli_lengths[mask]
-        ray_dir_basis_filtered = self.ray_direction_basis[:, mask, :]
-        colli_indices = self.ray_vol_colli_indices
-        ray_vol_colli_indices_filtered = [
-            idx for idx, mask_val in zip(colli_indices, mask) if mask_val
-        ]
+        if not mask.any():
+            # Return empty tensors with desired shapes
+            # first dim would be self.ray_vol_colli_lengths.shape[0]
+            ell_in_voxels_filtered = torch.empty(0, 0)
+            ray_dir_basis_filtered = torch.empty(3, 0, 3)
+            ray_vol_colli_indices_filtered = []
+        else:
+            # Apply mask to ray data
+            ell_in_voxels_filtered = self.ray_vol_colli_lengths[mask]
+            ray_dir_basis_filtered = self.ray_direction_basis[:, mask, :]
+            colli_indices = self.ray_vol_colli_indices
+            ray_vol_colli_indices_filtered = [
+                idx for idx, mask_val in zip(colli_indices, mask) if mask_val
+            ]
 
         return ell_in_voxels_filtered, ray_dir_basis_filtered, ray_vol_colli_indices_filtered
 
