@@ -1038,14 +1038,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         odd_mla_shift = np.mod(n_micro_lenses, 2)
 
         ml_ii_idx = 0
-        ml_jj_idx = 0
         # Iterate over each row of microlenses (y direction)
         for ml_ii in tqdm(range(-n_ml_half, n_ml_half + odd_mla_shift),
                           f'Computing rows of microlenses {self.backend}'):
 
             # Initialize a list for storing concatenated images of the current row
             full_img_row_list = [None] * 5
-
+            ml_jj_idx = 0
             # Iterate over each column of microlenses in the current row (x direction)
             for ml_jj in range(-n_ml_half, n_ml_half+odd_mla_shift):
 
@@ -1128,7 +1127,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if intensity:
             return self.intensity_images(volume, microlens_offset=offset)
         else:
-            return self.ret_and_azim_images(volume, microlens_offset=offset, mla_index=mla_index)
+            return self.ret_and_azim_images(volume, microlens_offset=offset,
+                                            mla_index=mla_index)
 
     def _concatenate_images(self, img_list1, img_list2, axis):
         if self.backend == BackEnds.NUMPY:
@@ -1188,8 +1188,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             return self.calc_cummulative_JM_of_ray_numpy(volume_in, microlens_offset)
         elif self.backend==BackEnds.PYTORCH:
             return self.calc_cummulative_JM_of_ray_torch(volume_in,
-                                                         microlens_offset,
-                                                         mla_index=(0, 0))
+                                        microlens_offset, mla_index=mla_index)
 
     def calc_cummulative_JM_of_ray_numpy(self, i, j,
                                          volume_in : BirefringentVolume, microlens_offset=[0,0]):
@@ -1261,6 +1260,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         ###### Mask out the rays that lead to nonzero pixels
         if self.use_lenslet_based_filtering:
+            # DEBUG
+            # err_message = f"mla_index {mla_index} is not in nonzero_pixels_dict"
+            # assert mla_index in self.nonzero_pixels_dict, err_message
             ell_in_voxels, ray_dir_basis, collision_indices = self._filter_ray_data(mla_index)
             if all_rays_at_once:
                 err_message = ("all_rays_at_once not implemented " +
@@ -1376,6 +1378,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                     pixels, accessed using `mla_index`.
         """
         mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
+
+        assert self.ray_vol_colli_lengths is not None, "Ray data must be populated first."
+        assert self.ray_direction_basis is not None, "Ray data must be populated first."
+        assert self.ray_vol_colli_indices is not None, "Ray data must be populated first."
+
         # Apply mask to ray data
         ell_in_voxels_filtered = self.ray_vol_colli_lengths[mask]
         ray_dir_basis_filtered = self.ray_direction_basis[:, mask, :]
@@ -1389,12 +1396,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def ret_and_azim_images(self, volume_in : BirefringentVolume,
                             microlens_offset=[0,0], mla_index=(0, 0)):
         '''Calculate retardance and azimuth values for a ray with a Jones Matrix.'''
-        # TODO: pass mla_index argument into the numpy and pytorch functions
         if self.backend==BackEnds.NUMPY:
+            # TODO: pass mla_index argument into the numpy function
             return self.ret_and_azim_images_numpy(volume_in, microlens_offset)
         elif self.backend==BackEnds.PYTORCH:
             return self.ret_and_azim_images_torch(volume_in, microlens_offset,
-                                                  mla_index=(0, 0))
+                                                  mla_index=mla_index)
 
     def ret_and_azim_images_numpy(self, volume_in : BirefringentVolume,
                                   microlens_offset=[0,0]):
@@ -1483,7 +1490,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Calculate Jones Matrices for all rays given the volume and microlens offset
         effective_JM = self.calc_cummulative_JM_of_ray(volume_in,
-                                            microlens_offset, mla_index=(0, 0))
+                                        microlens_offset, mla_index=mla_index)
 
         # Calculate retardance and azimuth from the effective Jones Matrices
         retardance = self.retardance(effective_JM)
@@ -1561,6 +1568,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         - self.nonzero_pixels_dict: A dictionary containing Boolean grids that
                 specify which pixles are nonzero, accessed using `mla_index`.
         """
+        err_message = f"mla_index {mla_index} is not in nonzero_pixels_dict"
+        assert mla_index in self.nonzero_pixels_dict, err_message
         reshaped_indices = self.ray_valid_indices.T
         nonzero_pixels_grid = self.nonzero_pixels_dict[mla_index]
         mask = np.array(
