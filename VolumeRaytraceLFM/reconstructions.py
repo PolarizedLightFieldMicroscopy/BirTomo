@@ -352,7 +352,10 @@ class Reconstructor:
     def optimizer_setup(self, volume_estimation, training_params):
         """Setup optimizer."""
         trainable_parameters = volume_estimation.get_trainable_variables()
-        return torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
+        # The learning rates specified are starting points for the optimizer.
+        parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
+                    {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
+        return torch.optim.Adam(parameters)
 
     def compute_losses(self, ret_meas, azim_meas, ret_image_current, azim_current, volume_estimation, training_params):
         if not torch.is_tensor(ret_meas):

@@ -1,5 +1,5 @@
 {
-    "n_epochs": 101,
+    "n_epochs": 301,
     "azimuth_weight": 0.5,
     "regularization_weight": 0.1,
     "lr_birefringence": 1e-3,
