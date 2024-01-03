@@ -588,7 +588,11 @@ class RayTraceLFM(OpticalElement):
         """
         num_mla = self.optical_info["n_micro_lenses"]
         num_pixels = self.optical_info["pixels_per_ml"]
-        # size = num_mla * num_pixels
+        mla_pixels = num_mla * num_pixels
+        err_message = ("mla_image must be a square matrix of shape " +
+                       f"{mla_pixels, mla_pixels} instead of {mla_image.shape}.")
+        assert mla_image.shape == (mla_pixels, mla_pixels), err_message
+
         nonzero_pixels_dict = {}
 
         if ray_valid_indices is None:
