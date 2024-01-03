@@ -21,7 +21,8 @@ DEVICE = torch.device(
 
 def recon_sphere():
     optical_info = setup_optical_parameters(
-        "config_settings/optical_config_sphere.json")
+        "config_settings/optical_config_sphere_large_vol.json")
+    foward_img_str = 'sphere6_thick2_31mla_17pix.npy'
     simulate = True
     if simulate:
         optical_system = {'optical_info': optical_info}
@@ -31,29 +32,29 @@ def recon_sphere():
         volume_GT = BirefringentVolume(
             backend=BACKEND,
             optical_info=optical_info,
-            volume_creation_args=volume_args.sphere_args6
+            volume_creation_args=volume_args.sphere_args6_thick
         )
-        # visualize_volume(volume_GT, optical_info)
+        visualize_volume(volume_GT, optical_info)
 
         simulator.forward_model(volume_GT)
         simulator.view_images()
         ret_image_meas = simulator.ret_img
         azim_image_meas = simulator.azim_img
         # Save the images as numpy arrays
-        if False:
+        if True:
             ret_numpy = ret_image_meas.detach().numpy()
-            np.save('forward_images/ret_voxel_pos_1mla_17pix.npy', ret_numpy)
+            np.save('forward_images/ret_' + foward_img_str, ret_numpy)
             azim_numpy = azim_image_meas.detach().numpy()
-            np.save('forward_images/azim_voxel_pos_1mla_17pix.npy', azim_numpy)
+            np.save('forward_images/azim_' + foward_img_str, azim_numpy)
     else:
         ret_image_meas = np.load(os.path.join(
-            'forward_images', 'ret_voxel_pos_1mla_17pix.npy'))
+            'forward_images', 'ret_' + foward_img_str))
         azim_image_meas = np.load(os.path.join(
-            'forward_images', 'azim_voxel_pos_1mla_17pix.npy'))
+            'forward_images', 'azim_' + foward_img_str))
 
     recon_optical_info = optical_info.copy()
     iteration_params = setup_iteration_parameters(
-        "config_settings/iter_config_sphere.json")
+        "config_settings/iter_config_sphere_large_vol.json")
     initial_volume = BirefringentVolume(
         backend=BACKEND,
         optical_info=recon_optical_info,
@@ -176,4 +177,5 @@ if __name__ == '__main__':
     #     f"volumes/2024-01-02_23-26-15/volume_ep_300_threshold_{ths}_bir.h5",
     #     optical_info, ths
     # )
-    recon_continuation()
+    # recon_continuation()
+    recon_sphere()
