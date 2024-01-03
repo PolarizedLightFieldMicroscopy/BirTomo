@@ -4,6 +4,8 @@ and BirefringentRaytraceLFM class
 """
 from math import floor
 from tqdm import tqdm
+from timeit import default_timer as timer
+import time
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
@@ -887,6 +889,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.ray_valid_indices_all = None
         self.MLA_volume_geometry_ready = False
         self.verbose = True
+        self.mla_execution_times = {}
 
     def __str__(self):
         info = (
@@ -1064,8 +1067,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 # Generate (intensity or ret/azim) images for the current microlens,
                 #   by passing an offset to this function
                 #   depending on the microlens and the super resolution
-                img_list = self._generate_images(volume_in, current_offset,
-                                intensity, mla_index=(ml_ii_idx, ml_jj_idx))
+                current_mla_index = (ml_ii_idx, ml_jj_idx)
+                start_time = time.time()
+                img_list = self.generate_images(volume_in, current_offset,
+                                intensity, mla_index=current_mla_index)
+                execution_time = time.time() - start_time
+                mla_index = (ml_ii_idx, ml_jj_idx)
+                if mla_index not in self.mla_execution_times:
+                    self.mla_execution_times[mla_index] = 0
+                self.mla_execution_times[mla_index] += execution_time
 
                 # Concatenate the generated images with the images of the current row
                 if full_img_row_list[0] is None:
@@ -1130,7 +1140,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Calculate and return the final offset for the current microlens
         return scaled_indices + central_offset - half_voxel_span
 
-    def _generate_images(self, volume, offset, intensity, mla_index=(0, 0)):
+    def generate_images(self, volume, offset, intensity, mla_index=(0, 0)):
+        """Generates images for a single microlens, by passing an offset
+        to the ray tracing process."""
         if intensity:
             return self.intensity_images(volume, microlens_offset=offset)
         else:
