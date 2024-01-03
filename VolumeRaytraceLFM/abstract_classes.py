@@ -583,10 +583,16 @@ class RayTraceLFM(OpticalElement):
             nonzero_pixels_dict: Mask for which rays lead to nonzero pixels.
                 Keys are tuples of (lenslet_row, lenslet_col).
                 Values are boolean arrays of shape (num_pixels, num_pixels).
+        Class attributes used:
+        - self.ray_valid_indices: 2D indices of the valid rays.
         """
         num_mla = self.optical_info["n_micro_lenses"]
         num_pixels = self.optical_info["pixels_per_ml"]
-        # size = num_mla * num_pixels
+        mla_pixels = num_mla * num_pixels
+        err_message = ("mla_image must be a square matrix of shape " +
+                       f"{mla_pixels, mla_pixels} instead of {mla_image.shape}.")
+        assert mla_image.shape == (mla_pixels, mla_pixels), err_message
+
         nonzero_pixels_dict = {}
 
         if ray_valid_indices is None:
@@ -603,12 +609,13 @@ class RayTraceLFM(OpticalElement):
                     i * num_pixels : (i + 1) * num_pixels,
                     j * num_pixels : (j + 1) * num_pixels
                     ]
-                # Create a boolean mask based on whether or not the image value
-                #   at each index is zero.
-                mask = np.array(
-                    [lenslet_image[idx[0], idx[1]] != 0 for idx in reshaped_indices]
-                )
-                # Fill values into variables nonzero_pixels
+                # Initialize a mask of the same shape as lenslet_image
+                mask = np.full(lenslet_image.shape, False, dtype=bool)
+                # Set True in the mask only for indices in reshaped_indices
+                # and where lenslet_image is not zero.
+                for idx in reshaped_indices:
+                    if lenslet_image[idx[0], idx[1]] != 0:
+                        mask[idx[0], idx[1]] = True
                 nonzero_pixels_dict[(i, j)] = mask
 
         return nonzero_pixels_dict

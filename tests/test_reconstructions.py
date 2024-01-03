@@ -1,5 +1,7 @@
+"""Tests for the reconstructions module."""
 import numpy as np
 import pytest
+from tests.fixtures_optical_info import set_optical_info
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.reconstructions import (
@@ -10,22 +12,7 @@ from VolumeRaytraceLFM.reconstructions import (
 
 @pytest.fixture
 def recon_info():
-    optical_info = {
-        "volume_shape": [3, 5, 5],
-        "axial_voxel_size_um": 1.0,
-        "cube_voxels": True,
-        "pixels_per_ml": 17,
-        "n_micro_lenses": 1,
-        "n_voxels_per_ml": 1,
-        "M_obj": 60,
-        "na_obj": 1.2,
-        "n_medium": 1.35,
-        "wavelength": 0.550,
-        "camera_pix_pitch": 6.5,
-        "polarizer": [[1, 0], [0, 1]],
-        "analyzer": [[1, 0], [0, 1]],
-        "polarizer_swing": 0.03
-    }
+    optical_info = set_optical_info([3, 5, 5], 17, 1)
     ret_image_meas = np.random.rand(17, 17)
     azim_image_meas = np.random.rand(17, 17)
     initial_volume = BirefringentVolume(

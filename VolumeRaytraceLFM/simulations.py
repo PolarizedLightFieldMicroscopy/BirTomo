@@ -53,6 +53,7 @@ class ForwardModel:
         # Linking with the optical system
         self.optical_info = optical_system['optical_info']
         self.rays = self.setup_raytracer(device=device)
+        self.rays.use_lenslet_based_filtering = False
         # Placeholders
         self.ret_img = None
         self.azim_img = None

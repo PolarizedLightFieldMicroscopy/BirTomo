@@ -65,6 +65,7 @@ class ReconstructionConfig:
         self.gt_volume = gt_vol
         self.ret_img_pred = None
         self.azim_img_pred = None
+        self.recon_directory = None
 
     def _to_numpy(self, image):
         """Convert image to a numpy array, if it's not already."""
@@ -76,10 +77,29 @@ class ReconstructionConfig:
             raise TypeError("Image must be a PyTorch Tensor or a numpy array")
 
     def save(self, parent_directory):
-        """Save the ReconstructionConfig to the specified directory."""
+        """Save the ReconstructionConfig to the specified directory.
+        Args:
+            parent_directory (str): Path to the directory where the
+                config_parameters directory will be created.
+        Returns:
+            None
+        Class instance attibutes saved:
+            - self.optical_info
+            - self.retardance_image
+            - self.azimuth_image
+            - self.interation_parameters
+        (if available)
+            - self.initial_volume
+            - self.gt_volume
+        Class instance attributes modified:
+            - self.recon_directory
+        """
+        self.recon_directory = parent_directory
+
         directory = os.path.join(parent_directory, "config_parameters")
         if not os.path.exists(directory):
             os.makedirs(directory)
+
         # Save the retardance and azimuth images
         np.save(os.path.join(directory, 'ret_image.npy'), self.retardance_image)
         np.save(os.path.join(directory, 'azim_image.npy'), self.azimuth_image)
@@ -158,6 +178,7 @@ class Reconstructor:
         self.volume_initial_guess = recon_info.initial_volume
         self.iteration_params = recon_info.interation_parameters
         self.volume_ground_truth = recon_info.gt_volume
+        self.recon_directory = recon_info.recon_directory
         if self.volume_ground_truth is not None:
             self.birefringence_simulated = self.volume_ground_truth.get_delta_n().detach()
             mip_image = convert_volume_to_2d_mip(
@@ -555,7 +576,10 @@ class Reconstructor:
         Method to perform the actual reconstruction based on the provided parameters.
         """
         if output_dir is None:
-            output_dir = create_unique_directory("reconstructions")
+            if self.recon_directory is not None:
+                output_dir = self.recon_directory
+            else:
+                output_dir = create_unique_directory("reconstructions")
 
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
