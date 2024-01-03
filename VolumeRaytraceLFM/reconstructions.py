@@ -6,6 +6,7 @@ import json
 import torch
 import numpy as np
 from tqdm import tqdm
+import csv
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
@@ -506,8 +507,9 @@ class Reconstructor:
             fig.canvas.flush_events()
             time.sleep(0.1)
             if ep % 10 == 0:
-                plt.savefig(os.path.join(
-                    output_dir, f"optim_ep_{'{:02d}'.format(ep)}.pdf"))
+                filename = f"optim_ep_{'{:02d}'.format(ep)}.pdf"
+                plt.savefig(os.path.join(output_dir, filename))
+                self.save_loss_lists_to_csv()
             time.sleep(0.1)
         if ep % 100 == 0:
             my_description = "Volume estimation after " + \
@@ -571,6 +573,26 @@ class Reconstructor:
                  })
             my_loss.line_chart(df_loss)
 
+    def save_loss_lists_to_csv(self):
+        """Save the loss lists to a csv file.
+
+        Class instance attributes accessed:
+        - self.recon_directory
+        - self.loss_total_list
+        - self.loss_data_term_list
+        - self.loss_reg_term_list
+        """
+        filename = "loss.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+
+        with open(filepath, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Total Loss", "Data Term Loss", "Regularization Term Loss"])
+            for total, data_term, reg_term in zip(self.loss_total_list, 
+                                                  self.loss_data_term_list, 
+                                                  self.loss_reg_term_list):
+                writer.writerow([total, data_term, reg_term])
+
     def reconstruct(self, output_dir=None, use_streamlit=False):
         """
         Method to perform the actual reconstruction based on the provided parameters.
@@ -618,6 +640,8 @@ class Reconstructor:
                     progress_bar, ep, n_epochs, my_recon_img_plot, my_loss
                 )
             self.visualize_and_save(ep, figure, output_dir)
+
+        self.save_loss_lists_to_csv()
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
         plt.show()
