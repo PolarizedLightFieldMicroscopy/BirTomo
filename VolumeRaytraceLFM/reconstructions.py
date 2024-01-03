@@ -417,6 +417,8 @@ class Reconstructor:
             (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
             (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
         )
+        
+        # cosine_similarity = torch.nn.CosineSimilarity(dim=0)
         if isinstance(params['regularization_weight'], list):
             params['regularization_weight'] = params['regularization_weight'][0]
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
@@ -509,17 +511,18 @@ class Reconstructor:
             fig.canvas.draw()
             fig.canvas.flush_events()
             time.sleep(0.1)
+            self.save_loss_lists_to_csv()
             if ep % 10 == 0:
-                filename = f"optim_ep_{'{:02d}'.format(ep)}.pdf"
+                filename = f"optim_ep_{'{:03d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
-                self.save_loss_lists_to_csv()
+                # self.save_loss_lists_to_csv()
             time.sleep(0.1)
         if ep % 100 == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
                 os.path.join(
-                    output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"),
+                    output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
                 description=my_description
             )
         return
@@ -619,7 +622,7 @@ class Reconstructor:
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        figure = setup_visualization()
+        figure = setup_visualization(window_title=output_dir)
 
         n_epochs = self.iteration_params['n_epochs']
         if use_streamlit:
@@ -645,6 +648,13 @@ class Reconstructor:
             self.visualize_and_save(ep, figure, output_dir)
 
         self.save_loss_lists_to_csv()
+        my_description = "Volume estimation after " + \
+            str(ep) + " iterations."
+        self.volume_pred.save_as_file(
+            os.path.join(
+                output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
+            description=my_description
+        )
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
         plt.show()
