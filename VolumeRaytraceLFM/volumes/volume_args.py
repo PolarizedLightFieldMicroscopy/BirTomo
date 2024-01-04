@@ -98,6 +98,15 @@ sphere_args6 = {
     }
 }
 
+sphere_args6_thick = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [6.5, 6.5, 6.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': 0.01,
+        'border_thickness': 2
+    }
+}
 
 sphere_shifted = {
     'init_mode': 'ellipsoid',

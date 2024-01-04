@@ -5,5 +5,6 @@
     "lr_birefringence": 1e-3,
     "lr_optic_axis": 1e-2,
     "output_posfix": "",
-    "loss_function": ""
+    "loss_function": "",
+    "notes": "ground truth is sphere_args6_thick"
 }

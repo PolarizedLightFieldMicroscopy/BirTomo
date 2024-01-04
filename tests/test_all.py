@@ -1,7 +1,13 @@
+import numpy as np
+import torch
 import pytest
 import matplotlib.pyplot as plt
 import copy
-from VolumeRaytraceLFM.birefringence_implementations import *
+from tests.fixtures_optical_info import set_optical_info
+from VolumeRaytraceLFM.abstract_classes import BackEnds
+from VolumeRaytraceLFM.birefringence_implementations import (
+    BirefringentVolume, BirefringentRaytraceLFM
+)
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
 
 
@@ -15,19 +21,8 @@ def global_data():
     # Set torch precision to Double to match numpy
     torch.set_default_dtype(torch.float64)
 
-    # Fetch default optical info
-    optical_info = OpticalElement.get_optical_info_template()
-
-    optical_info['volume_shape'] = [11, 11, 11]
-    optical_info['axial_voxel_size_um'] = 1.0
-    optical_info['pixels_per_ml'] = 5
-    optical_info['na_obj'] = 1.2
+    optical_info = set_optical_info([11, 11, 11], 5, 1)
     optical_info['n_medium'] = 1.52
-    optical_info['wavelength'] = 0.550
-    optical_info['n_micro_lenses'] = 1
-    optical_info['n_voxels_per_ml'] = 1
-    optical_info['polarizer'] = np.array([[1, 0], [0, 1]])
-    optical_info['analyzer'] = np.array([[1, 0], [0, 1]])
 
     return {'optical_info': optical_info}
 
@@ -470,10 +465,17 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
 
     # Generate a volume with random everywhere
     voxel_torch_random = BirefringentVolume(
-        backend=BackEnds.PYTORCH,  optical_info=optical_info, volume_creation_args={'init_mode': 'ellipsoid'})
+        backend=BackEnds.PYTORCH,
+        optical_info=optical_info,
+        volume_creation_args={'init_mode': 'ellipsoid'}
+    )
     # Copy the volume, to have exactly the same things
-    voxel_numpy_random = BirefringentVolume(backend=BackEnds.NUMPY,  optical_info=optical_info,
-                                            Delta_n=voxel_torch_random.get_delta_n().numpy(), optic_axis=voxel_torch_random.get_optic_axis().numpy())
+    voxel_numpy_random = BirefringentVolume(
+        backend=BackEnds.NUMPY,
+        optical_info=optical_info,
+        Delta_n=voxel_torch_random.get_delta_n().numpy(),
+        optic_axis=voxel_torch_random.get_optic_axis().numpy()
+    )
 
     assert BF_raytrace_numpy.optical_info == voxel_numpy_random.optical_info, 'Mismatch on RayTracer and volume optical_info numpy'
     assert BF_raytrace_torch.optical_info == voxel_torch_random.optical_info, 'Mismatch on RayTracer and volume optical_info torch'
@@ -593,7 +595,9 @@ def speed_speed(global_data, volume_init_mode):
     optical_info['n_micro_lenses'] = 5
 
     BF_raytrace_torch = BirefringentRaytraceLFM(
-        backend=BackEnds.PYTORCH, optical_info=optical_info)
+        backend=BackEnds.PYTORCH,
+        optical_info=optical_info
+    )
     BF_raytrace_torch.compute_rays_geometry()
 
     volume_torch_random = BF_raytrace_torch.init_volume(
@@ -608,8 +612,7 @@ def speed_speed(global_data, volume_init_mode):
     # Set all gradients to zero
     optimizer.zero_grad()
 
-    [ret_image, azim_image] = BF_raytrace_torch.ray_trace_through_volume(
-        volume_torch_random)
+    [ret_image, azim_image] = BF_raytrace_torch.ray_trace_through_volume(volume_torch_random)
 
     import torch.autograd.profiler as profiler
     with profiler.profile(with_stack=True, profile_memory=True) as prof:
@@ -793,7 +796,7 @@ def main():
 
 
 def check_azimuth_images(img1, img2, message="Error when comparing azimuth computations"):
-    ''' Compares two azimuth images, taking into account that atan2 output
+    '''Compares two azimuth images, taking into account that atan2 output
     of 0 and pi is equivalent'''
     if not np.all(np.isclose(img1, img2, atol=1e-5)):
         # Check if the difference is a multiple of pi
@@ -803,6 +806,7 @@ def check_azimuth_images(img1, img2, message="Error when comparing azimuth compu
 
 
 def plot_azimuth(img):
+    """Plot azimuth image, with polar coordinates"""
     ctr = [(img.shape[0] - 1) / 2, (img.shape[1] - 1) / 2]
     i = np.linspace(0, img.shape[0] - 1, img.shape[0])
     j = np.linspace(0, img.shape[0] - 1, img.shape[0])
@@ -823,7 +827,8 @@ def plot_azimuth(img):
     # plt.colorbar()
     plt.title('Azimuth (degrees)')
     # Add colorbar, make sure to specify tick locations to match desired ticklabels
-    # cbar.ax.set_yticklabels(['-pi', '-pi/2', '-pi/4', '-pi/8', '0', 'pi/8', 'pi/4', 'pi/2', 'pi'])  # vertically oriented colorbar
+    # vertically oriented colorbar
+    # cbar.ax.set_yticklabels(['-pi', '-pi/2', '-pi/4', '-pi/8', '0', 'pi/8', 'pi/4', 'pi/2', 'pi'])
     cbar = fig.colorbar(cax, ticks=np.rad2deg(
         [-np.pi, -np.pi/2, -np.pi/3, -np.pi/4, -np.pi/6, 0,
          np.pi/6, np.pi/4, np.pi/3, np.pi/2, np.pi])

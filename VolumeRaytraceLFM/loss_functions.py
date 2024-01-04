@@ -79,3 +79,42 @@ def apply_loss_function_and_reg(loss_type, reg_types, retardance_measurement, or
 
     total_loss = data_term + regularization_term_total
     return total_loss, data_term, regularization_term_total
+
+
+def cosine_similarity_loss_scaled(optic_axis, delta_n):
+    """
+    Compute a loss that encourages vectors in optic_axis to point in
+    similar directions, scaled by the values in delta_n.
+
+    Args:
+        optic_axis (torch.Tensor): Tensor of shape (3, N) where N is the
+                                   number of 3D vectors.
+        delta_n (torch.Tensor): Tensor of shape (N,) with scaling
+                                factors for each vector.
+
+    Returns:
+        torch.Tensor: Scalar tensor representing the loss.
+    """
+
+    # Normalize the vectors to unit length
+    normalized_vectors = F.normalize(optic_axis, p=2, dim=0)
+
+    # Compute pairwise cosine similarity (N, N)
+    cos_sim_matrix = torch.matmul(normalized_vectors.transpose(0, 1), normalized_vectors)
+
+    # Scale the cosine similarity matrix by delta_n
+    # We use an outer product to create a scaling matrix of shape (N, N)
+    scaling_matrix = torch.outer(delta_n, delta_n)
+    scaled_cos_sim_matrix = cos_sim_matrix * scaling_matrix
+
+    # Ignore the diagonal elements by setting them to zero
+    scaled_cos_sim_matrix.fill_diagonal_(0)
+
+    # Loss is the negative sum of the off-diagonal elements
+    loss = -scaled_cos_sim_matrix.sum()
+
+    # Normalize the loss by the number of comparisons
+    num_vectors = optic_axis.size(1)
+    loss /= (num_vectors * (num_vectors - 1))
+
+    return loss
