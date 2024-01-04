@@ -3,6 +3,7 @@ import matplotlib
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
 
+
 def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to_plot=None, colormap='inferno', use_matplotlib=False):
     try:
         volume_shape = optical_config['volume_shape']
@@ -12,18 +13,19 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
         print('Error in plot_ray_path: optical_config should be a dictionary containing the required variables...')
         return
 
-    z1,y1,x1 = ray_entry
-    z2,y2,x2 = ray_exit
+    z1, y1, x1 = ray_entry
+    z2, y2, x2 = ray_exit
     offset = 0
-    z_indices = np.array([x for (x,y,z) in colition_indexes])
-    y_indices = np.array([y for (x,y,z) in colition_indexes])
-    x_indices = np.array([z for (x,y,z) in colition_indexes])
+    z_indices = np.array([x for (x, y, z) in colition_indexes])
+    y_indices = np.array([y for (x, y, z) in colition_indexes])
+    x_indices = np.array([z for (x, y, z) in colition_indexes])
 
     # Create box around volume
     voxels = np.zeros(volume_shape)
 
-    # Define grid 
-    z_coords,y_coords,x_coords = np.indices(np.array(voxels.shape) + 1).astype(float)
+    # Define grid
+    z_coords, y_coords, x_coords = np.indices(
+        np.array(voxels.shape) + 1).astype(float)
 
     x_coords += 0.5
     y_coords += 0.5
@@ -32,25 +34,27 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
     y_coords *= dxy
     z_coords *= dz
 
-    voxels[z_indices,y_indices,x_indices] = 1
+    voxels[z_indices, y_indices, x_indices] = 1
 
     # Fast rendering with matplotlib
     if use_matplotlib:
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
-        ax.scatter((z_indices+offset)*dxy,(y_indices+offset)*dxy,(x_indices+offset)*dxy, s=dxy)
-        ax.scatter(z1,y1,x1, c='red')
-        ax.scatter(z2,y2,x2, c='green')
+        ax.scatter((z_indices+offset)*dxy, (y_indices+offset)
+                   * dxy, (x_indices+offset)*dxy, s=dxy)
+        ax.scatter(z1, y1, x1, c='red')
+        ax.scatter(z2, y2, x2, c='green')
 
         facecolor = '#FF00000F'
         edgecolor = '#FF0000FF'
-        voxels[z_indices,y_indices,x_indices] = 1
+        voxels[z_indices, y_indices, x_indices] = 1
 
-        facecolors = np.where(voxels==1, facecolor, '#0000000F')
-        edgecolors = np.where(voxels==1, edgecolor, '#0000000F')
+        facecolors = np.where(voxels == 1, facecolor, '#0000000F')
+        edgecolors = np.where(voxels == 1, edgecolor, '#0000000F')
 
-        ax.voxels(z_coords, y_coords, x_coords, voxels, facecolors=facecolors, edgecolors=edgecolors)
-        ax.plot([z1,z2],[y1,y2],[x1,x2])
+        ax.voxels(z_coords, y_coords, x_coords, voxels,
+                  facecolors=facecolors, edgecolors=edgecolors)
+        ax.plot([z1, z2], [y1, y2], [x1, x2])
         plt.xlabel('Axial')
         plt.ylabel('Y axis')
         # show backward mesh?
@@ -60,33 +64,36 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
     else:
         import plotly.graph_objects as go
         # Draw entry and exit point
-        fig = go.Figure(data=go.Scatter3d(x=[z1,z2],y=[y1,y2],z=[x1,x2],
-            marker=dict(
+        fig = go.Figure(data=go.Scatter3d(x=[z1, z2], y=[y1, y2], z=[x1, x2],
+                                          marker=dict(
             size=12,
             color='blue',  # set color to an array/list of desired values
             colorscale='Viridis',   # choose a colorscale
-            ),
+        ),
             line=dict(
             width=3,
             color='blue',  # set color to an array/list of desired values
             colorscale='Viridis',   # choose a colorscale
-            )))
+        )))
         # Draw the whole volume span
         fig.add_mesh3d(
-                # 8 vertices of a cube
-                x=[0, 0, volume_size_um[0], volume_size_um[0], 0, 0, volume_size_um[0], volume_size_um[0]],
-                y=[0, volume_size_um[1], volume_size_um[1], 0, 0, volume_size_um[1], volume_size_um[1], 0],
-                z=[0, 0, 0, 0, volume_size_um[2], volume_size_um[2], volume_size_um[2], volume_size_um[2]],
-                colorbar_title='z',
-                colorscale='inferno',
-                opacity=0.1,
-                # Intensity of each vertex, which will be interpolated and color-coded
-                intensity = np.linspace(0, 1, 8, endpoint=True),
-                # i, j and k give the vertices of triangles
-                i = [7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-                j = [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-                k = [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-            )
+            # 8 vertices of a cube
+            x=[0, 0, volume_size_um[0], volume_size_um[0],
+               0, 0, volume_size_um[0], volume_size_um[0]],
+            y=[0, volume_size_um[1], volume_size_um[1], 0,
+               0, volume_size_um[1], volume_size_um[1], 0],
+            z=[0, 0, 0, 0, volume_size_um[2], volume_size_um[2],
+               volume_size_um[2], volume_size_um[2]],
+            colorbar_title='z',
+            colorscale='inferno',
+            opacity=0.1,
+            # Intensity of each vertex, which will be interpolated and color-coded
+            intensity=np.linspace(0, 1, 8, endpoint=True),
+            # i, j and k give the vertices of triangles
+            i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+            j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+            k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+        )
         # Draw all the voxels
         cmap = matplotlib.cm.get_cmap(colormap)
         for vix in range(len(z_indices)):
@@ -96,25 +103,33 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
                 rgba = cmap(opacity)
                 voxel_color = f'rgb({int(rgba[0]*255)},{int(rgba[1]*255)},{int(rgba[2]*255)})'
             offset = 0
-            voxel_coord_low = [(z_indices[vix]+offset)*dz, (y_indices[vix]+offset)*dxy, (x_indices[vix]+offset)*dxy]
+            voxel_coord_low = [(z_indices[vix]+offset)*dz,
+                               (y_indices[vix]+offset)*dxy, (x_indices[vix]+offset)*dxy]
             offset = 1
-            voxel_coord_top = [(z_indices[vix]+offset)*dz, (y_indices[vix]+offset)*dxy, (x_indices[vix]+offset)*dxy]
+            voxel_coord_top = [(z_indices[vix]+offset)*dz,
+                               (y_indices[vix]+offset)*dxy, (x_indices[vix]+offset)*dxy]
             fig.add_mesh3d(
                 # 8 vertices of a cube
-                x=[voxel_coord_low[0], voxel_coord_low[0], voxel_coord_top[0], voxel_coord_top[0], voxel_coord_low[0], voxel_coord_low[0], voxel_coord_top[0], voxel_coord_top[0]],
-                y=[voxel_coord_low[1], voxel_coord_top[1], voxel_coord_top[1], voxel_coord_low[1], voxel_coord_low[1], voxel_coord_top[1], voxel_coord_top[1], voxel_coord_low[1]],
-                z=[voxel_coord_low[2], voxel_coord_low[2], voxel_coord_low[2], voxel_coord_low[2], voxel_coord_top[2], voxel_coord_top[2], voxel_coord_top[2], voxel_coord_top[2]],
+                x=[voxel_coord_low[0], voxel_coord_low[0], voxel_coord_top[0], voxel_coord_top[0],
+                    voxel_coord_low[0], voxel_coord_low[0], voxel_coord_top[0], voxel_coord_top[0]],
+                y=[voxel_coord_low[1], voxel_coord_top[1], voxel_coord_top[1], voxel_coord_low[1],
+                    voxel_coord_low[1], voxel_coord_top[1], voxel_coord_top[1], voxel_coord_low[1]],
+                z=[voxel_coord_low[2], voxel_coord_low[2], voxel_coord_low[2], voxel_coord_low[2],
+                    voxel_coord_top[2], voxel_coord_top[2], voxel_coord_top[2], voxel_coord_top[2]],
                 alphahull=5,
                 opacity=opacity/2,
                 color=voxel_color)
         fig.update_layout(
-        scene = dict(
-                    xaxis = dict(nticks=volume_shape[0], range=[0, volume_size_um[0]]),
-                    yaxis = dict(nticks=volume_shape[1], range=[0, volume_size_um[1]]),
-                    zaxis = dict(nticks=volume_shape[2], range=[0, volume_size_um[2]]),
-                    xaxis_title='Axial dimension',),
-        # width=700,
-        margin=dict(r=0, l=0, b=0, t=0)
+            scene=dict(
+                xaxis=dict(nticks=volume_shape[0], range=[
+                           0, volume_size_um[0]]),
+                yaxis=dict(nticks=volume_shape[1], range=[
+                           0, volume_size_um[1]]),
+                zaxis=dict(nticks=volume_shape[2], range=[
+                           0, volume_size_um[2]]),
+                xaxis_title='Axial dimension',),
+            # width=700,
+            margin=dict(r=0, l=0, b=0, t=0)
         )
         # Disable legend and colorbar
         fig.update_traces(showlegend=False)
@@ -122,34 +137,37 @@ def plot_ray_path(ray_entry, ray_exit, colition_indexes, optical_config, data_to
         fig.update(layout_coloraxis_showscale=False)
     fig.show()
 
+
 def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=None, use_matplotlib=False):
 
-    i_shape,j_shape = ray_entry.shape[1:]
+    i_shape, j_shape = ray_entry.shape[1:]
 
     # Grab all rays
-    all_entry = np.reshape(ray_entry,[ray_entry.shape[0],i_shape*j_shape])
-    all_exit = np.reshape(ray_exit,[ray_entry.shape[0],i_shape*j_shape])
-    x_entry,y_entry,z_entry = all_entry[1,:],all_entry[2,:],all_entry[0,:]
-    x_exit,y_exit,z_exit = all_exit[1,:],all_exit[2,:],all_exit[0,:]
+    all_entry = np.reshape(ray_entry, [ray_entry.shape[0], i_shape*j_shape])
+    all_exit = np.reshape(ray_exit, [ray_entry.shape[0], i_shape*j_shape])
+    x_entry, y_entry, z_entry = all_entry[1,
+                                          :], all_entry[2, :], all_entry[0, :]
+    x_exit, y_exit, z_exit = all_exit[1, :], all_exit[2, :], all_exit[0, :]
 
     # grab the ray index to color them
     ray_index = list(range(len(x_exit)))
     if use_matplotlib:
         # And plot them
         plt.clf()
-        ax = plt.subplot(1,3,1)
+        ax = plt.subplot(1, 3, 1)
         plt.scatter(x_entry, y_entry, c=ray_index, cmap=colormap)
         ax.set_box_aspect(1)
         plt.title('entry rays coords')
-        ax = plt.subplot(1,3,2)
+        ax = plt.subplot(1, 3, 2)
         plt.scatter(x_exit, y_exit, c=ray_index, cmap=colormap)
         ax.set_box_aspect(1)
         plt.title('exit rays coords')
-        ax = plt.subplot(1,3,3, projection='3d')
+        ax = plt.subplot(1, 3, 3, projection='3d')
         for ray_ix in range(len(x_entry)):
             cmap = matplotlib.cm.get_cmap(colormap)
             rgba = cmap(ray_ix/len(x_entry))
-            plt.plot([x_entry[ray_ix],x_exit[ray_ix]],[y_entry[ray_ix],y_exit[ray_ix]],[z_entry[ray_ix],z_exit[ray_ix]], color=rgba)
+            plt.plot([x_entry[ray_ix], x_exit[ray_ix]], [y_entry[ray_ix], y_exit[ray_ix]], [
+                     z_entry[ray_ix], z_exit[ray_ix]], color=rgba)
 
         # Add area covered by MLAs
         if optical_config is not None:
@@ -157,11 +175,13 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
             m = optical_config.volume_config.volume_size_um[1]/2
             n_mlas = optical_config.mla_config.n_mlas//2
             mla_sample_pitch = optical_config.mla_config.pitch / optical_config.PSF_config.M
-            x = [m-n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch,m-n_mlas*mla_sample_pitch]
-            y = [m-n_mlas*mla_sample_pitch,m-n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch,m+n_mlas*mla_sample_pitch]
-            z = [mz,mz,mz,mz]
-            verts = [list(zip(x,y,z))]
-            ax.add_collection3d(Poly3DCollection(verts,alpha=.20))
+            x = [m-n_mlas*mla_sample_pitch, m+n_mlas*mla_sample_pitch,
+                 m+n_mlas*mla_sample_pitch, m-n_mlas*mla_sample_pitch]
+            y = [m-n_mlas*mla_sample_pitch, m-n_mlas*mla_sample_pitch,
+                 m+n_mlas*mla_sample_pitch, m+n_mlas*mla_sample_pitch]
+            z = [mz, mz, mz, mz]
+            verts = [list(zip(x, y, z))]
+            ax.add_collection3d(Poly3DCollection(verts, alpha=.20))
 
         # ax.set_box_aspect((1,1,5))
         plt.xlabel('x')
@@ -175,22 +195,27 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
         # Plot entry and exit?
         if False:
             fig = make_subplots(rows=1, cols=3,
-                                specs=[[{'is_3d': False}, {'is_3d': False}, {'is_3d': True}]],
-                                subplot_titles=("Entry rays coords", "Exit rays coords", "Rays through volume"),
+                                specs=[
+                                    [{'is_3d': False}, {'is_3d': False}, {'is_3d': True}]],
+                                subplot_titles=(
+                                    "Entry rays coords", "Exit rays coords", "Rays through volume"),
                                 print_grid=True)
-            fig.update_layout(autosize=True, scene=dict(aspectratio = dict( x=1, y=1, z=1 ), aspectmode = 'manual'))#height=300, width=900)
-            fig.append_trace(go.Scatter(x=x_entry, y=y_entry, mode='markers', marker=dict(color=ray_index, colorscale=colormap)), row=1, col=1)
-            fig.append_trace(go.Scatter(x=x_exit, y=y_exit, mode='markers', marker=dict(color=ray_index, colorscale=colormap)), row=1, col=2)
+            fig.update_layout(autosize=True, scene=dict(aspectratio=dict(
+                x=1, y=1, z=1), aspectmode='manual'))  # height=300, width=900)
+            fig.append_trace(go.Scatter(x=x_entry, y=y_entry, mode='markers', marker=dict(
+                color=ray_index, colorscale=colormap)), row=1, col=1)
+            fig.append_trace(go.Scatter(x=x_exit, y=y_exit, mode='markers', marker=dict(
+                color=ray_index, colorscale=colormap)), row=1, col=2)
 
             # Plot rays
             for ray_ix in range(len(x_entry)):
                 cmap = matplotlib.cm.get_cmap(colormap)
                 rgba = cmap(ray_ix/len(x_entry))
                 if not np.isnan(x_entry[ray_ix]) and not np.isnan(x_exit[ray_ix]):
-                    fig.append_trace(go.Scatter3d(x=[x_entry[ray_ix],x_exit[ray_ix]], y=[y_entry[ray_ix],y_exit[ray_ix]],z=[z_entry[ray_ix],z_exit[ray_ix]],
-                        marker=dict(color=rgba, size=4), 
-                        line=dict(color=rgba))
-                    , row=1, col=3)
+                    fig.append_trace(go.Scatter3d(x=[x_entry[ray_ix], x_exit[ray_ix]], y=[y_entry[ray_ix], y_exit[ray_ix]], z=[z_entry[ray_ix], z_exit[ray_ix]],
+                                                  marker=dict(
+                                                      color=rgba, size=4),
+                                                  line=dict(color=rgba)), row=1, col=3)
         else:
             fig = make_subplots(rows=1, cols=1,
                                 specs=[[{'is_3d': True}]],
@@ -214,19 +239,21 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
             all_z[2::3] = np.NaN
 
             # prepare colors for each line
-            rgba = [ray_ix/len(all_x) for ray_ix in range(len(all_x))] 
+            rgba = [ray_ix/len(all_x) for ray_ix in range(len(all_x))]
             # Draw the lines and markers
             fig.append_trace(go.Scatter3d(z=all_x, y=all_y, x=all_z,
-                marker=dict(color=rgba, colorscale=colormap, size=4), 
-                line=dict(color=rgba, colorscale=colormap, ), 
-                connectgaps=False, mode='lines+markers'
-                ),
-                row=1, col=1)
+                                          marker=dict(
+                                              color=rgba, colorscale=colormap, size=4),
+                                          line=dict(
+                                              color=rgba, colorscale=colormap, ),
+                                          connectgaps=False, mode='lines+markers'
+                                          ),
+                             row=1, col=1)
             fig.update_layout(
-            scene = dict(
-                        xaxis_title='Axial dimension',),
-            # width=700,
-            margin=dict(r=0, l=0, b=0, t=0)
+                scene=dict(
+                    xaxis_title='Axial dimension',),
+                # width=700,
+                margin=dict(r=0, l=0, b=0, t=0)
             )
 
         fig.show()

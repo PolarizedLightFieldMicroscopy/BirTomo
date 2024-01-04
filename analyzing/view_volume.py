@@ -25,15 +25,16 @@ print("Volume creation args:", vol_args)
 volume_filename = os.path.join('reconstructions', dir, 'volume_ep_200.h5')
 
 volume = BirefringentVolume.init_from_file(
-                                volume_filename,
-                                # backend=backend,
-                                optical_info=optical_info
-                                )
+    volume_filename,
+    # backend=backend,
+    optical_info=optical_info
+)
 
 # Plot volume
 with torch.no_grad():
     # Plot the optic axis and birefringence within the volume
     plotly_figure = volume.plot_lines_plotly()
     # Append volumes to plot
-    plotly_figure = volume.plot_volume_plotly(optical_info, voxels_in=volume.get_delta_n(), opacity=0.02, fig=plotly_figure)
+    plotly_figure = volume.plot_volume_plotly(
+        optical_info, voxels_in=volume.get_delta_n(), opacity=0.02, fig=plotly_figure)
     plotly_figure.show()

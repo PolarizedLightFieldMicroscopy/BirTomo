@@ -10,6 +10,7 @@ REGULARIZATION_FNS = {
     # Add more functions here if needed
 }
 
+
 class PolarimetricLossFunction:
     def __init__(self, json_file=None):
         if json_file:
@@ -18,11 +19,13 @@ class PolarimetricLossFunction:
             self.weight_retardance = params.get('weight_retardance', 1.0)
             self.weight_orientation = params.get('weight_orientation', 1.0)
             self.weight_datafidelity = params.get('weight_datafidelity', 1.0)
-            self.weight_regularization = params.get('weight_regularization', 0.1)
+            self.weight_regularization = params.get(
+                'weight_regularization', 0.1)
             # Initialize any specific loss functions you might need
             self.mse_loss = nn.MSELoss()
             # Initialize regularization functions
-            self.regularization_fns = [(REGULARIZATION_FNS[fn_name], weight) for fn_name, weight in params.get('regularization_fns', [])]
+            self.regularization_fns = [(REGULARIZATION_FNS[fn_name], weight)
+                                       for fn_name, weight in params.get('regularization_fns', [])]
         else:
             self.weight_retardance = 1.0
             self.weight_orientation = 1.0
@@ -66,7 +69,8 @@ class PolarimetricLossFunction:
 
     def compute_total_loss(self, pred_retardance, pred_orientation, data):
         # Compute individual losses
-        datafidelity_loss = self.compute_datafidelity_term(pred_retardance, pred_orientation)
+        datafidelity_loss = self.compute_datafidelity_term(
+            pred_retardance, pred_orientation)
         regularization_loss = self.compute_regularization_term(data)
 
         # Compute total loss with weighted sum

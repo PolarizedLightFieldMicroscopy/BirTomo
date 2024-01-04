@@ -34,9 +34,11 @@ if uploaded_file:
                 st.write(f"\n{key}: {value}")
 
     image_description = metadata['ImageDescription'].value
-    image_description = image_description.replace('true', 'True').replace('false', 'False')
+    image_description = image_description.replace(
+        'true', 'True').replace('false', 'False')
     image_description_dict = eval(image_description)
-    tab1, tab2, tab3, tab4 = st.tabs(["Description", "Optical info", "Parameters", "All metadata"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["Description", "Optical info", "Parameters", "All metadata"])
     with tab1:
         st.header("Description")
         subset_dict = {}

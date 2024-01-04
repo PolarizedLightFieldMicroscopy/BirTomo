@@ -6,6 +6,7 @@ from os.path import exists
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools
 
 # Packages needed for siddon algorithm calculations
 from VolumeRaytraceLFM.my_siddon import (siddon_params, siddon_midpoints,
@@ -123,30 +124,50 @@ class OpticalElement(OpticBlock):
 
 ###########################################################################################
 class RayTraceLFM(OpticalElement):
-    '''This is a base class that takes a volume geometry and LFM geometry and calculates which
-    arrive to each of the pixels behind each micro-lense, and discards the rest.
-    This class also pre-computes how each rays traverses the volume with the Siddon algorithm.
-    The interaction between the voxels and the rays is defined by each specialization of this class.
+    '''This is a base class that takes a volume geometry and LFM geometry and
+    calculates which arrive to each of the pixels behind each microlens, and
+    discards the rest. This class also pre-computes how each rays traverses the
+    volume with the Siddon algorithm. The interaction between the voxels and
+    the rays is defined by each instance of this class.
     '''
     def __init__(
         self,
-        backend : BackEnds = BackEnds.NUMPY, torch_args={},
-        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0], 'pixels_per_ml' : 17,
-                      'na_obj' : 1.2, 'n_medium' : 1.52, 'wavelength' : 0.550, 'n_micro_lenses' : 1,
-                      'n_voxels_per_ml' : 1}
+        backend : BackEnds = BackEnds.NUMPY,
+        torch_args={},
+        optical_info={'volume_shape' : [11,11,11], 'voxel_size_um' : 3*[1.0],
+                      'pixels_per_ml' : 17, 'na_obj' : 1.2, 'n_medium' : 1.52,
+                      'wavelength' : 0.550, 'n_micro_lenses' : 1,
+                      'n_voxels_per_ml' : 1
+                      }
             ):
+        # Initialize the OpticalElement class
         super(RayTraceLFM, self).__init__(
             backend=backend,
             torch_args=torch_args,
             optical_info=optical_info
             )
 
-        # Create dummy variables for pre-computed rays and paths through the volume
-        # This are defined in compute_rays_geometry
+        # Create dummy variables for pre-computed rays and paths through the volume.
+        # Many of these are defined in compute_rays_geometry.
         self.ray_valid_indices = None
         self.ray_vol_colli_indices = None
         self.ray_vol_colli_lengths = None
         self.ray_direction_basis = None
+        self.ray_valid_direction = None
+        self.ray_valid_indices_by_ray_num = None
+        self.vox_ctr_idx = None
+        self.volume_ctr_um = None
+        self.ray_vol_colli_lengths = None
+        self.ray_vol_colli_indices = None
+        self.ray_direction_basis = None
+        self.lateral_ray_length_from_center = 0
+        self.voxel_span_per_ml = 0
+        self.vol_shape_restricted = None
+        self.use_lenslet_based_filtering = True
+
+        self.nonzero_pixels_dict = self._create_default_nonzero_pixels_dict(
+            optical_info['n_micro_lenses'], optical_info['pixels_per_ml']
+            )
 
     def forward(self, volume_in ):
         '''Perform the forward model calculations.'''
@@ -157,6 +178,14 @@ class RayTraceLFM(OpticalElement):
         #           {volume_in.simul_type} was provided"
         return self.ray_trace_through_volume(volume_in)
 
+    def _create_default_nonzero_pixels_dict(self, num_mla, num_pixels):
+        '''Creates a dictionary that stores the mask for which rays lead to 
+        nonzero pixels. This dictionary is a placeholder for the actual mask.'''
+        default_value = lambda: np.ones((num_pixels, num_pixels), dtype=bool)
+        # Generate all (i,j) pairs using itertools.product
+        iter_product = itertools.product(range(num_mla), repeat=2)
+        nonzero_pixels_dict = {(i, j): default_value() for i, j in iter_product}
+        return nonzero_pixels_dict
 
 ###########################################################################################
     # Helper functions
@@ -394,20 +423,32 @@ class RayTraceLFM(OpticalElement):
         ray_diff = ray_diff / np.linalg.norm(ray_diff, axis=0)
         return ray_enter, ray_exit, ray_diff
 
-    def compute_rays_geometry(self, filename=None):
+    def compute_rays_geometry(self,
+                              filename=None,
+                              image=None,
+                              apply_filter_to_rays=False
+                             ):
         '''Computes the ray-voxel collision based on the Siddon algorithm.
         Requires:
             calling self.rays_through_volumes to compute ray entry, exit and directions.
-        Parameters:
-            filename (str) optional: Saves the geometry to a pickle file, and loads the geometry
-                                    from a file if the file exists.
+        Args:
+            filename (str) optional: Saves the geometry to a pickle file,
+                and loads the geometry from a file if the file exists.
+            image (np.array) optional:
+                The image used to create a mask for the rays.
+            apply_filter_to_rays (bool) optional: Whether to apply the mask to
+                the rays. Only works when using a 1x1 microlens array.
         Returns:
-            None
+            self: The RayTraceLFM instance with updated geometry.
         Computes:
-            self.vox_ctr_idx ([3]):     3D index of the central voxel.
-            self.volume_ctr_um ([3]):   3D coordinate in um of the central voxel
-            self.ray_valid_indices (list of tuples n_rays*[(i,j),]):
+            self.vox_ctr_idx (np.array [3]):
+                3D index of the central voxel.
+            self.volume_ctr_um (np.array [3]):
+                3D coordinate in um of the central voxel
+            self.ray_valid_indices_by_ray_num (list of tuples n_rays*[(i,j),]):
                 Store the 2D ray index of a valid ray (without nan in entry/exit)
+            self.ray_valid_indices: array of shape (2, n_valid_rays):
+                Stores the 2D indices of the valid rays
             self.ray_vol_colli_indices (list of list of tuples n_valid_rays*[(z,y,x),(z,y,x)]):
                 Stores the coordinates of the voxels that the ray n collides with.
             self.ray_vol_colli_lengths (list of list of floats n_valid_rays*[ell1,ell2]):
@@ -415,40 +456,220 @@ class RayTraceLFM(OpticalElement):
                 ray_vol_colli_indices.
             self.ray_valid_direction  (list [n_valid_rays, 3]):
                 Stores the direction of ray n.
+            self.lateral_ray_length_from_center (float):
+                Maximum lateral reach of a ray from the center voxel.
+            self.voxel_span_per_ml (float):
+                Maximum lateral reach of a ray from the center voxel, rounded up.
+            self.ray_direction_basis (list [3]):
+                List size 3, where each element is a torch tensor shaped [n_rays, 3]
+            self.nonzero_pixels_dict (dict):
+                Mask for which rays lead to nonzero pixels for each lenslet.
+                Computed if an image is provided.
         '''
         # If a filename is provided, check if it exists and load the whole ray tracer class from it.
-        if filename is not None and exists(filename):
+        if self._load_geometry_from_file(filename):
+            return self
+
+        # Identify the endpoints of the rays
+        ray_enter, ray_exit, ray_diff = self._initialize_ray_geometry()
+
+        # The maximum voxel-span is with respect to the middle voxel,
+        #   let's shift that to the origin
+        lat_length, vox_span = RayTraceLFM.compute_lateral_ray_length_and_voxel_span(
+            ray_diff, self.optical_info['volume_shape'][0]
+            )
+        self.lateral_ray_length_from_center = lat_length
+        self.voxel_span_per_ml = vox_span
+
+        ray_valid_indices_by_ray_num, ray_vol_colli_indices, \
+        ray_vol_colli_lengths, ray_valid_direction = \
+            self.compute_ray_collisions(
+                ray_enter, ray_exit, self.optical_info['voxel_size_um'], self.vol_shape_restricted
+                )
+
+        # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
+        self.ray_valid_indices_by_ray_num = ray_valid_indices_by_ray_num
+
+        # Maximum number of ray-voxel interactions, to define
+        max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
+
+        n_valid_rays = len(ray_valid_indices_by_ray_num)
+
+        # Initialize storage for ray valid indices
+        if self.backend == BackEnds.NUMPY:
+            self.ray_valid_indices = np.zeros((2, n_valid_rays), dtype=int)
+        elif self.backend == BackEnds.PYTORCH:
+            self.ray_valid_indices = torch.zeros(2, n_valid_rays, dtype=int)
+
+        # Populate the ray valid indices array
+        for ix, pixel_pos in enumerate(ray_valid_indices_by_ray_num):
+            self.ray_valid_indices[0, ix] = pixel_pos[0]
+            self.ray_valid_indices[1, ix] = pixel_pos[1]
+
+        self._filter_invalid_rays(
+            max_ray_voxels_collision, ray_vol_colli_lengths, ray_valid_direction
+            )
+
+        # TODO: check if collision indices should be filtered too
+        # Collisions indices does not get filtered
+        self.ray_vol_colli_indices = ray_vol_colli_indices
+
+        if image is not None:
+            if not np.any(image):
+                raise ValueError("The image cannot be all zeros.")
+            if apply_filter_to_rays:
+                self.filter_rays_based_on_pixels(image)
+            self.nonzero_pixels_dict = self.identify_rays_from_pixels_mla(
+                image, ray_valid_indices=self.ray_valid_indices
+                )
+
+        # Update volume shape information to account for the whole workspace
+        self._update_volume_shape_info()
+
+        # Calculate ray directions basis and stores in self.ray_direction_basis
+        self._calculate_ray_directions()
+
+        # Save geometry to file if filename is provided
+        if filename is not None:
+            self.pickle(filename)
+            print(f'Saved RayTraceLFM object from {filename}')
+
+        return self
+
+    def filter_rays_based_on_pixels(self, image):
+        """
+        Filters the rays based on the non-zero pixel values in the given image.
+        Args:
+            image (numpy.ndarray): The image used to filter the rays.
+        Returns:
+            self: The updated instance of the class with filtered ray attributes.
+        """
+        # Reshape self.ray_valid_indices to pair row and column indices
+        reshaped_indices = self.ray_valid_indices.T
+
+        # Create a boolean mask based on whether the image value at each index is not zero
+        mask = np.array([image[index[0], index[1]] != 0 for index in reshaped_indices])
+
+        # Apply the mask to reshaped_indices
+        filtered_reshaped_indices = reshaped_indices[mask]
+
+        # ray_valid_indices_by_ray_num is not adjusted
+        #   because it is not used in the forward model
+        colli_indices = self.ray_vol_colli_indices
+        filtered_ray_vol_colli_indices = [
+            idx for idx, mask_val in zip(colli_indices, mask) if mask_val
+        ]
+        filtered_ray_vol_colli_lengths = self.ray_vol_colli_lengths[mask]
+        filtered_ray_valid_direction = self.ray_valid_direction[mask]
+
+        # Re-assign instance attributes
+        self.ray_vol_colli_indices = filtered_ray_vol_colli_indices
+        self.ray_vol_colli_lengths = nn.Parameter(
+            filtered_ray_vol_colli_lengths, requires_grad=False
+            )
+        self.ray_valid_direction = nn.Parameter(
+            filtered_ray_valid_direction, requires_grad=False
+            )
+        # Transpose back to get the filtered self.ray_valid_indices
+        self.ray_valid_indices = filtered_reshaped_indices.T
+
+        return self
+
+    def identify_rays_from_pixels_mla(self, mla_image, ray_valid_indices=None):
+        """
+        Args:
+            mla_image (np.array): Light field image.
+        Return:
+            nonzero_pixels_dict: Mask for which rays lead to nonzero pixels.
+                Keys are tuples of (lenslet_row, lenslet_col).
+                Values are boolean arrays of shape (num_pixels, num_pixels).
+        """
+        num_mla = self.optical_info["n_micro_lenses"]
+        num_pixels = self.optical_info["pixels_per_ml"]
+        # size = num_mla * num_pixels
+        nonzero_pixels_dict = {}
+
+        if ray_valid_indices is None:
+            self.compute_rays_geometry()
+            # Reshape self.ray_valid_indices to pair row and column indices
+            reshaped_indices = self.ray_valid_indices.T
+        else:
+            reshaped_indices = ray_valid_indices.T
+
+        # Loop through sections of mla_image, and store a mask.
+        for i in range(num_mla):
+            for j in range(num_mla):
+                lenslet_image = mla_image[
+                    i * num_pixels : (i + 1) * num_pixels,
+                    j * num_pixels : (j + 1) * num_pixels
+                    ]
+                # Create a boolean mask based on whether or not the image value
+                #   at each index is zero.
+                mask = np.array(
+                    [lenslet_image[idx[0], idx[1]] != 0 for idx in reshaped_indices]
+                )
+                # Fill values into variables nonzero_pixels
+                nonzero_pixels_dict[(i, j)] = mask
+
+        return nonzero_pixels_dict
+
+    def _load_geometry_from_file(self, filename):
+        """Loads ray tracer class from a file if it exists."""
+        if filename and exists(filename):
             data = self.unpickle(filename)
             print(f'Loaded RayTraceLFM object from {filename}')
             return data
+        return False
 
-        # todo: We treat differently numpy and torch rays, as some rays go outside the volume of
-        #   interest.
-        # We need to revisit this when we start computing images with more than one micro-lens in
-        #   numpy
-        # if False:#self.backend == BackEnds.NUMPY:
-        #     # The valid workspace is defined by the number of micro-lenses
-        # valid_vol_shape = self.optical_info['volume_shape'][1]
-        # elif self.backend == BackEnds.PYTORCH:
-        valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
+    def _initialize_ray_geometry(self):
+        '''
+        Initializes and calculates the ray geometry for the RayTraceLFM 
+        class. Fetches necessary variables from `optical_info`, computes 
+        the restricted volume shape, and calculates the central voxel 
+        indices and their unit measurements. Determines ray entry, exit, 
+        and direction for the optical setup.
 
-        # Fetch needed variables
+        Adjusts for numpy and torch rays, especially when rays extend 
+        outside the volume of interest. Stores ray geometry locally 
+        based on the backend (numpy or pytorch).
+
+        Returns:
+            tuple: A tuple with three elements:
+                - ray_enter: Entry points of rays (np.array/torch.Tensor)
+                - ray_exit: Exit points of rays (np.array/torch.Tensor)
+                - ray_diff: Direction of rays (np.array/torch.Tensor)
+        
+        Note:
+            Updates attributes `vol_shape_restricted`, `ray_entry`, 
+            `ray_exit`, and `ray_direction`. Converts ray geometry 
+            to pytorch tensors for pytorch backend, otherwise uses 
+            numpy arrays.
+        '''
+        # We may need to treat differently numpy and torch rays, as some
+        # rays go outside the volume of interest.
+
+        # Fetch necessary variables from optical_info
         pixels_per_ml = self.optical_info['pixels_per_ml']
         naObj = self.optical_info['na_obj']
         nMedium = self.optical_info['n_medium']
-        vol_shape = [self.optical_info['volume_shape'][0],] + 2*[valid_vol_shape]
-        voxel_size_um = self.optical_info['voxel_size_um']
+        valid_vol_shape = self.optical_info['n_micro_lenses'] * self.optical_info['n_voxels_per_ml']
+        self.vol_shape_restricted = [self.optical_info['volume_shape'][0],] + 2 * [valid_vol_shape]
         # vox_ctr_idx is in index units
-        vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
-        self.vox_ctr_idx = vox_ctr_idx.astype(int)
-        self.volume_ctr_um = vox_ctr_idx * voxel_size_um # in vol units (um)
+        vox_ctr_idx_restricted = np.array(
+            [self.vol_shape_restricted[0] / 2,
+             self.vol_shape_restricted[1] / 2,
+             self.vol_shape_restricted[2] / 2]
+            )
+        voxel_size_um = self.optical_info['voxel_size_um']
+        # volume_ctr_um_restricted is in volume units (um)
+        volume_ctr_um_restricted = vox_ctr_idx_restricted * voxel_size_um
 
         # Calculate the ray geometry
-        ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(pixels_per_ml, naObj,
-                                                                     nMedium, self.volume_ctr_um)
+        ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
+            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted
+            )
 
         # Store locally
-        self.voxel_span_per_ml = 0
         if self.backend == BackEnds.PYTORCH:
             self.ray_entry = torch.from_numpy(ray_enter).float()
             self.ray_exit = torch.from_numpy(ray_exit).float()
@@ -458,38 +679,107 @@ class RayTraceLFM(OpticalElement):
             self.ray_exit = ray_exit
             self.ray_direction = ray_diff
 
-        # The maximum voxel-span is with respect to the middle voxel, let's shift that to the origin
-        # find first valid ray from one of the borders
+        return ray_enter, ray_exit, ray_diff
+
+    @staticmethod
+    def compute_lateral_ray_length_and_voxel_span(ray_diff, axial_volume_dim):
+        '''
+        Computes the lateral length of the ray and the maximum voxel span.
+
+        Args:
+            ray_diff (np.array): The ray differential, an array containing 
+                                the direction of the rays through the volume.
+        Returns:
+            lateral_ray_length_from_center (float): The maximum lateral
+                reach of a ray from the center voxel.
+            voxel_span_per_ml (float): The maximum voxel span per microlens.
+                This the the lateral_ray_length_from_center rounded up.
+        '''
+        # Find the first valid ray from one of the borders
         half_ml_shape = ray_diff.shape[1] // 2
         valid_ray_coord = 0
         while np.isnan(ray_diff[0, valid_ray_coord, half_ml_shape]):
             valid_ray_coord += 1
+
         # Compute how long is the ray laterally
-        self.voxel_span_per_ml = vol_shape[0] * \
-            ray_diff[2,valid_ray_coord,half_ml_shape] / ray_diff[0,valid_ray_coord,half_ml_shape]
+        lateral_ray_length = axial_volume_dim * \
+                            ray_diff[2, valid_ray_coord, half_ml_shape] / \
+                            ray_diff[0, valid_ray_coord, half_ml_shape]
+
         # Compensate for different voxel sizes axially vs laterally
-        # self.voxel_span_per_ml *= (self.optical_info['voxel_size_um'][1]
-        #                            / self.optical_info['voxel_size_um'][0])
-        # Compute what's the maximum reach of a ray from the center voxel
-        self.voxel_span_per_ml = np.ceil(self.voxel_span_per_ml / 2.0)
+        # Uncomment the next line if different voxel sizes need to be considered
+        # lateral_ray_length *= (self.optical_info['voxel_size_um'][1] /
+        #                        self.optical_info['voxel_size_um'][0])
 
-        # Pre-comute things for torch and store in tensors
-        i_range,j_range = self.ray_entry.shape[1:]
+        # Compute the maximum reach of a ray from the center voxel
+        voxel_span_per_ml = np.ceil(lateral_ray_length / 2.0)
 
-        # Compute Siddon's algorithm for each ray
+        lateral_ray_length_from_center = lateral_ray_length / 2.0
+
+        return lateral_ray_length_from_center, voxel_span_per_ml
+
+    def _filter_invalid_rays(self, max_num_collisions, collision_lengths, valid_direction):
+        '''
+        Filters out invalid rays and processes the data of valid rays.
+
+        This method takes the lengths of ray-voxel collisions and the
+        valid directions of rays, then filters out invalid rays based on
+        the provided indices. It initializes and populates arrays for
+        storing the processed ray-voxel collision lengths and valid ray
+        directions.
+
+        Args:
+            max_num_collisions (int): The maximum number of voxel collisions for any ray.
+            collision_lengths (list or np.array or torch.Tensor): A collection that
+                contains the lengths of traversal of each ray through voxels.
+            valid_direction (list or np.array or torch.Tensor): A collection that
+                contains the directions of each valid ray.
+
+        Returns:
+            None: This method does not return any value but updates the instance variables
+                `ray_vol_colli_lengths` and `ray_valid_direction` with the processed
+                information for valid rays.
+        
+        Notes:
+        - The method distinguishes between handling data in NumPy and PyTorch
+            based on the backend specified in the class.
+        - The instance variable `ray_valid_indices_by_ray_num` is expected
+            to be populated beforehand to indicate valid rays.
+        '''
+        n_valid_rays = len(self.ray_valid_indices_by_ray_num)
+
+        # Initialize storage for ray-voxel collision lengths and ray valid directions
+        if self.backend == BackEnds.NUMPY:
+            self.ray_vol_colli_lengths = np.zeros([n_valid_rays, max_num_collisions])
+            self.ray_valid_direction = np.zeros([n_valid_rays, 3])
+        elif self.backend == BackEnds.PYTORCH:
+            self.ray_vol_colli_lengths = nn.Parameter(torch.zeros(n_valid_rays, max_num_collisions))
+            self.ray_vol_colli_lengths.requires_grad = False
+            self.ray_valid_direction = nn.Parameter(torch.zeros(n_valid_rays, 3))
+            self.ray_valid_direction.requires_grad = False
+
+        # Process each valid ray
+        for valid_ray in range(n_valid_rays):
+            val_lengths = collision_lengths[valid_ray]
+            self.ray_valid_direction[valid_ray, :] = valid_direction[valid_ray]
+            if self.backend == BackEnds.NUMPY:
+                self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = val_lengths
+            elif self.backend == BackEnds.PYTORCH:
+                self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
+
+    def compute_ray_collisions(self, ray_enter, ray_exit, voxel_size_um, vol_shape):
         ray_valid_indices = []
         ray_valid_direction = []
         ray_vol_colli_indices = []
         ray_vol_colli_lengths = []
 
-        # Iterate rays
+        i_range, j_range = ray_enter.shape[1:]
+
         for ii in range(i_range):
             for jj in range(j_range):
-                # Fetch ray information
-                start = ray_enter[:,ii,jj]
-                stop = ray_exit[:,ii,jj]
+                start = ray_enter[:, ii, jj]
+                stop = ray_exit[:, ii, jj]
 
-                # We only store the valid rays
                 if np.any(np.isnan(start)) or np.any(np.isnan(stop)):
                     if self.backend == BackEnds.PYTORCH:
                         continue
@@ -503,73 +793,45 @@ class RayTraceLFM(OpticalElement):
                     voxels_of_segs = vox_indices(seg_mids, voxel_size_um)
                     voxel_intersection_lengths = siddon_lengths(start, stop, siddon_list)
 
-                # Remove voxels that go outside the volume
-
-                # Store in a temporary list
-                ray_valid_indices.append((ii,jj))
+                ray_valid_indices.append((ii, jj))
                 ray_vol_colli_indices.append(voxels_of_segs)
                 ray_vol_colli_lengths.append(voxel_intersection_lengths)
-                ray_valid_direction.append(self.ray_direction[:,ii,jj])
+                ray_valid_direction.append(self.ray_direction[:, ii, jj])
 
-        # Maximum number of ray-voxel interactions, to define
-        max_ray_voxels_collision = np.max([len(D) for D in ray_vol_colli_indices])
-        n_valid_rays = len(ray_valid_indices)
+        return ray_valid_indices, ray_vol_colli_indices, ray_vol_colli_lengths, ray_valid_direction
 
-        # Create the information to store
-        if self.backend == BackEnds.NUMPY:
-            self.ray_valid_indices = np.zeros((2, len(ray_valid_indices)), dtype=int)
-        elif self.backend == BackEnds.PYTORCH:
-            self.ray_valid_indices = torch.zeros(2, len(ray_valid_indices), dtype=int)
-        for ix in range(len(ray_valid_indices)):
-            self.ray_valid_indices[0,ix] = ray_valid_indices[ix][0]
-            self.ray_valid_indices[1,ix] = ray_valid_indices[ix][1]
-
-        # Store as tuples for now
-        self.ray_vol_colli_indices = ray_vol_colli_indices
-        if self.backend == BackEnds.NUMPY:
-            self.ray_vol_colli_lengths = np.zeros([n_valid_rays, max_ray_voxels_collision])
-            self.ray_valid_direction = np.zeros([n_valid_rays, 3])
-        elif self.backend == BackEnds.PYTORCH:
-            # Save as nn.Parameters so Pytorch can handle them correctly,
-            #   for things like moving this whole class to GPU.
-            self.ray_vol_colli_lengths = nn.Parameter(torch.zeros(n_valid_rays,
-                                                                  max_ray_voxels_collision))
-            self.ray_vol_colli_lengths.requires_grad = False
-            self.ray_valid_direction = nn.Parameter(torch.zeros(n_valid_rays, 3))
-            self.ray_valid_direction.requires_grad = False
-
-        # Filter out rays that aren't valid (contain nan)
-        for valid_ray in range(n_valid_rays):
-            # Fetch the ray-voxel intersection length for this ray
-            val_lengths = ray_vol_colli_lengths[valid_ray]
-            self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths) \
-                            if self.backend == BackEnds.PYTORCH else val_lengths
-            self.ray_valid_direction[valid_ray, :] = ray_valid_direction[valid_ray]
-
-        # Update volume shape information, to account for the whole workspace
-        # todo: mainly for pytorch multi-lenslet computation
+    def _update_volume_shape_info(self):
+        '''
+        Updates volume shape information, including the 3D index and 
+        coordinates of the central voxel.
+        '''
         vol_shape = self.optical_info['volume_shape']
-        # in index units
-        vox_ctr_idx = np.array([vol_shape[0] / 2, vol_shape[1] / 2, vol_shape[2] / 2])
-        self.vox_ctr_idx = vox_ctr_idx.astype(int)
-        self.volume_ctr_um = vox_ctr_idx * voxel_size_um
+        # Central voxel index (in index units)
+        self.vox_ctr_idx = np.array([
+            vol_shape[0] // 2, 
+            vol_shape[1] // 2, 
+            vol_shape[2] // 2
+        ], dtype=int)
+        # Central voxel coordinates (in volume units)
+        self.volume_ctr_um = self.vox_ctr_idx * \
+                             self.optical_info['voxel_size_um']
 
-        if filename is not None:
-            self.pickle(filename)
-            print(f'Saved RayTraceLFM object from {filename}')
-
-        # Calculate the ray's direction with the two normalized perpendicular directions
-        # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
+    def _calculate_ray_directions(self):
+        '''
+        Calculates the direction of each valid ray with two perpendicular
+        directions. Updates ray direction basis.
+        '''
         if self.backend == BackEnds.NUMPY:
-            self.ray_direction_basis = []
-            for n_ray,ray in enumerate(self.ray_valid_direction):
-                self.ray_direction_basis.append(RayTraceLFM.calc_ray_direction(ray))
+            self.ray_direction_basis = [
+                RayTraceLFM.calc_ray_direction(ray) 
+                for ray in self.ray_valid_direction
+            ]
         elif self.backend == BackEnds.PYTORCH:
             self.ray_direction_basis = nn.Parameter(
-                RayTraceLFM.calc_ray_direction_torch(self.ray_valid_direction)
+                RayTraceLFM.calc_ray_direction_torch(
+                    self.ray_valid_direction
                 )
-
-        return self
+            )
 
     # Helper functions to load/save the whole class to disk
     def pickle(self, filename):

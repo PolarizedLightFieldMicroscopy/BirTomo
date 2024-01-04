@@ -1,19 +1,24 @@
 '''Regularization functions that can use used in the optimization process.'''
 import torch
 
+
 def l1(data, weight=1.0):
     return weight * torch.abs(data).mean()
+
 
 def l2(data, weight=1.0):
     return weight * torch.pow(data, 2).mean()
 
+
 def linfinity(data, weight=1.0):
     return weight * torch.max(torch.abs(data))
+
 
 def elastic_net(data, weight1=1.0, weight2=1.0):
     l1_term = torch.abs(data).sum()
     l2_term = torch.pow(data, 2).sum()
     return weight1 * l1_term + weight2 * l2_term
+
 
 def total_variation_3d_volumetric(data, weight=1.0):
     """

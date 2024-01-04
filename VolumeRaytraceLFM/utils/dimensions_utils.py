@@ -1,5 +1,6 @@
 import torch
 
+
 def get_region_of_ones_shape(mask):
     """
     Computes the shape of the smallest bounding box that contains all the ones in the input mask.
@@ -16,6 +17,7 @@ def get_region_of_ones_shape(mask):
     shape = max_indices - min_indices + 1
     return shape
 
+
 def crop_3d_tensor(tensor, new_shape):
     """
     Crops a 3D tensor to a specified new shape, keeping the central part of the original tensor.
@@ -30,6 +32,7 @@ def crop_3d_tensor(tensor, new_shape):
     end_W = start_W + new_W
     return tensor[start_D:end_D, start_H:end_H, start_W:end_W]
 
+
 def reshape_crop_and_flatten_parameter(flattened_param, original_shape, new_shape):
     # Reshape the flattened parameter
     reshaped_param = flattened_param.view(original_shape)
@@ -43,11 +46,13 @@ def reshape_crop_and_flatten_parameter(flattened_param, original_shape, new_shap
     end_H = start_H + new_H
     start_W = (W - new_W) // 2
     end_W = start_W + new_W
-    cropped_tensor = reshaped_param[..., start_D:end_D, start_H:end_H, start_W:end_W]
+    cropped_tensor = reshaped_param[...,
+                                    start_D:end_D, start_H:end_H, start_W:end_W]
 
     # Flatten and convert back to a Parameter
     cropped_flattened_parameter = torch.nn.Parameter(cropped_tensor.flatten())
     return cropped_flattened_parameter
+
 
 def reshape_and_crop(flattened_param, original_shape, new_shape):
     """
@@ -70,8 +75,10 @@ def reshape_and_crop(flattened_param, original_shape, new_shape):
     end_H = start_H + new_H
     start_W = (W - new_W) // 2
     end_W = start_W + new_W
-    cropped_tensor = reshaped_param[..., start_D:end_D, start_H:end_H, start_W:end_W]
+    cropped_tensor = reshaped_param[...,
+                                    start_D:end_D, start_H:end_H, start_W:end_W]
     return cropped_tensor
+
 
 def store_as_pytorch_parameter(tensor, var_type: str):
     '''

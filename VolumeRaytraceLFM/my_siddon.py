@@ -1,6 +1,7 @@
 import numpy as np
 from math import floor, ceil
 
+
 def siddon_params(start, stop, vox_pitch, vox_count):
     x1, y1, z1 = start
     x2, y2, z2 = stop
@@ -28,7 +29,7 @@ def siddon_params(start, stop, vox_pitch, vox_count):
     a_min = max(0, max([min(a_0[i], a_N[i]) for i in range(3)]))
     a_max = min(1, min([max(a_0[i], a_N[i]) for i in range(3)]))
 
-    #now find range of indices corresponding to max/min a values
+    # now find range of indices corresponding to max/min a values
     if (x2 - x1) >= 0:
         i_min = ceil(pix_numx - (pix_numx*dx - a_min*(x2 - x1) - x1)/dx)
         i_max = floor((x1 + a_max*(x2 - x1))/dx)
@@ -42,7 +43,7 @@ def siddon_params(start, stop, vox_pitch, vox_count):
     elif (y2 - y1) < 0:
         j_min = ceil(pix_numy - (pix_numy*dy - a_max*(y2 - y1) - y1)/dy)
         j_max = floor((y1 + a_min*(y2 - y1))/dy)
-    
+
     if (z2 - z1) >= 0:
         k_min = ceil(pix_numz - (pix_numz*dz - a_min*(z2 - z1) - z1)/dz)
         k_max = floor((z1 + a_max*(z2 - z1))/dz)
@@ -50,7 +51,7 @@ def siddon_params(start, stop, vox_pitch, vox_count):
         k_min = ceil(pix_numz - (pix_numz*dz - a_max*(z2 - z1) - z1)/dz)
         k_max = floor((z1 + a_min*(z2 - z1))/dz)
 
-    #next calculate the list of parametric values for each coordinate
+    # next calculate the list of parametric values for each coordinate
     a_x = []
     if (x2 - x1) > 0:
         for i in range(i_min, i_max):
@@ -75,11 +76,12 @@ def siddon_params(start, stop, vox_pitch, vox_count):
         for k in range(k_min, k_max):
             a_z.insert(0, (k*dz - z1)/(z2 - z1))
 
-    #finally, form the list of parametric values
+    # finally, form the list of parametric values
     a_list = [a_min] + a_x + a_y + a_z + [a_max]
     a_list = list(set(a_list))
     a_list.sort()
     return a_list
+
 
 def siddon_midpoints(start, stop, a_list):
     '''Calculates the midpoints of the ray sections that intersect each voxel'''
@@ -90,15 +92,17 @@ def siddon_midpoints(start, stop, a_list):
         mids.append((x, y, z))
     return mids
 
+
 def vox_indices(midpoints, vox_pitch):
     '''Identifies the voxels for which the midpoints belong by converting to 
     voxel units, then rounding down to get the voxel index used we are using
     to refer to the voxel'''
     dx, dy, dz = vox_pitch
     i_voxels = []
-    for (x,y,z) in midpoints:
+    for (x, y, z) in midpoints:
         i_voxels.append((int(x / dx), int(y / dy), int(z / dz)))
     return i_voxels
+
 
 def siddon_lengths(start, stop, a_list):
     '''Finds length of intersections by multiplying difference in parametric 
@@ -108,6 +112,7 @@ def siddon_lengths(start, stop, a_list):
     for m in range(1, len(a_list)):
         lengths.append(entire_length * (a_list[m] - a_list[m - 1]))
     return lengths
+
 
 def siddon(start, stop, voxel_size, volume_shape):
     siddon_list = siddon_params(start, stop, voxel_size, volume_shape)
