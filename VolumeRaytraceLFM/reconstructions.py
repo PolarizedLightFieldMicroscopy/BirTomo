@@ -6,6 +6,7 @@ import json
 import torch
 import numpy as np
 from tqdm import tqdm
+import csv
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
@@ -351,7 +352,10 @@ class Reconstructor:
     def optimizer_setup(self, volume_estimation, training_params):
         """Setup optimizer."""
         trainable_parameters = volume_estimation.get_trainable_variables()
-        return torch.optim.Adam(trainable_parameters, lr=training_params['lr'])
+        # The learning rates specified are starting points for the optimizer.
+        parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
+                    {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
+        return torch.optim.Adam(parameters)
 
     def compute_losses(self, ret_meas, azim_meas, ret_image_current, azim_current, volume_estimation, training_params):
         if not torch.is_tensor(ret_meas):
@@ -413,6 +417,8 @@ class Reconstructor:
             (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
             (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
         )
+        
+        # cosine_similarity = torch.nn.CosineSimilarity(dim=0)
         if isinstance(params['regularization_weight'], list):
             params['regularization_weight'] = params['regularization_weight'][0]
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
@@ -505,16 +511,18 @@ class Reconstructor:
             fig.canvas.draw()
             fig.canvas.flush_events()
             time.sleep(0.1)
+            self.save_loss_lists_to_csv()
             if ep % 10 == 0:
-                plt.savefig(os.path.join(
-                    output_dir, f"optim_ep_{'{:02d}'.format(ep)}.pdf"))
+                filename = f"optim_ep_{'{:03d}'.format(ep)}.pdf"
+                plt.savefig(os.path.join(output_dir, filename))
+                # self.save_loss_lists_to_csv()
             time.sleep(0.1)
         if ep % 100 == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
                 os.path.join(
-                    output_dir, f"volume_ep_{'{:02d}'.format(ep)}.h5"),
+                    output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
                 description=my_description
             )
         return
@@ -571,6 +579,26 @@ class Reconstructor:
                  })
             my_loss.line_chart(df_loss)
 
+    def save_loss_lists_to_csv(self):
+        """Save the loss lists to a csv file.
+
+        Class instance attributes accessed:
+        - self.recon_directory
+        - self.loss_total_list
+        - self.loss_data_term_list
+        - self.loss_reg_term_list
+        """
+        filename = "loss.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+
+        with open(filepath, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Total Loss", "Data Term Loss", "Regularization Term Loss"])
+            for total, data_term, reg_term in zip(self.loss_total_list, 
+                                                  self.loss_data_term_list, 
+                                                  self.loss_reg_term_list):
+                writer.writerow([total, data_term, reg_term])
+
     def reconstruct(self, output_dir=None, use_streamlit=False):
         """
         Method to perform the actual reconstruction based on the provided parameters.
@@ -594,7 +622,7 @@ class Reconstructor:
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        figure = setup_visualization()
+        figure = setup_visualization(window_title=output_dir)
 
         n_epochs = self.iteration_params['n_epochs']
         if use_streamlit:
@@ -618,6 +646,15 @@ class Reconstructor:
                     progress_bar, ep, n_epochs, my_recon_img_plot, my_loss
                 )
             self.visualize_and_save(ep, figure, output_dir)
+
+        self.save_loss_lists_to_csv()
+        my_description = "Volume estimation after " + \
+            str(ep) + " iterations."
+        self.volume_pred.save_as_file(
+            os.path.join(
+                output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
+            description=my_description
+        )
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
         plt.show()
