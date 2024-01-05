@@ -26,6 +26,9 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter
 )
+from VolumeRaytraceLFM.loss_functions import (
+    weighted_local_cosine_similarity_loss
+)
 
 COMBINING_DELTA_N = False
 DEBUG = False
@@ -206,6 +209,10 @@ class Reconstructor:
         self.loss_total_list = []
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
+
+        self.loss_TV_reg_list = []
+        self.loss_1000L1_list = []
+        self.loss_cos_sim_list = []
 
     def _initialize_volume(self):
         """
@@ -417,12 +424,23 @@ class Reconstructor:
             (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
             (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
         )
-        
+
+        cos_sim_loss = weighted_local_cosine_similarity_loss(
+            vol_pred.get_optic_axis(), vol_pred.get_delta_n()
+        )
         # cosine_similarity = torch.nn.CosineSimilarity(dim=0)
         if isinstance(params['regularization_weight'], list):
             params['regularization_weight'] = params['regularization_weight'][0]
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
-        regularization_term = params['regularization_weight'] * (0.5 * TV_reg + 1000 * (vol_pred.Delta_n ** 2).mean())
+
+        TV_term = params['TV_weight'] * TV_reg
+        L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n ** 2).mean()
+        cos_sim_term = params['cos_sim_weight'] * cos_sim_loss
+        regularization_term = params['regularization_weight'] * (TV_term + L1_norm_term + cos_sim_term)
+
+        self.loss_TV_reg_list.append(TV_term.item())
+        self.loss_1000L1_list.append(L1_norm_term.item())
+        self.loss_cos_sim_list.append(cos_sim_term.item())
 
         # Total loss
         loss = data_term + regularization_term
@@ -598,6 +616,19 @@ class Reconstructor:
                                                   self.loss_data_term_list, 
                                                   self.loss_reg_term_list):
                 writer.writerow([total, data_term, reg_term])
+
+        filename_reg = "reg.csv"
+        filepath_reg = os.path.join(self.recon_directory, filename_reg)
+
+        with open(filepath_reg, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Total Variation of birefringence",
+                             "L1 norm of birefringence (x1000)",
+                             "Cosine similarity of optic axis"])
+            for TV_reg, L1_norm, cos_sim in zip(self.loss_TV_reg_list,
+                                                self.loss_1000L1_list,
+                                                self.loss_cos_sim_list):
+                writer.writerow([TV_reg, L1_norm, cos_sim])
 
     def reconstruct(self, output_dir=None, use_streamlit=False):
         """
