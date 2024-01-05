@@ -34,7 +34,7 @@ def get_ret_azim_images(recon_optical_info):
 def recon_debug():
     """Reconstruct the xylem data set for debugging purposes."""
     start_time = time.time()
-    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
+    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem_quick.json")
     iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem_quick.json")
     ret_image_meas, azim_image_meas = get_ret_azim_images(recon_optical_info)
 
@@ -79,7 +79,7 @@ def recon_xylem():
 def recon_continuation(init_vol_path):
     """Reconstruct the xylem data set from a previous reconstruction."""
     recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
-    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem_quick.json")
+    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem.json")
     ret_image_meas, azim_image_meas = get_ret_azim_images(recon_optical_info)
 
     # reconstruction
@@ -100,4 +100,7 @@ def recon_continuation(init_vol_path):
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 if __name__ == '__main__':
-    recon_debug()
+    # recon_debug()
+    # recon_xylem()
+    xylem_vol_path = os.path.join('reconstructions', '2024-01-03_22-00-52', 'volume_ep_300.h5')
+    recon_continuation(xylem_vol_path)
