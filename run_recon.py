@@ -282,32 +282,43 @@ def recon_voxel():
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
-def recon_continuation():
-    optical_info = setup_optical_parameters(
-        "config_settings/optical_config_sphere.json")
-    foward_img_str = 'sphere6_thick1_31mla_17pix.npy'
-    volume_GT = BirefringentVolume(
-        backend=BACKEND,
-        optical_info=optical_info,
-        volume_creation_args=volume_args.sphere_args6
-    )
+def recon_continuation(shape='sphere', init_volume_path=None):
+    if shape == 'sphere':
+        optical_info = setup_optical_parameters(
+            "config_settings/optical_config_sphere.json")
+        foward_img_str = 'sphere6_thick1_31mla_17pix.npy'
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.sphere_args6
+        )
+        iteration_params = setup_iteration_parameters(
+            "config_settings/iter_config_sphere.json")
+    elif shape == 'helix':
+        optical_info = setup_optical_parameters(
+            "config_settings/optical_config_helix_z7.json")
+        foward_img_str = 'helix1_9mla_17pix_7z.npy'
+        helix_path = "objects/Helix/Helix1_resaved.h5"
+        volume_GT = BirefringentVolume.init_from_file(
+            helix_path, BackEnds.PYTORCH, optical_info)
+        iteration_params = setup_iteration_parameters(
+            "config_settings/iter_config_helix.json")
+    else:
+        raise ValueError(f"Unknown shape {shape}")
+
+    iteration_params["notes"] = f"Continuation of previous reconstruction {init_volume_path}"
     # visualize_volume(volume_GT, optical_info)
     ret_image_meas = np.load(os.path.join(
         'forward_images', 'ret_' + foward_img_str))
     azim_image_meas = np.load(os.path.join(
         'forward_images', 'azim_' + foward_img_str))
 
-    # reconstruction
     recon_optical_info = optical_info.copy()
-    iteration_params = setup_iteration_parameters(
-        "config_settings/iter_config_sphere.json")
-    sphere_path = "volumes/2024-01-02_23-26-15/volume_ep_300.h5"
     initial_volume = BirefringentVolume.init_from_file(
-        sphere_path, BackEnds.PYTORCH, recon_optical_info)
+        init_volume_path, BackEnds.PYTORCH, recon_optical_info)
     visualize_volume(initial_volume, recon_optical_info)
 
     recon_directory = create_unique_directory("reconstructions")
-    # volume_GT = initial_volume
 
     # Compute the reconstuction
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
@@ -331,7 +342,7 @@ def resave_volume(old_path, new_path):
 
 def simulate_helix_images():
     optical_info = setup_optical_parameters(
-        "config_settings/optical_config_helix.json")
+        "config_settings/optical_config_helix_z7.json")
     optical_system = {'optical_info': optical_info}  
     simulator = ForwardModel(optical_system, backend=BACKEND)
     # Volume creation
@@ -344,9 +355,9 @@ def simulate_helix_images():
 
 def recon_helix():
     optical_info = setup_optical_parameters(
-        "config_settings/optical_config_helix.json")
-    foward_img_str = 'helix1_9mla_17pix_3z.npy'
-    simulate = True
+        "config_settings/optical_config_helix_z7.json")
+    foward_img_str = 'helix1_9mla_17pix_7z.npy'
+    simulate = False
     if simulate:
         optical_system = {'optical_info': optical_info}
         # Initialize the forward model. Raytracing is performed as part of the initialization.
@@ -407,9 +418,11 @@ def recon_helix():
 
 def helix():
     """Helix-related functions."""
-    simulate_helix_images()
+    # simulate_helix_images()
     # resave_volume("objects/Helix/Helix1.h5", "objects/Helix/Helix1_resaved.h5")
     # recon_helix()
+    helix_recon_path = "reconstructions/2024-01-10_21-44-20/volume_ep_300.h5"
+    recon_continuation(shape='helix', init_volume_path=helix_recon_path)
 
 def main():
     optical_info = setup_optical_parameters(
