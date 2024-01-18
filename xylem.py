@@ -102,5 +102,11 @@ def recon_continuation(init_vol_path):
 if __name__ == '__main__':
     # recon_debug()
     # recon_xylem()
-    xylem_vol_path = os.path.join('reconstructions', '2024-01-03_22-00-52', 'volume_ep_300.h5')
+    xylem_vol_path = os.path.join('reconstructions', '2024-01-04_17-57-13', 'volume_ep_100.h5')
     recon_continuation(xylem_vol_path)
+    
+    # Visualize a volume
+    # optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
+    # volume = BirefringentVolume.init_from_file(
+    #     xylem_vol_path, BackEnds.PYTORCH, optical_info)
+    # visualize_volume(volume, optical_info)
