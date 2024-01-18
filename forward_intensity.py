@@ -1,5 +1,5 @@
 """Script to run forward intensity projection
-This script using numpy back-end to:
+This script using numpy or pytorch back-end to:
     - Compute the ray geometry depending on the Light field microscope and volume configuration.
     - Traverse the rays through the volume.
     - Compute the intensity measurements for every ray fot various polarization settings.

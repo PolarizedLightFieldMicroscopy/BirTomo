@@ -81,40 +81,49 @@ def apply_loss_function_and_reg(loss_type, reg_types, retardance_measurement, or
     return total_loss, data_term, regularization_term_total
 
 
-def cosine_similarity_loss_scaled(optic_axis, delta_n):
+def weighted_local_cosine_similarity_loss(optic_axis, delta_n):
     """
-    Compute a loss that encourages vectors in optic_axis to point in
-    similar directions, scaled by the values in delta_n.
+    Compute a loss that encourages each vector in optic_axis to align
+    with its neighbors, weighted by delta_n.
 
     Args:
-        optic_axis (torch.Tensor): Tensor of shape (3, N) where N is the
-                                   number of 3D vectors.
-        delta_n (torch.Tensor): Tensor of shape (N,) with scaling
-                                factors for each vector.
+        optic_axis (torch.Tensor): Tensor of shape (3, D, H, W)
+            representing a 3D volume of vectors.
+        delta_n (torch.Tensor): Tensor of shape (D, H, W) with weights
+            for each spatial point.
 
     Returns:
         torch.Tensor: Scalar tensor representing the loss.
+    
+    The loss is between 0 and 2.
     """
+    normalized_optic_axis = F.normalize(optic_axis, p=2, dim=0)
+    normalized_delta_n = delta_n / delta_n.abs().max() / 2
+    err_message = "Normalized birefringence values are not within the range [-0.5, 0.5]."
+    assert torch.all((normalized_delta_n >= -0.5) & (normalized_delta_n <= 0.5)), err_message
 
-    # Normalize the vectors to unit length
-    normalized_vectors = F.normalize(optic_axis, p=2, dim=0)
+    cos_sim_loss = 0.0
+    valid_comparisons = 0
 
-    # Compute pairwise cosine similarity (N, N)
-    cos_sim_matrix = torch.matmul(normalized_vectors.transpose(0, 1), normalized_vectors)
+    # Compute cosine similarity with local neighbors along each dimension
+    for i in range(1, 4):  # Iterate over D, H, W dimensions
+        rolled_optic_axis = torch.roll(normalized_optic_axis, shifts=-1, dims=i)
+        
+        # Compute cosine similarity (dot product) along this dimension
+        #   Array of shape (D, H, W) with floats between -1 and 1
+        cos_sim = (normalized_optic_axis * rolled_optic_axis).sum(dim=0)
 
-    # Scale the cosine similarity matrix by delta_n
-    # We use an outer product to create a scaling matrix of shape (N, N)
-    scaling_matrix = torch.outer(delta_n, delta_n)
-    scaled_cos_sim_matrix = cos_sim_matrix * scaling_matrix
+        rolled_delta_n = torch.roll(normalized_delta_n, shifts=-1, dims=i-1)
 
-    # Ignore the diagonal elements by setting them to zero
-    scaled_cos_sim_matrix.fill_diagonal_(0)
+        weighted_cos_sim = cos_sim * (normalized_delta_n.abs() + rolled_delta_n.abs()) / 2
 
-    # Loss is the negative sum of the off-diagonal elements
-    loss = -scaled_cos_sim_matrix.sum()
+        # Create the valid mask to avoid boundary elements
+        valid_mask = torch.ones_like(weighted_cos_sim, dtype=torch.bool)
+        valid_mask.index_fill_(i-1, torch.tensor([weighted_cos_sim.size(i-1) - 1]), False)
 
-    # Normalize the loss by the number of comparisons
-    num_vectors = optic_axis.size(1)
-    loss /= (num_vectors * (num_vectors - 1))
+        cos_sim_loss += (1 - weighted_cos_sim[valid_mask]).sum()
+        valid_comparisons += valid_mask.sum().item()
 
-    return loss
+    cos_sim_loss /= valid_comparisons
+
+    return cos_sim_loss

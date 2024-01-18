@@ -1031,7 +1031,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         err_message = "The volume in front of the microlenses" + \
             f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
             f"Increase the volume_shape to at least [{min_required_volume_size+1},{min_required_volume_size+1}]"
-        assert min_required_volume_size <= volume_shape[1] and min_required_volume_size <= volume_shape[2], err_message
+        raise_error = True # DEBUG: set to False to avoid raising error
+        if raise_error:
+            assert min_required_volume_size <= volume_shape[1] and min_required_volume_size <= volume_shape[2], err_message
 
         # Traverse volume for every ray, and generate intensity images or retardance and azimuth images
 
@@ -1102,7 +1104,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def _validate_volume_size(self, min_required_volume_size, volume_shape):
         if min_required_volume_size > volume_shape[1] or min_required_volume_size > volume_shape[2]:
-            raise ValueError(f"The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}.")
+            print(f"WARNING: The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}.")
+            raise_error = True # DEBUG: set to False to avoid raising error
+            if raise_error:
+                raise ValueError(f"The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}.")
 
     def _calculate_current_offset(self, row_index, col_index,
                                   num_voxels_per_ml, num_microlenses):
