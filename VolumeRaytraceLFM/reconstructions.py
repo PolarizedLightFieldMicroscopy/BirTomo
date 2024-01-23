@@ -29,6 +29,7 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
 from VolumeRaytraceLFM.loss_functions import (
     weighted_local_cosine_similarity_loss
 )
+from VolumeRaytraceLFM.utils.mask_utils import create_half_zero_mask
 
 COMBINING_DELTA_N = False
 DEBUG = False
@@ -168,7 +169,8 @@ class Reconstructor:
     def __init__(self,
                  recon_info: ReconstructionConfig,
                  device='cpu',
-                 omit_rays_based_on_pixels=False
+                 omit_rays_based_on_pixels=False,
+                 apply_volume_mask=False
                  ):
         """
         Initialize the Reconstructor with the provided parameters.
@@ -201,6 +203,8 @@ class Reconstructor:
         if omit_rays_based_on_pixels:
             image_for_rays = self.ret_img_meas
         self.rays = self.setup_raytracer(image=image_for_rays, device=device)
+
+        self.apply_volume_mask = apply_volume_mask
 
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
@@ -450,17 +454,6 @@ class Reconstructor:
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
 
-        if COMBINING_DELTA_N:
-            Delta_n_combined = torch.cat(
-                [volume_estimation.Delta_n_first_part,
-                 volume_estimation.Delta_n_second_part],
-                dim=0
-            )
-            # Attempt to update Delta_n of BirefringentVolume directly
-            # The in-place operation causes problems with the gradient tracking
-            # with torch.no_grad():  # Temporarily disable gradient tracking
-            #   volume_estimation.Delta_n[:] = Delta_n_combined  # Update the value in-place
-            volume_estimation.Delta_n_combined = torch.nn.Parameter(Delta_n_combined)
         # Apply forward model
         [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
         loss, data_term, regularization_term = self._compute_loss(ret_image_current, azim_image_current)
@@ -468,37 +461,40 @@ class Reconstructor:
         # Verify the gradients before and after the backward pass
         if DEBUG:
             print("\nBefore backward pass:")
-            print("requires_grad:",
-                  volume_estimation.Delta_n_first_part.requires_grad)
-            print("Gradient for Delta_n_first_part:",
-                  volume_estimation.Delta_n_first_part.grad)
-            print("Gradient for Delta_n_second_part:",
-                  volume_estimation.Delta_n_second_part.grad)
+            self.print_grad_info(volume_estimation)
+
         loss.backward()
+
         if DEBUG:
             print("\nAfter backward pass:")
-            print("requires_grad:",
-                  volume_estimation.Delta_n_first_part.requires_grad)
-            print("Gradient for Delta_n_first_part:",
-                  volume_estimation.Delta_n_first_part.grad)
-            print("Gradient for Delta_n_second_part:",
-                  volume_estimation.Delta_n_second_part.grad)
+            self.print_grad_info(volume_estimation)
 
-        # One method would be to set the gradients of the second half to zero
-        if False:
-            half_length = volume_estimation.Delta_n.size(0) // 2
-            volume_estimation.Delta_n.grad[half_length:] = 0
+        if self.apply_volume_mask:
+            mask_shape = volume_estimation.get_delta_n().shape
+            flattened_mask = create_half_zero_mask(mask_shape)
+            volume_estimation.Delta_n.grad *= flattened_mask
 
-        # Note: This is where volume_estimation.Delta_n.grad becomes non-zero
         optimizer.step()
 
+        self.store_results(
+            ret_image_current, azim_image_current,
+            volume_estimation, loss, data_term, regularization_term
+        )
+        return
+
+
+    def print_grad_info(self, volume_estimation):
+        print("requires_grad:", volume_estimation.Delta_n_first_part.requires_grad)
+        print("Gradient for Delta_n_first_part:", volume_estimation.Delta_n_first_part.grad)
+        print("Gradient for Delta_n_second_part:", volume_estimation.Delta_n_second_part.grad)
+
+    def store_results(self, ret_image_current, azim_image_current, volume_estimation, loss, data_term, regularization_term):
         self.ret_img_pred = ret_image_current.detach().cpu().numpy()
         self.azim_img_pred = azim_image_current.detach().cpu().numpy()
         self.volume_pred = volume_estimation
         self.loss_total_list.append(loss.item())
         self.loss_data_term_list.append(data_term.item())
         self.loss_reg_term_list.append(regularization_term.item())
-        return
 
     def visualize_and_save(self, ep, fig, output_dir):
         volume_estimation = self.volume_pred

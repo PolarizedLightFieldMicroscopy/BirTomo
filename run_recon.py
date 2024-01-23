@@ -235,7 +235,7 @@ def recon_voxel():
         volume_GT = BirefringentVolume(
             backend=BACKEND,
             optical_info=optical_info,
-            volume_creation_args=volume_args.sphere_args3
+            volume_creation_args=volume_args.voxel_args
         )
         visualize_volume(volume_GT, optical_info)
 
@@ -244,7 +244,7 @@ def recon_voxel():
         ret_image_meas = simulator.ret_img
         azim_image_meas = simulator.azim_img
         # Save the images as numpy arrays
-        if False:
+        if True:
             ret_numpy = ret_image_meas.detach().numpy()
             np.save('forward_images/ret_' + foward_img_str, ret_numpy)
             azim_numpy = azim_image_meas.detach().numpy()
@@ -276,7 +276,7 @@ def recon_voxel():
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
@@ -330,6 +330,7 @@ def recon_continuation(shape='sphere', init_volume_path=None):
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)    
 
+
 def resave_volume(old_path, new_path):
     """Resave a volume to a new path."""
     optical_info = setup_optical_parameters(
@@ -339,6 +340,7 @@ def resave_volume(old_path, new_path):
     my_description = "Helix1 resaved on 2024-01-10"
     volume.save_as_file(new_path, description=my_description)
     print(f"Saved volume to {new_path}")
+
 
 def simulate_helix_images():
     optical_info = setup_optical_parameters(
@@ -352,6 +354,7 @@ def simulate_helix_images():
     # visualize_volume(volume_GT, optical_info)
     simulator.forward_model(volume_GT)
     simulator.view_images()
+
 
 def recon_helix():
     optical_info = setup_optical_parameters(
@@ -424,6 +427,7 @@ def helix():
     helix_recon_path = "reconstructions/2024-01-10_21-44-20/volume_ep_300.h5"
     recon_continuation(shape='helix', init_volume_path=helix_recon_path)
 
+
 def main():
     optical_info = setup_optical_parameters(
         "config_settings/optical_config_largemla.json")
@@ -463,7 +467,7 @@ def main():
 if __name__ == '__main__':
     # recon()
     # recon_sphere()
-    # recon_voxel()
+    recon_voxel()
     # recon_sphere_from_prev_try()
 
-    helix()
+    # helix()
