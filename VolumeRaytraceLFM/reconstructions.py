@@ -29,7 +29,9 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
 from VolumeRaytraceLFM.loss_functions import (
     weighted_local_cosine_similarity_loss
 )
-from VolumeRaytraceLFM.utils.mask_utils import create_half_zero_mask
+from VolumeRaytraceLFM.utils.mask_utils import (
+    create_half_zero_mask, create_half_zero_sandwich_mask
+)
 
 COMBINING_DELTA_N = False
 DEBUG = False
@@ -208,6 +210,10 @@ class Reconstructor:
 
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
+        
+        # Mask initial guess of volume
+        if self.apply_volume_mask:
+            self.generate_mask_and_apply_to_volume()
 
         # Lists to store the loss after each iteration
         self.loss_total_list = []
@@ -309,6 +315,11 @@ class Reconstructor:
             self.volume_pred.Delta_n[mask.view(-1) == 0] = 0
             # Masking the optic axis caused NaNs in the Jones Matrix. So, we don't mask it.
             # self.volume_pred.optic_axis[:, mask.view(-1)==0] = 0
+
+    def generate_mask_and_apply_to_volume(self):
+        mask_shape = self.volume_pred.get_delta_n().shape
+        flattened_mask = create_half_zero_sandwich_mask(mask_shape)
+        self.volume_pred.Delta_n = torch.nn.Parameter(self.volume_pred.Delta_n * flattened_mask)
 
     def crop_pred_volume_to_reachable_region(self):
         """Crop the predicted volume to the region that is reachable by the microscope.
@@ -471,7 +482,7 @@ class Reconstructor:
 
         if self.apply_volume_mask:
             mask_shape = volume_estimation.get_delta_n().shape
-            flattened_mask = create_half_zero_mask(mask_shape)
+            flattened_mask = create_half_zero_sandwich_mask(mask_shape)
             volume_estimation.Delta_n.grad *= flattened_mask
 
         optimizer.step()
