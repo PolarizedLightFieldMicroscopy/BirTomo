@@ -157,9 +157,6 @@ class RayTraceLFM(OpticalElement):
         self.ray_valid_indices_by_ray_num = None
         self.vox_ctr_idx = None
         self.volume_ctr_um = None
-        self.ray_vol_colli_lengths = None
-        self.ray_vol_colli_indices = None
-        self.ray_direction_basis = None
         self.lateral_ray_length_from_center = 0
         self.voxel_span_per_ml = 0
         self.vol_shape_restricted = None
