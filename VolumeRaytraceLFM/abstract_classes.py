@@ -478,10 +478,17 @@ class RayTraceLFM(OpticalElement):
         self.lateral_ray_length_from_center = lat_length
         self.voxel_span_per_ml = vox_span
 
+        # DEBUG: checking indexing
+        use_full_volume = False
+        if use_full_volume:
+            vol_shape_for_raytracing = self.optical_info['volume_shape']
+        else:
+            vol_shape_for_raytracing = self.vol_shape_restricted
         ray_valid_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
             self.compute_ray_collisions(
-                ray_enter, ray_exit, self.optical_info['voxel_size_um'], self.vol_shape_restricted
+                ray_enter, ray_exit, self.optical_info['voxel_size_um'],
+                vol_shape_for_raytracing
                 )
 
         # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
@@ -772,6 +779,7 @@ class RayTraceLFM(OpticalElement):
                 self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
 
     def compute_ray_collisions(self, ray_enter, ray_exit, voxel_size_um, vol_shape):
+        # vol_shape = [7, 4, 4]
         ray_valid_indices = []
         ray_valid_direction = []
         ray_vol_colli_indices = []
