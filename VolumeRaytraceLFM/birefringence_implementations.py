@@ -1263,6 +1263,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             for m in range(len(voxels_of_segs[n_ray])):
                 ell = ell_in_voxels[n_ray][m]
                 vox = voxels_of_segs[n_ray][m]
+
+                # Check if indices are within bounds
+                y_index = vox[1] + microlens_offset[0]
+                z_index = vox[2] + microlens_offset[1]
+                y_in_bounds = 0 <= y_index < volume_in.Delta_n.shape[1]
+                z_in_bounds = 0 <= z_index < volume_in.Delta_n.shape[2]
+                if not (y_in_bounds and z_in_bounds):
+                    err_msg = ("Cumulative Jones Matrix computation failed. " +
+                        "Index out of bounds: Attempted to access Delta_n at index "
+                        f"[{vox[0]}, {y_index}, {z_index}], but this is outside "
+                        f"the valid range of Delta_n's shape {volume_in.Delta_n.shape}.")
+                    raise IndexError(err_msg)
+
                 Delta_n = volume_in.Delta_n[vox[0],
                                             vox[1]+microlens_offset[0],
                                             vox[2]+microlens_offset[1]]
@@ -1272,8 +1285,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                                 vox[2]+microlens_offset[1]]
                 JM = self.voxRayJM(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
                 JM_list.append(JM)
+        except IndexError as e:
+            raise IndexError(err_msg)
         except:
-            raise Exception("Error accessing the volume, try increasing the volume size in Y-Z")
+            raise Exception("Cumulative Jones Matrix computation failed. " +
+                "Error accessing the volume, try increasing the volume size in Y-Z")
         material_JM = BirefringentRaytraceLFM.rayJM_numpy(JM_list)
         return material_JM
 
@@ -1383,9 +1399,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 else:
                     material_JM[rays_with_voxels, ...] = \
                         material_JM[rays_with_voxels, ...] @ JM
-
+            except IndexError as e:
+                err_msg = ("Cumulative Jones Matrix computation failed. " +
+                    "At least one voxel index is out of bounds for the Delta_n " +
+                    f"which is of shape {volume_in.Delta_n.shape}. " +
+                    f"The max of the list of voxel indices (length {len(vox)}) is {max(vox)}.")
+                raise IndexError(err_msg)
             except:
-                raise Exception("Error accessing the volume, try increasing the volume size in Y-Z")
+                raise Exception("Cumulative Jones Matrix computation failed. " +
+                    "Error accessing the volume, try increasing the volume size in Y-Z")
 
         return material_JM
 
