@@ -779,7 +779,27 @@ class RayTraceLFM(OpticalElement):
                 self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
 
     def compute_ray_collisions(self, ray_enter, ray_exit, voxel_size_um, vol_shape):
-        # vol_shape = [7, 4, 4]
+        """
+        Computes parameters for collisions of rays with voxels.
+        For each ray defined by start (ray_enter) and end (ray_exit) points,
+        calculates the intersected voxels and lengths of intersections within
+        a volume of given shape (vol_shape) and voxel size (voxel_size_um).
+
+        Args:
+        - ray_enter: Array of ray start points.
+        - ray_exit: Array of ray end points.
+        - voxel_size_um: Size of a single voxel in micrometers.
+        - vol_shape: Shape of the volume as a list [x, y, z].
+
+        Returns:
+        - ray_valid_indices: List of valid ray indices.
+        - ray_vol_colli_indices: List of voxel indices for each ray segment.
+        - ray_vol_colli_lengths: List of intersection lengths for each voxel.
+        - ray_valid_direction: List of directions for each valid ray.
+
+        Class attributes accessed:
+        - self.ray_direction: The direction of each valid ray.
+        """
         ray_valid_indices = []
         ray_valid_direction = []
         ray_vol_colli_indices = []
