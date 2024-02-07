@@ -11,7 +11,10 @@ from VolumeRaytraceLFM.setup_parameters import (
 )
 from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructor
 from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
-from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
+from VolumeRaytraceLFM.utils.file_utils import (
+    create_unique_directory,
+    get_forward_img_str_postfix
+)
 
 BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device(
@@ -119,7 +122,8 @@ def recon():
 def recon_sphere():
     optical_info = setup_optical_parameters(
         "config_settings/optical_config_sphere.json")
-    foward_img_str = 'sphere6_thick1_31mla_17pix_25z.npy'
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'sphere6_thick1' + postfix + '.npy'
     simulate = True
     if simulate:
         optical_system = {'optical_info': optical_info}
@@ -140,14 +144,14 @@ def recon_sphere():
         # Save the images as numpy arrays
         if True:
             ret_numpy = ret_image_meas.detach().numpy()
-            np.save('forward_images/ret_' + foward_img_str, ret_numpy)
+            np.save('forward_images/ret_' + forward_img_str, ret_numpy)
             azim_numpy = azim_image_meas.detach().numpy()
-            np.save('forward_images/azim_' + foward_img_str, azim_numpy)
+            np.save('forward_images/azim_' + forward_img_str, azim_numpy)
     else:
         ret_image_meas = np.load(os.path.join(
-            'forward_images', 'ret_' + foward_img_str))
+            'forward_images', 'ret_' + forward_img_str))
         azim_image_meas = np.load(os.path.join(
-            'forward_images', 'azim_' + foward_img_str))
+            'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
     iteration_params = setup_iteration_parameters(
@@ -173,7 +177,8 @@ def recon_sphere():
 def recon_sphere_from_prev_try():
     optical_info = setup_optical_parameters(
         "config_settings/optical_config_sphere.json")
-    foward_img_str = 'sphere6_thick1_31mla_17pix.npy'
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'sphere6_thick1' + postfix + '.npy'
     simulate = True
     if simulate:
         optical_system = {'optical_info': optical_info}
@@ -194,14 +199,14 @@ def recon_sphere_from_prev_try():
         # Save the images as numpy arrays
         if True:
             ret_numpy = ret_image_meas.detach().numpy()
-            np.save('forward_images/ret_' + foward_img_str, ret_numpy)
+            np.save('forward_images/ret_' + forward_img_str, ret_numpy)
             azim_numpy = azim_image_meas.detach().numpy()
-            np.save('forward_images/azim_' + foward_img_str, azim_numpy)
+            np.save('forward_images/azim_' + forward_img_str, azim_numpy)
     else:
         ret_image_meas = np.load(os.path.join(
-            'forward_images', 'ret_' + foward_img_str))
+            'forward_images', 'ret_' + forward_img_str))
         azim_image_meas = np.load(os.path.join(
-            'forward_images', 'azim_' + foward_img_str))
+            'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
     iteration_params = setup_iteration_parameters(
@@ -225,9 +230,8 @@ def recon_sphere_from_prev_try():
 def recon_voxel():
     optical_info = setup_optical_parameters(
         "config_settings/optical_config_voxel.json")
-    num_microlenses = optical_info['n_micro_lenses']
-    num_pixels = optical_info['pixels_per_ml']
-    foward_img_str = f'voxel_pos_{num_microlenses}mla_{num_pixels}pix.npy'
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'voxel_pos' + postfix + '.npy'
     simulate = False
     if simulate:
         optical_system = {'optical_info': optical_info}
@@ -248,14 +252,14 @@ def recon_voxel():
         # Save the images as numpy arrays
         if True:
             ret_numpy = ret_image_meas.detach().numpy()
-            np.save('forward_images/ret_' + foward_img_str, ret_numpy)
+            np.save('forward_images/ret_' + forward_img_str, ret_numpy)
             azim_numpy = azim_image_meas.detach().numpy()
-            np.save('forward_images/azim_' + foward_img_str, azim_numpy)
+            np.save('forward_images/azim_' + forward_img_str, azim_numpy)
     else:
         ret_image_meas = np.load(os.path.join(
-            'forward_images', 'ret_' + foward_img_str))
+            'forward_images', 'ret_' + forward_img_str))
         azim_image_meas = np.load(os.path.join(
-            'forward_images', 'azim_' + foward_img_str))
+            'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
     iteration_params = setup_iteration_parameters(
@@ -289,7 +293,8 @@ def recon_continuation(shape='sphere', init_volume_path=None):
     if shape == 'sphere':
         optical_info = setup_optical_parameters(
             "config_settings/optical_config_sphere.json")
-        foward_img_str = 'sphere6_thick1_31mla_17pix.npy'
+        postfix = get_forward_img_str_postfix(optical_info)
+        forward_img_str = 'sphere6_thick1' + postfix + '.npy'
         volume_GT = BirefringentVolume(
             backend=BACKEND,
             optical_info=optical_info,
@@ -300,7 +305,8 @@ def recon_continuation(shape='sphere', init_volume_path=None):
     elif shape == 'helix':
         optical_info = setup_optical_parameters(
             "config_settings/optical_config_helix_z7.json")
-        foward_img_str = 'helix1_9mla_17pix_7z.npy'
+        postfix = get_forward_img_str_postfix(optical_info)
+        forward_img_str = 'helix1' + postfix + '_7z.npy'
         helix_path = "objects/Helix/Helix1_resaved.h5"
         volume_GT = BirefringentVolume.init_from_file(
             helix_path, BackEnds.PYTORCH, optical_info)
@@ -312,9 +318,9 @@ def recon_continuation(shape='sphere', init_volume_path=None):
     iteration_params["notes"] = f"Continuation of previous reconstruction {init_volume_path}"
     # visualize_volume(volume_GT, optical_info)
     ret_image_meas = np.load(os.path.join(
-        'forward_images', 'ret_' + foward_img_str))
+        'forward_images', 'ret_' + forward_img_str))
     azim_image_meas = np.load(os.path.join(
-        'forward_images', 'azim_' + foward_img_str))
+        'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
     initial_volume = BirefringentVolume.init_from_file(
@@ -362,7 +368,8 @@ def simulate_helix_images():
 def recon_helix():
     optical_info = setup_optical_parameters(
         "config_settings/optical_config_helix_z7.json")
-    foward_img_str = 'helix1_9mla_17pix_7z.npy'
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'helix1' + postfix + '_7z.npy'
     simulate = False
     if simulate:
         optical_system = {'optical_info': optical_info}
@@ -387,14 +394,14 @@ def recon_helix():
         # Save the images as numpy arrays
         if True:
             ret_numpy = ret_image_meas.detach().numpy()
-            np.save('forward_images/ret_' + foward_img_str, ret_numpy)
+            np.save('forward_images/ret_' + forward_img_str, ret_numpy)
             azim_numpy = azim_image_meas.detach().numpy()
-            np.save('forward_images/azim_' + foward_img_str, azim_numpy)
+            np.save('forward_images/azim_' + forward_img_str, azim_numpy)
     else:
         ret_image_meas = np.load(os.path.join(
-            'forward_images', 'ret_' + foward_img_str))
+            'forward_images', 'ret_' + forward_img_str))
         azim_image_meas = np.load(os.path.join(
-            'forward_images', 'azim_' + foward_img_str))
+            'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
     iteration_params = setup_iteration_parameters(

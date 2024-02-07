@@ -34,3 +34,19 @@ def create_unique_directory(base_output_dir):
     os.makedirs(unique_output_dir, exist_ok=True)
     print(f"Created the unique output directory {unique_output_dir}")
     return unique_output_dir
+
+
+def get_forward_img_str_postfix(optical_info):
+    """Generates the postfix for the forward_img_str variable based on
+    the number of microlenses and pixels per microlens.
+    
+    Args:
+        optical_info (dict)
+
+    Returns:
+        postfix (str): The postfix for the forward_img_str variable.
+    """
+    num_microlenses = optical_info['n_micro_lenses']
+    num_pixels = optical_info['pixels_per_ml']
+    postfix = f'_{num_microlenses}mla_{num_pixels}pix'
+    return postfix
