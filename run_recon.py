@@ -225,7 +225,9 @@ def recon_sphere_from_prev_try():
 def recon_voxel():
     optical_info = setup_optical_parameters(
         "config_settings/optical_config_voxel.json")
-    foward_img_str = 'voxel_pos_1mla_17pix.npy'
+    num_microlenses = optical_info['n_micro_lenses']
+    num_pixels = optical_info['pixels_per_ml']
+    foward_img_str = f'voxel_pos_{num_microlenses}mla_{num_pixels}pix.npy'
     simulate = False
     if simulate:
         optical_system = {'optical_info': optical_info}
@@ -277,6 +279,7 @@ def recon_voxel():
     )
     recon_config.save(recon_directory)
     reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor.rays.store_shifted_vox_indices()
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)

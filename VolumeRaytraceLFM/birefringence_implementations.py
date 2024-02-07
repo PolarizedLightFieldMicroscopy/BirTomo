@@ -890,6 +890,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.MLA_volume_geometry_ready = False
         self.verbose = True
         self.mla_execution_times = {}
+        self.vox_indices_ml_shifted = {}
+        self.vox_indices_by_mla_idx = {}
 
     def __str__(self):
         info = (
@@ -998,6 +1000,55 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         self.MLA_volume_geometry_ready = True
         return
+
+    def store_shifted_vox_indices(self):
+        """Store the shifted voxel indices for each microlens in a
+        dictionary. The shape of the volume is taken from the
+        optical_info, which should be the same as the volume used in the
+        ray tracing process.
+
+        Args:
+            None
+
+        Returns:
+            dict: contains the shifted voxel indices for each microlens
+
+        Class attributes accessed:
+        (directly)
+        - self.optical_info['n_micro_lenses']
+        - self.optical_info['n_voxels_per_ml']
+        - self.ray_vol_colli_indices
+        (indirectly)
+        - self.backend
+        - self.optical_info['volume_shape']
+
+        Notes:
+        - vox_list may be equivalent to self.vox_indices_ml_shifted[str(current_offset)]
+        """
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
+        n_ml_half = floor(n_micro_lenses / 2.0)
+        
+        collision_indices = self.ray_vol_colli_indices
+        
+        for ml_ii_idx in range(n_micro_lenses):
+            ml_ii = ml_ii_idx - n_ml_half
+            for ml_jj_idx in range(n_micro_lenses):
+                ml_jj = ml_jj_idx - n_ml_half
+                current_offset = self._calculate_current_offset(
+                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
+                    )
+                mla_index = (ml_ii_idx, ml_jj_idx)
+                vox_list = self._gather_voxels_of_rays_pytorch(
+                    current_offset, collision_indices
+                    )
+                # self._update_vox_indices_shifted(
+                #         current_offset, self.ray_vol_colli_indices
+                #     )
+                if mla_index not in self.vox_indices_by_mla_idx.keys():
+                        self.vox_indices_by_mla_idx[mla_index] = vox_list
+        
+        return self.vox_indices_by_mla_idx
 
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None,
                                  all_rays_at_once=True, intensity=False):
@@ -1445,7 +1496,36 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 self.optical_info['volume_shape']) for ix in range(len(vox))]
                 for vox in collision_indices
                 ]
+
         return self.vox_indices_ml_shifted[key]
+
+    def _gather_voxels_of_rays_pytorch(self, microlens_offset, collision_indices):
+        """Gathers the shifted voxel indices based on the microlens offset.
+
+        Args:
+            microlens_offset (list): Offset [y, z] in volume space due to the
+                                     microlens position.
+            collision_indices (list): The indices of the voxels that each ray
+                                      segment traverses.
+
+        Returns:
+            list: The shifted voxel indices in 1D.
+
+        Class attributes accessed:
+        - self.backend: The backend used for computation.
+        - self.optical_info['volume_shape']: The shape of the volume.
+        """
+        err_msg = "This function is for PyTorch backend only."
+        assert self.backend == BackEnds.PYTORCH, err_msg
+        list_of_voxel_lists = [
+        [RayTraceLFM.ravel_index((vox[ix][0],
+                vox[ix][1] + microlens_offset[0],
+                vox[ix][2] + microlens_offset[1]),
+        self.optical_info['volume_shape']) for ix in range(len(vox))]
+        for vox in collision_indices
+        ]
+
+        return list_of_voxel_lists
 
     def _filter_ray_data(self, mla_index):
         """
