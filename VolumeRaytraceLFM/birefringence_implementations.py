@@ -1409,9 +1409,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             if all_rays_at_once:
                 voxels_of_segs = self.vox_indices_ml_shifted_all
             else:
-                voxels_of_segs = self._update_vox_indices_shifted(
+                if mla_index not in self.vox_indices_by_mla_idx.keys():
+                    vox_list = self._gather_voxels_of_rays_pytorch(
                         microlens_offset, self.ray_vol_colli_indices
                         )
+                    self.vox_indices_by_mla_idx[mla_index] = vox_list
+                voxels_of_segs = self.vox_indices_by_mla_idx[mla_index]
 
         # Process interactions of all rays with each voxel
         # Iterate the interactions of all rays with the m-th voxel
