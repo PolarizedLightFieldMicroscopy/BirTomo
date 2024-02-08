@@ -282,9 +282,16 @@ def recon_voxel():
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+
+    # Changes made for developing masking process
+    reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
+    # reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.rays.store_shifted_vox_indices()
+    reconstructor.voxel_setup()
+
+    
     reconstructor.rays.verbose = False
+    reconstructor.rays.use_lenslet_based_filtering = False
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 

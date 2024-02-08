@@ -32,6 +32,10 @@ from VolumeRaytraceLFM.loss_functions import (
 from VolumeRaytraceLFM.utils.mask_utils import (
     create_half_zero_mask, create_half_zero_sandwich_mask
 )
+from VolumeRaytraceLFM.utils.dict_utils import (
+    extract_numbers_from_dict_of_lists,
+    transform_dict_list_to_set
+)
 
 COMBINING_DELTA_N = False
 DEBUG = False
@@ -379,6 +383,24 @@ class Reconstructor:
                     {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
         return torch.optim.Adam(parameters)
 
+    def voxel_setup(self):
+        """Extract volume voxel related information."""
+        self.rays.store_shifted_vox_indices()
+        vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+        vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
+        sorted_vox_list = sorted(vox_set)
+        vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
+        
+        vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
+        # Initialize a mask of the same size as Delta_n with False
+        Delta_n = self.volume_initial_guess.Delta_n
+        mask = torch.zeros(Delta_n.shape[0], dtype=torch.bool)
+        # Use tensor indexing to set True for indices in my_set
+        mask[vox_set_tensor] = True
+
+        self.mask = mask
+        return
+
     def compute_losses(self, ret_meas, azim_meas, ret_image_current, azim_current, volume_estimation, training_params):
         if not torch.is_tensor(ret_meas):
             ret_meas = torch.tensor(ret_meas)
@@ -481,9 +503,16 @@ class Reconstructor:
             self.print_grad_info(volume_estimation)
 
         if self.apply_volume_mask:
-            mask_shape = volume_estimation.get_delta_n().shape
-            flattened_mask = create_half_zero_sandwich_mask(mask_shape)
-            volume_estimation.Delta_n.grad *= flattened_mask
+            ## Apply a generic mask
+            # mask_shape = volume_estimation.get_delta_n().shape
+            # flattened_mask = create_half_zero_sandwich_mask(mask_shape)
+            # volume_estimation.Delta_n.grad *= flattened_mask
+
+            ## Apply voxel-specific mask
+            # volume_estimation.Delta_n.grad = volume_estimation.Delta_n.grad[self.mask]
+            # volume_estimation.optic_axis.grad = volume_estimation.optic_axis.grad[:, self.mask]
+            volume_estimation.Delta_n.grad *= self.mask
+            # volume_estimation.optic_axis.grad *= self.mask
 
         optimizer.step()
 
