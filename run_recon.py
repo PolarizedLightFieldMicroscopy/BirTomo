@@ -287,7 +287,7 @@ def recon_voxel():
     reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
     # reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.rays.store_shifted_vox_indices()
-    reconstructor.voxel_setup()
+    reconstructor.voxel_mask_setup()
 
     
     reconstructor.rays.verbose = False

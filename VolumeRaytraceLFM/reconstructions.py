@@ -211,13 +211,16 @@ class Reconstructor:
         self.rays = self.setup_raytracer(image=image_for_rays, device=device)
 
         self.apply_volume_mask = apply_volume_mask
+        self.mask = torch.ones(self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool)
 
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
         
         # Mask initial guess of volume
         if self.apply_volume_mask:
-            self.generate_mask_and_apply_to_volume()
+            self.voxel_mask_setup()
+            self.apply_mask_to_volume(self.volume_pred)
+            
 
         # Lists to store the loss after each iteration
         self.loss_total_list = []
@@ -383,7 +386,7 @@ class Reconstructor:
                     {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
         return torch.optim.Adam(parameters)
 
-    def voxel_setup(self):
+    def voxel_mask_setup(self):
         """Extract volume voxel related information."""
         self.rays.store_shifted_vox_indices()
         vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
@@ -393,12 +396,16 @@ class Reconstructor:
         
         vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
         # Initialize a mask of the same size as Delta_n with False
-        Delta_n = self.volume_initial_guess.Delta_n
+        Delta_n = self.volume_pred.Delta_n
         mask = torch.zeros(Delta_n.shape[0], dtype=torch.bool)
         # Use tensor indexing to set True for indices in my_set
         mask[vox_set_tensor] = True
 
         self.mask = mask
+        return
+    
+    def apply_mask_to_volume(self, volume : BirefringentVolume):
+        volume.Delta_n = torch.nn.Parameter(volume.Delta_n * self.mask)
         return
 
     def compute_losses(self, ret_meas, azim_meas, ret_image_current, azim_current, volume_estimation, training_params):
