@@ -6,6 +6,7 @@ from math import floor
 from tqdm import tqdm
 from timeit import default_timer as timer
 import time
+from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
@@ -1529,6 +1530,46 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         ]
 
         return list_of_voxel_lists
+
+    def _count_vox_raytrace_occurrences(self, zero_retardance_voxels=False):
+        """Counts occurances of voxels from ray tracing.
+        Iterates over micro-lenses, aggregates voxel indices,
+        and counts occurrences. Optionally filters for voxels
+        leading to zero retardance.
+
+        Args:
+            zero_retardance_voxels (bool): If True, filters for
+            voxels not contributing to nonzero retardance.
+
+        Returns:
+            Counter: Counts of voxel indices.
+        
+        Class attributes accessed:
+        (directly)
+        - self.optical_info['n_micro_lenses']
+        - self.vox_indices_by_mla_idx
+        (indirectly)
+        - self.ray_valid_indices
+        - self.nonzero_pixels_dict
+        """
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        count = Counter()
+        for ml_ii_idx in range(n_micro_lenses):
+            for ml_jj_idx in range(n_micro_lenses):
+                mla_index = (ml_ii_idx, ml_jj_idx)
+                vox_indicies = self.vox_indices_by_mla_idx[mla_index]
+
+                if zero_retardance_voxels:
+                    # Get the boolean mask for the pixels that are not zero
+                    nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
+                    # Find the voxels that lead to a zero pixel in the retardance image
+                    zero_ret_vox_indices = [vox_indicies[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
+                    vox_indicies = zero_ret_vox_indices
+
+                flat_list = [item for sublist in vox_indicies for item in sublist]
+                count.update(flat_list)
+                # print(f"mla_index: {mla_index}, counter: {count}")
+        return count
 
     def _filter_ray_data(self, mla_index):
         """
