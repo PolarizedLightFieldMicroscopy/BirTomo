@@ -1569,8 +1569,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return count
 
     def identify_voxels_repeated_zero_ret(self):
-        count = self._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
-        vox_list = filter_keys_by_count(count, 2)
+        counts = self._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
+        vox_list = filter_keys_by_count(counts, 2)
         return vox_list
 
     def _filter_ray_data(self, mla_index):

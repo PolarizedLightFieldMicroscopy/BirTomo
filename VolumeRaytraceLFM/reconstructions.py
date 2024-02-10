@@ -394,6 +394,14 @@ class Reconstructor:
         sorted_vox_list = sorted(vox_set)
         vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
         
+        vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+        
+        filtered_vox_list = list(vox_set - set(vox_list_excluding))
+        filter_out_repeat_zero_ret = True
+        if filter_out_repeat_zero_ret:
+            sorted_vox_list = sorted(filtered_vox_list)
+        
+        print(f"Masking out voxels except for {len(sorted_vox_list)} voxels: {sorted_vox_list}")
         vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
         # Initialize a mask of the same size as Delta_n with False
         Delta_n = self.volume_pred.Delta_n
