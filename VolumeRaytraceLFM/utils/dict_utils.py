@@ -28,3 +28,19 @@ def transform_dict_list_to_set(input_dict):
         # Flatten list of lists and convert to set
         result[key] = set(x for sublist in lists for x in sublist)
     return result
+
+
+def filter_keys_by_count(counter, count_ths):
+    """
+    Filters keys in a Counter by a count threshold.
+
+    Args:
+        counter (Counter): Counter with integer counts.
+        count_ths (int): Min count for keys to be included.
+
+    Returns:
+        list: Keys with counts >= count_ths.
+    """
+    filtered_list = [key for key, count in counter.items() 
+                    if count >= count_ths]
+    return sorted(filtered_list)
