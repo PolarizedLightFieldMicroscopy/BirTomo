@@ -1,5 +1,5 @@
 import pytest
-from VolumeRaytraceLFM.simulations import BackEnds
+from VolumeRaytraceLFM.abstract_classes import BackEnds
 
 
 BACKENDS = {

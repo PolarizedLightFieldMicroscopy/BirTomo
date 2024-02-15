@@ -6,10 +6,12 @@ from math import floor
 from tqdm import tqdm
 from timeit import default_timer as timer
 import time
+from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
+from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count
 from utils import errors
 
 NORM_PROJ = False   # normalize the projection of the ray onto the optic axis
@@ -668,7 +670,7 @@ class BirefringentVolume(BirefringentElement):
         jj = floor(center[1]*volume_shape[1]) - jj.astype(float)
         ii = floor(center[2]*volume_shape[2]) - ii.astype(float)
 
-        # DEBUG: checking the indicies
+        # DEBUG: checking the indices
         # np.argwhere(ellipsoid_border == np.min(ellipsoid_border))
         # plt.imshow(ellipsoid_border_mask[int(volume_shape[0] / 2),:,:])
         ellipsoid_border = (kk**2) / (radius[0]**2) + (jj**2) / (radius[1]**2) + (ii**2) / (radius[2]**2)
@@ -890,6 +892,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.MLA_volume_geometry_ready = False
         self.verbose = True
         self.mla_execution_times = {}
+        self.vox_indices_ml_shifted = {}
+        self.vox_indices_by_mla_idx = {}
 
     def __str__(self):
         info = (
@@ -998,6 +1002,50 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         self.MLA_volume_geometry_ready = True
         return
+
+    def store_shifted_vox_indices(self):
+        """Store the shifted voxel indices for each microlens in a
+        dictionary. The shape of the volume is taken from the
+        optical_info, which should be the same as the volume used in the
+        ray tracing process.
+
+        Args:
+            None
+
+        Returns:
+            dict: contains the shifted voxel indices for each microlens
+
+        Class attributes accessed:
+        (directly)
+        - self.optical_info['n_micro_lenses']
+        - self.optical_info['n_voxels_per_ml']
+        - self.ray_vol_colli_indices
+        (indirectly)
+        - self.backend
+        - self.optical_info['volume_shape']
+
+        Notes:
+        - vox_list may be equivalent to self.vox_indices_ml_shifted[str(current_offset)]
+        """
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
+        n_ml_half = floor(n_micro_lenses / 2.0)
+        collision_indices = self.ray_vol_colli_indices
+        for ml_ii_idx in range(n_micro_lenses):
+            ml_ii = ml_ii_idx - n_ml_half
+            for ml_jj_idx in range(n_micro_lenses):
+                ml_jj = ml_jj_idx - n_ml_half
+                current_offset = self._calculate_current_offset(
+                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
+                    )
+                mla_index = (ml_ii_idx, ml_jj_idx)
+                vox_list = self._gather_voxels_of_rays_pytorch(
+                    current_offset, collision_indices
+                    )
+                if mla_index not in self.vox_indices_by_mla_idx.keys():
+                        self.vox_indices_by_mla_idx[mla_index] = vox_list
+        
+        return self.vox_indices_by_mla_idx
 
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None,
                                  all_rays_at_once=True, intensity=False):
@@ -1263,6 +1311,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             for m in range(len(voxels_of_segs[n_ray])):
                 ell = ell_in_voxels[n_ray][m]
                 vox = voxels_of_segs[n_ray][m]
+
+                # Check if indices are within bounds
+                y_index = vox[1] + microlens_offset[0]
+                z_index = vox[2] + microlens_offset[1]
+                y_in_bounds = 0 <= y_index < volume_in.Delta_n.shape[1]
+                z_in_bounds = 0 <= z_index < volume_in.Delta_n.shape[2]
+                if not (y_in_bounds and z_in_bounds):
+                    err_msg = ("Cumulative Jones Matrix computation failed. " +
+                        "Index out of bounds: Attempted to access Delta_n at index "
+                        f"[{vox[0]}, {y_index}, {z_index}], but this is outside "
+                        f"the valid range of Delta_n's shape {volume_in.Delta_n.shape}.")
+                    raise IndexError(err_msg)
+
                 Delta_n = volume_in.Delta_n[vox[0],
                                             vox[1]+microlens_offset[0],
                                             vox[2]+microlens_offset[1]]
@@ -1272,8 +1333,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                                 vox[2]+microlens_offset[1]]
                 JM = self.voxRayJM(Delta_n, opticAxis, rayDir, ell, self.optical_info['wavelength'])
                 JM_list.append(JM)
+        except IndexError as e:
+            raise IndexError(err_msg)
         except:
-            raise Exception("Error accessing the volume, try increasing the volume size in Y-Z")
+            raise Exception("Cumulative Jones Matrix computation failed. " +
+                "Error accessing the volume, try increasing the volume size in Y-Z")
         material_JM = BirefringentRaytraceLFM.rayJM_numpy(JM_list)
         return material_JM
 
@@ -1342,9 +1406,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             if all_rays_at_once:
                 voxels_of_segs = self.vox_indices_ml_shifted_all
             else:
-                voxels_of_segs = self._update_vox_indices_shifted(
+                if mla_index not in self.vox_indices_by_mla_idx.keys():
+                    vox_list = self._gather_voxels_of_rays_pytorch(
                         microlens_offset, self.ray_vol_colli_indices
                         )
+                    self.vox_indices_by_mla_idx[mla_index] = vox_list
+                voxels_of_segs = self.vox_indices_by_mla_idx[mla_index]
 
         # Process interactions of all rays with each voxel
         # Iterate the interactions of all rays with the m-th voxel
@@ -1383,9 +1450,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 else:
                     material_JM[rays_with_voxels, ...] = \
                         material_JM[rays_with_voxels, ...] @ JM
-
+            except IndexError as e:
+                err_msg = ("Cumulative Jones Matrix computation failed. " +
+                    "At least one voxel index is out of bounds for the Delta_n " +
+                    f"which is of shape {volume_in.Delta_n.shape}. " +
+                    f"The max of the list of voxel indices (length {len(vox)}) is {max(vox)}.")
+                raise IndexError(err_msg)
             except:
-                raise Exception("Error accessing the volume, try increasing the volume size in Y-Z")
+                raise Exception("Cumulative Jones Matrix computation failed. " +
+                    "Error accessing the volume, try increasing the volume size in Y-Z")
 
         return material_JM
 
@@ -1423,7 +1496,82 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 self.optical_info['volume_shape']) for ix in range(len(vox))]
                 for vox in collision_indices
                 ]
+
         return self.vox_indices_ml_shifted[key]
+
+    def _gather_voxels_of_rays_pytorch(self, microlens_offset, collision_indices):
+        """Gathers the shifted voxel indices based on the microlens offset.
+
+        Args:
+            microlens_offset (list): Offset [y, z] in volume space due to the
+                                     microlens position.
+            collision_indices (list): The indices of the voxels that each ray
+                                      segment traverses.
+
+        Returns:
+            list: The shifted voxel indices in 1D.
+
+        Class attributes accessed:
+        - self.backend: The backend used for computation.
+        - self.optical_info['volume_shape']: The shape of the volume.
+        """
+        err_msg = "This function is for PyTorch backend only."
+        assert self.backend == BackEnds.PYTORCH, err_msg
+        list_of_voxel_lists = [
+        [RayTraceLFM.ravel_index((vox[ix][0],
+                vox[ix][1] + microlens_offset[0],
+                vox[ix][2] + microlens_offset[1]),
+        self.optical_info['volume_shape']) for ix in range(len(vox))]
+        for vox in collision_indices
+        ]
+
+        return list_of_voxel_lists
+
+    def _count_vox_raytrace_occurrences(self, zero_retardance_voxels=False):
+        """Counts occurances of voxels from ray tracing.
+        Iterates over micro-lenses, aggregates voxel indices,
+        and counts occurrences. Optionally filters for voxels
+        leading to zero retardance.
+
+        Args:
+            zero_retardance_voxels (bool): If True, filters for
+            voxels not contributing to nonzero retardance.
+
+        Returns:
+            Counter: Counts of voxel indices.
+        
+        Class attributes accessed:
+        (directly)
+        - self.optical_info['n_micro_lenses']
+        - self.vox_indices_by_mla_idx
+        (indirectly)
+        - self.ray_valid_indices
+        - self.nonzero_pixels_dict
+        """
+        assert self.vox_indices_by_mla_idx, "Voxel indices data must be populated first."
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        count = Counter()
+        for ml_ii_idx in range(n_micro_lenses):
+            for ml_jj_idx in range(n_micro_lenses):
+                mla_index = (ml_ii_idx, ml_jj_idx)
+                vox_indices = self.vox_indices_by_mla_idx[mla_index]
+
+                if zero_retardance_voxels:
+                    # Get the boolean mask for the pixels that are not zero
+                    nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
+                    # Find the voxels that lead to a zero pixel in the retardance image
+                    zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
+                    vox_indices = zero_ret_vox_indices
+
+                flat_list = [item for sublist in vox_indices for item in sublist]
+                count.update(flat_list)
+                # print(f"mla_index: {mla_index}, counter: {count}")
+        return count
+
+    def identify_voxels_repeated_zero_ret(self):
+        counts = self._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
+        vox_list = filter_keys_by_count(counts, 2)
+        return vox_list
 
     def _filter_ray_data(self, mla_index):
         """

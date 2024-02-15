@@ -157,9 +157,6 @@ class RayTraceLFM(OpticalElement):
         self.ray_valid_indices_by_ray_num = None
         self.vox_ctr_idx = None
         self.volume_ctr_um = None
-        self.ray_vol_colli_lengths = None
-        self.ray_vol_colli_indices = None
-        self.ray_direction_basis = None
         self.lateral_ray_length_from_center = 0
         self.voxel_span_per_ml = 0
         self.vol_shape_restricted = None
@@ -481,10 +478,17 @@ class RayTraceLFM(OpticalElement):
         self.lateral_ray_length_from_center = lat_length
         self.voxel_span_per_ml = vox_span
 
+        # DEBUG: checking indexing
+        use_full_volume = False
+        if use_full_volume:
+            vol_shape_for_raytracing = self.optical_info['volume_shape']
+        else:
+            vol_shape_for_raytracing = self.vol_shape_restricted
         ray_valid_indices_by_ray_num, ray_vol_colli_indices, \
         ray_vol_colli_lengths, ray_valid_direction = \
             self.compute_ray_collisions(
-                ray_enter, ray_exit, self.optical_info['voxel_size_um'], self.vol_shape_restricted
+                ray_enter, ray_exit, self.optical_info['voxel_size_um'],
+                vol_shape_for_raytracing
                 )
 
         # ray_valid_indices_by_ray_num gives pixel indices of the given ray number
@@ -775,6 +779,27 @@ class RayTraceLFM(OpticalElement):
                 self.ray_vol_colli_lengths[valid_ray, :len(val_lengths)] = torch.tensor(val_lengths)
 
     def compute_ray_collisions(self, ray_enter, ray_exit, voxel_size_um, vol_shape):
+        """
+        Computes parameters for collisions of rays with voxels.
+        For each ray defined by start (ray_enter) and end (ray_exit) points,
+        calculates the intersected voxels and lengths of intersections within
+        a volume of given shape (vol_shape) and voxel size (voxel_size_um).
+
+        Args:
+        - ray_enter: Array of ray start points.
+        - ray_exit: Array of ray end points.
+        - voxel_size_um: Size of a single voxel in micrometers.
+        - vol_shape: Shape of the volume as a list [x, y, z].
+
+        Returns:
+        - ray_valid_indices: List of valid ray indices.
+        - ray_vol_colli_indices: List of voxel indices for each ray segment.
+        - ray_vol_colli_lengths: List of intersection lengths for each voxel.
+        - ray_valid_direction: List of directions for each valid ray.
+
+        Class attributes accessed:
+        - self.ray_direction: The direction of each valid ray.
+        """
         ray_valid_indices = []
         ray_valid_direction = []
         ray_vol_colli_indices = []

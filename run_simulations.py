@@ -15,7 +15,7 @@ from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
 
 # Select backend method
 BACKEND = BackEnds.PYTORCH
-# backend = BackEnds.NUMPY
+# BACKEND = BackEnds.NUMPY
 
 if BACKEND == BackEnds.PYTORCH:
     import torch
