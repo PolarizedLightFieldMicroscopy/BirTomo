@@ -66,12 +66,23 @@ class BirefringentVolume(BirefringentElement):
         if volume_creation_args is not None:
             self.init_volume(volume_creation_args['init_mode'], volume_creation_args.get('init_args', {}))
 
+        self._initialize_combo_vector()
+
     def _initialize_volume_attributes(self, optical_info, Delta_n, optic_axis):
         self.volume_shape = optical_info['volume_shape']
         if self.backend == BackEnds.NUMPY:
             self._initialize_numpy_backend(Delta_n, optic_axis)
         elif self.backend == BackEnds.PYTORCH:
             self._initialize_pytorch_backend(Delta_n, optic_axis)
+        else:
+            raise ValueError(f"Unsupported backend type: {self.backend}")
+
+    def _initialize_combo_vector(self):
+        '''Create a combo vector with the birefringence and optic axis'''
+        if self.backend == BackEnds.NUMPY:
+            self.biraxis = self.Delta_n * self.optic_axis
+        elif self.backend == BackEnds.PYTORCH:
+            self.biraxis = nn.Parameter(self.Delta_n * self.optic_axis)
         else:
             raise ValueError(f"Unsupported backend type: {self.backend}")
 
@@ -164,6 +175,15 @@ class BirefringentVolume(BirefringentElement):
             return self.optic_axis.view(3, self.optical_info['volume_shape'][0],
                                             self.optical_info['volume_shape'][1],
                                             self.optical_info['volume_shape'][2])
+        else:
+            return self.optic_axis
+
+    def get_biraxis(self):
+        '''Retrieves the birefringence times optic axis as a 4D array'''
+        if self.backend == BackEnds.PYTORCH:
+            return self.biraxis.view(3, self.optical_info['volume_shape'][0],
+                                        self.optical_info['volume_shape'][1],
+                                        self.optical_info['volume_shape'][2])
         else:
             return self.optic_axis
 
@@ -1388,6 +1408,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 raise Exception("Error accessing the volume, try increasing the volume size in Y-Z")
 
         return material_JM
+
+    def _extract_from_biraxis(self, volume : BirefringentVolume):
+        '''Extracts the birefringence and optic axis from the biraxis attribute'''
+        biraxis = volume.biraxis
+        Delta_n = volume.Delta_n
+        opticAxis = self.volume.optic_axis
+        return Delta_n, opticAxis
 
     def _get_default_JM(self):
         """Returns the default Jones Matrix for a ray that does not
