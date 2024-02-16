@@ -70,7 +70,7 @@ def recon_xylem():
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
@@ -101,9 +101,9 @@ def recon_continuation(init_vol_path):
 
 if __name__ == '__main__':
     # recon_debug()
-    # recon_xylem()
-    xylem_vol_path = os.path.join('reconstructions', '2024-01-04_17-57-13', 'volume_ep_100.h5')
-    recon_continuation(xylem_vol_path)
+    recon_xylem()
+    # xylem_vol_path = os.path.join('reconstructions', '2024-01-04_17-57-13', 'volume_ep_100.h5')
+    # recon_continuation(xylem_vol_path)
     
     # Visualize a volume
     # optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")

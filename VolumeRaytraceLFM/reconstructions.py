@@ -29,6 +29,13 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
 from VolumeRaytraceLFM.loss_functions import (
     weighted_local_cosine_similarity_loss
 )
+from VolumeRaytraceLFM.utils.mask_utils import (
+    create_half_zero_mask, create_half_zero_sandwich_mask
+)
+from VolumeRaytraceLFM.utils.dict_utils import (
+    extract_numbers_from_dict_of_lists,
+    transform_dict_list_to_set
+)
 
 COMBINING_DELTA_N = False
 DEBUG = False
@@ -168,7 +175,8 @@ class Reconstructor:
     def __init__(self,
                  recon_info: ReconstructionConfig,
                  device='cpu',
-                 omit_rays_based_on_pixels=False
+                 omit_rays_based_on_pixels=False,
+                 apply_volume_mask=False
                  ):
         """
         Initialize the Reconstructor with the provided parameters.
@@ -202,8 +210,17 @@ class Reconstructor:
             image_for_rays = self.ret_img_meas
         self.rays = self.setup_raytracer(image=image_for_rays, device=device)
 
+        self.apply_volume_mask = apply_volume_mask
+        self.mask = torch.ones(self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool)
+
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
+        
+        # Mask initial guess of volume
+        if self.apply_volume_mask:
+            self.voxel_mask_setup()
+            self.apply_mask_to_volume(self.volume_pred)
+            
 
         # Lists to store the loss after each iteration
         self.loss_total_list = []
@@ -306,6 +323,11 @@ class Reconstructor:
             # Masking the optic axis caused NaNs in the Jones Matrix. So, we don't mask it.
             # self.volume_pred.optic_axis[:, mask.view(-1)==0] = 0
 
+    def generate_mask_and_apply_to_volume(self):
+        mask_shape = self.volume_pred.get_delta_n().shape
+        flattened_mask = create_half_zero_sandwich_mask(mask_shape)
+        self.volume_pred.Delta_n = torch.nn.Parameter(self.volume_pred.Delta_n * flattened_mask)
+
     def crop_pred_volume_to_reachable_region(self):
         """Crop the predicted volume to the region that is reachable by the microscope.
         Note: This method modifies the volume_pred attribute. The voxel indices of the predetermined ray tracing are no longer valid.
@@ -363,6 +385,36 @@ class Reconstructor:
         parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
                     {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
         return torch.optim.Adam(parameters)
+
+    def voxel_mask_setup(self):
+        """Extract volume voxel related information."""
+        self.rays.store_shifted_vox_indices()
+        vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+        vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
+        sorted_vox_list = sorted(vox_set)
+        vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
+        
+        vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+        
+        filtered_vox_list = list(vox_set - set(vox_list_excluding))
+        filter_out_repeat_zero_ret = True
+        if filter_out_repeat_zero_ret:
+            sorted_vox_list = sorted(filtered_vox_list)
+        
+        print(f"Masking out voxels except for {len(sorted_vox_list)} voxels: {sorted_vox_list}")
+        vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
+        # Initialize a mask of the same size as Delta_n with False
+        Delta_n = self.volume_pred.Delta_n
+        mask = torch.zeros(Delta_n.shape[0], dtype=torch.bool)
+        # Use tensor indexing to set True for indices in my_set
+        mask[vox_set_tensor] = True
+
+        self.mask = mask
+        return
+    
+    def apply_mask_to_volume(self, volume : BirefringentVolume):
+        volume.Delta_n = torch.nn.Parameter(volume.Delta_n * self.mask)
+        return
 
     def compute_losses(self, ret_meas, azim_meas, ret_image_current, azim_current, volume_estimation, training_params):
         if not torch.is_tensor(ret_meas):
@@ -450,17 +502,6 @@ class Reconstructor:
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
 
-        if COMBINING_DELTA_N:
-            Delta_n_combined = torch.cat(
-                [volume_estimation.Delta_n_first_part,
-                 volume_estimation.Delta_n_second_part],
-                dim=0
-            )
-            # Attempt to update Delta_n of BirefringentVolume directly
-            # The in-place operation causes problems with the gradient tracking
-            # with torch.no_grad():  # Temporarily disable gradient tracking
-            #   volume_estimation.Delta_n[:] = Delta_n_combined  # Update the value in-place
-            volume_estimation.Delta_n_combined = torch.nn.Parameter(Delta_n_combined)
         # Apply forward model
         [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
         loss, data_term, regularization_term = self._compute_loss(ret_image_current, azim_image_current)
@@ -468,37 +509,47 @@ class Reconstructor:
         # Verify the gradients before and after the backward pass
         if DEBUG:
             print("\nBefore backward pass:")
-            print("requires_grad:",
-                  volume_estimation.Delta_n_first_part.requires_grad)
-            print("Gradient for Delta_n_first_part:",
-                  volume_estimation.Delta_n_first_part.grad)
-            print("Gradient for Delta_n_second_part:",
-                  volume_estimation.Delta_n_second_part.grad)
+            self.print_grad_info(volume_estimation)
+
         loss.backward()
+
         if DEBUG:
             print("\nAfter backward pass:")
-            print("requires_grad:",
-                  volume_estimation.Delta_n_first_part.requires_grad)
-            print("Gradient for Delta_n_first_part:",
-                  volume_estimation.Delta_n_first_part.grad)
-            print("Gradient for Delta_n_second_part:",
-                  volume_estimation.Delta_n_second_part.grad)
+            self.print_grad_info(volume_estimation)
 
-        # One method would be to set the gradients of the second half to zero
-        if False:
-            half_length = volume_estimation.Delta_n.size(0) // 2
-            volume_estimation.Delta_n.grad[half_length:] = 0
+        if self.apply_volume_mask:
+            ## Apply a generic mask
+            # mask_shape = volume_estimation.get_delta_n().shape
+            # flattened_mask = create_half_zero_sandwich_mask(mask_shape)
+            # volume_estimation.Delta_n.grad *= flattened_mask
 
-        # Note: This is where volume_estimation.Delta_n.grad becomes non-zero
+            ## Apply voxel-specific mask
+            # volume_estimation.Delta_n.grad = volume_estimation.Delta_n.grad[self.mask]
+            # volume_estimation.optic_axis.grad = volume_estimation.optic_axis.grad[:, self.mask]
+            volume_estimation.Delta_n.grad *= self.mask
+            # volume_estimation.optic_axis.grad *= self.mask
+
         optimizer.step()
 
+        self.store_results(
+            ret_image_current, azim_image_current,
+            volume_estimation, loss, data_term, regularization_term
+        )
+        return
+
+
+    def print_grad_info(self, volume_estimation):
+        print("requires_grad:", volume_estimation.Delta_n_first_part.requires_grad)
+        print("Gradient for Delta_n_first_part:", volume_estimation.Delta_n_first_part.grad)
+        print("Gradient for Delta_n_second_part:", volume_estimation.Delta_n_second_part.grad)
+
+    def store_results(self, ret_image_current, azim_image_current, volume_estimation, loss, data_term, regularization_term):
         self.ret_img_pred = ret_image_current.detach().cpu().numpy()
         self.azim_img_pred = azim_image_current.detach().cpu().numpy()
         self.volume_pred = volume_estimation
         self.loss_total_list.append(loss.item())
         self.loss_data_term_list.append(data_term.item())
         self.loss_reg_term_list.append(regularization_term.item())
-        return
 
     def visualize_and_save(self, ep, fig, output_dir):
         volume_estimation = self.volume_pred
