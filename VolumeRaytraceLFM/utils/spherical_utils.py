@@ -57,11 +57,20 @@ def cartesian_to_spherical_torch(tensor):
     """
     x, y, z = tensor[0, ...], tensor[1, ...], tensor[2, ...]
     r = torch.sqrt(x**2 + y**2 + z**2)
-    # Ensure z/r stays within [-1, 1] to prevent NaNs in acos due to numerical issues.
-    # No need to adjust r directly, as we're addressing the potential division by zero
-    # or invalid acos argument by clamping.
-    z_r = torch.clamp(z / r, -1, 1)
-    phi = torch.acos(z_r)
+    without_mask = False
+    if without_mask:
+        z_r = torch.clamp(z / r, -1, 1)
+        phi = torch.acos(z_r)
+    else:
+        # Use a mask to identify locations with r = 0 to avoid division by zero
+        near_zero_radius_mask = r == 0
+        # Temporarily set r to 1 where it is 0 to avoid division by zero in these cases
+        r_safe = torch.where(near_zero_radius_mask, torch.tensor(1.0, device=tensor.device, dtype=tensor.dtype), r)
+        z_r = torch.clamp(z / r_safe, -1, 1)
+        phi = torch.acos(z_r)
+        # Optionally, set phi to 0 (or any arbitrary value) where r is 0, as the angle is undefined
+        phi = torch.where(near_zero_radius_mask,
+                          torch.tensor(0.0, device=tensor.device, dtype=tensor.dtype), phi)
     theta = torch.atan2(y, x)
     return torch.stack([r, phi, theta], dim=0)
 

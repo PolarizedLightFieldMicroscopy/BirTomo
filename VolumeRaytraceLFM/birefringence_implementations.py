@@ -199,6 +199,15 @@ class BirefringentVolume(BirefringentElement):
         else:
             return self.optic_axis
 
+    def get_sphere_coords(self):
+        '''Retrieves the spherical coordinates as a 4D array'''
+        if self.backend == BackEnds.PYTORCH:
+            return self.sphere_coords.view(3, self.optical_info['volume_shape'][0],
+                                              self.optical_info['volume_shape'][1],
+                                              self.optical_info['volume_shape'][2])
+        else:
+            return self.sphere_coords
+
     def normalize_optic_axis(self):
         """Normalize the optic axis per voxel."""
         if self.backend == BackEnds.PYTORCH:
@@ -1400,6 +1409,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 Delta_n = (volume_in.Delta_n_combined[vox] if OPTIMIZING_MODE
                            else volume_in.Delta_n[vox])
                 opticAxis = volume_in.optic_axis[:, vox].permute(1,0)
+                # optic_axis_all = self._extract_optic_axis_from_sphere_coords(volume_in)
+                # opticAxis = optic_axis_all[:, vox].permute(1,0)
 
                 # Subset of precomputed ray directions that interact with voxels in this step
                 filtered_ray_directions = ray_dir_basis[:, rays_with_voxels, :]
@@ -1425,8 +1436,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         '''Extracts the birefringence and optic axis from the biraxis attribute'''
         biraxis = volume.biraxis
         Delta_n = volume.Delta_n
-        opticAxis = self.volume.optic_axis
+        opticAxis = volume.optic_axis
+        # Placeholder implementation
         return Delta_n, opticAxis
+
+    def _extract_optic_axis_from_sphere_coords(self, volume : BirefringentVolume):
+        '''Extracts the optic axis from the spherical coordinates'''
+        sphere_coords = volume.sphere_coords
+        optic_axis = spherical_utils.spherical_to_cartesian_torch(sphere_coords)
+        return optic_axis
 
     def _get_default_JM(self):
         """Returns the default Jones Matrix for a ray that does not
