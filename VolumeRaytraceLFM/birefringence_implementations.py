@@ -10,6 +10,7 @@ from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
+from VolumeRaytraceLFM.utils import spherical_utils
 from utils import errors
 
 NORM_PROJ = False   # normalize the projection of the ray onto the optic axis
@@ -67,6 +68,7 @@ class BirefringentVolume(BirefringentElement):
             self.init_volume(volume_creation_args['init_mode'], volume_creation_args.get('init_args', {}))
 
         self._initialize_combo_vector()
+        self._initialize_spherical_coords()
 
     def _initialize_volume_attributes(self, optical_info, Delta_n, optic_axis):
         self.volume_shape = optical_info['volume_shape']
@@ -83,6 +85,16 @@ class BirefringentVolume(BirefringentElement):
             self.biraxis = self.Delta_n * self.optic_axis
         elif self.backend == BackEnds.PYTORCH:
             self.biraxis = nn.Parameter(self.Delta_n * self.optic_axis)
+        else:
+            raise ValueError(f"Unsupported backend type: {self.backend}")
+
+    def _initialize_spherical_coords(self):
+        '''Create a combo vector with the birefringence and optic axis'''
+        if self.backend == BackEnds.NUMPY:
+            self.sphere_coords = spherical_utils.cartesian_to_spherical_numpy(self.optic_axis)
+        elif self.backend == BackEnds.PYTORCH:
+            sphere_coords = spherical_utils.cartesian_to_spherical_torch(self.optic_axis)
+            self.sphere_coords = nn.Parameter(sphere_coords)
         else:
             raise ValueError(f"Unsupported backend type: {self.backend}")
 
