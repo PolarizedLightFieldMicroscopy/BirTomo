@@ -56,13 +56,12 @@ def cartesian_to_spherical_torch(tensor):
             dimension contains spherical coordinates (r, phi, theta).
     """
     x, y, z = tensor[0, ...], tensor[1, ...], tensor[2, ...]
-    r = torch.sqrt(x**2 + y**2 + z**2) + 1e-8
+    r = torch.sqrt(x**2 + y**2 + z**2)
     # Ensure z/r stays within [-1, 1] to prevent NaNs in acos due to numerical issues.
     # No need to adjust r directly, as we're addressing the potential division by zero
     # or invalid acos argument by clamping.
     z_r = torch.clamp(z / r, -1, 1)
     phi = torch.acos(z_r)
-    # phi = torch.acos(z / r)
     theta = torch.atan2(y, x)
     return torch.stack([r, phi, theta], dim=0)
 
