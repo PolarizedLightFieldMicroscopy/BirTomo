@@ -964,7 +964,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
              f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
                 f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"        
 
-        odd_mla_shift = np.mod(n_micro_lenses,2)
+        odd_mla_shift = np.mod(n_micro_lenses, 2)
         # Iterate microlenses in y direction
         for iix,ml_ii in tqdm(enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)),
                               f'Computing rows of microlens ret+azim {self.backend}'):
@@ -972,7 +972,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             for jjx,ml_jj in enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)):
                 # Compute offset to top corner of the volume in front of the microlens (ii,jj)
                 current_offset = (
-                    np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml*ml_jj])
+                    np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml * ml_jj])
                     + np.array(self.vox_ctr_idx[1:]) - n_voxels_per_ml_half
                     )
                 self.vox_indices_ml_shifted_all += [
@@ -1031,7 +1031,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
         n_ml_half = floor(n_micro_lenses / 2.0)
         collision_indices = self.ray_vol_colli_indices
-        for ml_ii_idx in range(n_micro_lenses):
+        if self.verbose:
+            print(f"Storing shifted voxel indices for each microlens")
+            row_iterable = tqdm(
+                range(n_micro_lenses),
+                desc=f'Computing rows of microlenses'
+            )
+        else:
+            row_iterable = range(n_micro_lenses)
+        for ml_ii_idx in row_iterable:
             ml_ii = ml_ii_idx - n_ml_half
             for ml_jj_idx in range(n_micro_lenses):
                 ml_jj = ml_jj_idx - n_ml_half

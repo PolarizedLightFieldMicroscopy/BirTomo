@@ -390,6 +390,7 @@ class Reconstructor:
         """Extract volume voxel related information."""
         self.rays.store_shifted_vox_indices()
         vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+        print("Collecting the set of voxels that are reached by the rays.")
         vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
         sorted_vox_list = sorted(vox_set)
         vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)

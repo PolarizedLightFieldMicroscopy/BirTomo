@@ -3,10 +3,12 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 
-# Convert volume to single 2D MIP image, input [batch,1,xDim,yDim,zDim]
 
-
-def volume_2_projections(vol_in, proj_type=torch.sum, scaling_factors=[1, 1, 1], depths_in_ch=True, ths=[0.0, 1.0], normalize=False, border_thickness=1, add_scale_bars=True, scale_bar_vox_sizes=[40, 20]):
+def volume_2_projections(vol_in, proj_type=torch.sum,
+                         scaling_factors=[1, 1, 1],
+                         depths_in_ch=True, ths=[0.0, 1.0], normalize=False,
+                         border_thickness=1, add_scale_bars=True,
+                         scale_bar_vox_sizes=[40, 20]):
     vol = vol_in.detach().clone().abs()
     # Normalize sets limits from 0 to 1
     if normalize:
@@ -68,7 +70,7 @@ def visualize_volume(volume: BirefringentVolume, optical_info: dict):
 
 def convert_volume_to_2d_mip(
     volume_input,
-    projection_func=torch.sum,
+    projection_func=torch.max,
     scaling_factors=(1, 1, 1),
     depths_in_channel=True,
     thresholds=(0.0, 1.0),
@@ -79,7 +81,7 @@ def convert_volume_to_2d_mip(
     """
     Convert a 3D volume to a single 2D Maximum Intensity Projection (MIP) image.
 
-    Parameters:
+    Args:
     - volume_input (Tensor): The input volume tensor of shape [batch, 1, xDim, yDim, zDim].
     - projection_func (function): Function to use for projection, e.g., torch.sum or torch.max.
     - scaling_factors (tuple): Scaling factors for x, y, and z dimensions respectively.
@@ -93,28 +95,32 @@ def convert_volume_to_2d_mip(
     - out_img (Tensor): The resulting 2D MIP image.
     """
     volume = volume_input.detach().abs().clone()
+
     # Normalize if required
     if normalize:
-        volume -= volume.min()
-        volume /= volume.max()
+        volume = safe_normalize(volume)
     # Permute and add channel if required
     if depths_in_channel:
         volume = volume.permute(0, 3, 2, 1).unsqueeze(1)
+
     # Apply intensity thresholds
     if thresholds != (0.0, 1.0):
         vol_min, vol_max = volume.min(), volume.max()
         threshold_min = vol_min + (vol_max - vol_min) * thresholds[0]
         threshold_max = vol_min + (vol_max - vol_min) * thresholds[1]
         volume = torch.clamp(volume, min=threshold_min, max=threshold_max)
+
     # Prepare new volume size after scaling
     scaled_vol_size = [int(volume.shape[i + 2] * scaling_factors[i])
                        for i in range(3)]
     batch_size, num_channels = volume.shape[:2]
+
     # Compute projections
     volume_cpu = volume.float().cpu()
-    x_projection = projection_func(volume_cpu, dim=2)
-    y_projection = projection_func(volume_cpu, dim=3)
-    z_projection = projection_func(volume_cpu, dim=4)
+    x_projection = projection_wrapper(volume_cpu, projection_func, dim=2)
+    y_projection = projection_wrapper(volume_cpu, projection_func, dim=3)
+    z_projection = projection_wrapper(volume_cpu, projection_func, dim=4)
+
     # Initialize output image with zeros
     out_img = torch.zeros(
         batch_size, num_channels,
@@ -129,13 +135,28 @@ def convert_volume_to_2d_mip(
     out_img[:, :, :scaled_vol_size[0], scaled_vol_size[1] + border_thickness:] = \
         F.interpolate(y_projection, size=(
             scaled_vol_size[0], scaled_vol_size[2]), mode='nearest')
+    
+    # Add white border lines between views
     if add_view_separation_lines:
         line_color = volume.max()
-        # Add white border lines
         out_img[:, :, scaled_vol_size[0]: scaled_vol_size[0] +
                 border_thickness, :] = line_color
         out_img[:, :, :, scaled_vol_size[1]: scaled_vol_size[1] + border_thickness] = line_color
     return out_img
+
+
+def projection_wrapper(volume, func, dim):
+    result = func(volume, dim=dim)
+    if isinstance(result, tuple):
+        return result[0]  # Assuming the first element is the projection
+    return result
+
+
+def safe_normalize(volume):
+    epsilon = 1e-8
+    volume_min = volume.min()
+    volume_max = volume.max()
+    return (volume - volume_min) / (volume_max - volume_min + epsilon)
 
 
 def prepare_plot_mip(mip_image, img_index=0, plot=True):
