@@ -24,6 +24,14 @@ voxel_shifted_args = {
     }
 }
 
+voxel_shiftedy_args = {
+    'init_mode': 'single_voxel',
+    'init_args': {
+        'delta_n': 0.05,
+        'offset': [0, 1, 0]
+    }
+}
+
 voxel_shiftedyz_args = {
     'init_mode': 'single_voxel',
     'init_args': {

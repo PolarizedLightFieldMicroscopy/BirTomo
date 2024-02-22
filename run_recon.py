@@ -154,6 +154,8 @@ def recon_sphere():
             'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
+    recon_optical_info["n_voxels_per_ml"] = 3
+    recon_optical_info["volume_shape"] = [33, 75, 75]
     iteration_params = setup_iteration_parameters(
         "config_settings/iter_config_sphere.json")
     initial_volume = BirefringentVolume(
@@ -168,7 +170,8 @@ def recon_sphere():
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    # reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
@@ -262,6 +265,8 @@ def recon_voxel():
             'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
+    # recon_optical_info["n_voxels_per_ml"] = 3
+    # recon_optical_info["volume_shape"] = [9, 17, 17]
     iteration_params = setup_iteration_parameters(
         "config_settings/iter_config.json")
     continue_recon = False
@@ -288,11 +293,62 @@ def recon_voxel():
     reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     # reconstructor.rays._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
     # vox_list = reconstructor.rays.identify_voxels_repeated_zero_ret()
-    reconstructor.voxel_mask_setup()
+    # reconstructor.voxel_mask_setup()
 
     
-    reconstructor.rays.verbose = False
-    reconstructor.rays.use_lenslet_based_filtering = False
+    # reconstructor.rays.verbose = False
+    # reconstructor.rays.use_lenslet_based_filtering = False
+    reconstructor.reconstruct(output_dir=recon_directory)
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
+
+def recon_voxel_shifted():
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config_voxel.json")
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'voxel_pos_shiftedy' + postfix + '.npy'
+    simulate = True
+    if simulate:
+        optical_system = {'optical_info': optical_info}
+        simulator = ForwardModel(optical_system, backend=BACKEND)
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.voxel_shiftedy_args
+        )
+        visualize_volume(volume_GT, optical_info)
+        simulator.forward_model(volume_GT)
+        simulator.view_images()
+        ret_image_meas = simulator.ret_img
+        azim_image_meas = simulator.azim_img
+        # Save the images as numpy arrays
+        if True:
+            ret_numpy = ret_image_meas.detach().numpy()
+            np.save('forward_images/ret_' + forward_img_str, ret_numpy)
+            azim_numpy = azim_image_meas.detach().numpy()
+            np.save('forward_images/azim_' + forward_img_str, azim_numpy)
+    else:
+        ret_image_meas = np.load(os.path.join(
+            'forward_images', 'ret_' + forward_img_str))
+        azim_image_meas = np.load(os.path.join(
+            'forward_images', 'azim_' + forward_img_str))
+
+    recon_optical_info = optical_info.copy()
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config.json")
+    initial_volume = BirefringentVolume(
+        backend=BACKEND,
+        optical_info=recon_optical_info,
+        volume_creation_args=volume_args.random_args
+    )
+    recon_directory = create_unique_directory("reconstructions")
+    if not simulate:
+        volume_GT = initial_volume
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
+        azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
+    )
+    recon_config.save(recon_directory)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
@@ -486,5 +542,6 @@ if __name__ == '__main__':
     # recon()
     # recon_sphere()
     recon_voxel()
+    # recon_voxel_shifted()
     # recon_sphere_from_prev_try()
     # helix()
