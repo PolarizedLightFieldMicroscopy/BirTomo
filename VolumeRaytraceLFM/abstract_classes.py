@@ -269,12 +269,12 @@ class RayTraceLFM(OpticalElement):
                 non_par_vec = torch.tensor(
                                 [1.0, 0, 0],
                                 device=value.device).unsqueeze(0).repeat(v1.shape[0], 1)
-                C = torch.cross(v1[invalid_indices,:], non_par_vec[invalid_indices,:])
+                C = torch.linalg.cross(v1[invalid_indices,:], non_par_vec[invalid_indices,:])
                 normal_vec[invalid_indices,:] = C / torch.linalg.norm(C, dim=1)
 
         # Compute the valid normal_vectors
         normal_vec[valid_indices] = (
-            torch.cross(v1[valid_indices], v2.unsqueeze(0).repeat(v1.shape[0],1)[valid_indices])
+            torch.linalg.cross(v1[valid_indices], v2.unsqueeze(0).repeat(v1.shape[0],1)[valid_indices])
             / torch.linalg.norm(
                 torch.linalg.cross(
                     v1[valid_indices],
