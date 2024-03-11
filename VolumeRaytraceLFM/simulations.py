@@ -136,7 +136,7 @@ class ForwardModel:
         my_fig = plot_retardance_orientation(
             ret_image, azim_image, azimuth_plot_type, include_labels=True
         )
-        my_fig.tight_layout()
+        # my_fig.tight_layout()
         plt.pause(0.2)
         plt.show(block=True)
 

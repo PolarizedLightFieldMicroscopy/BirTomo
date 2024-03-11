@@ -89,6 +89,8 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
     if ax == None:
         fig, ax = plt.subplots()
     im = ax.imshow(rgb, cmap='hsv')
+    ax.set_xticks([])
+    ax.set_yticks([])
     # Add colorbar for hue (azimuth)
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
     axins1 = inset_axes(ax,
@@ -133,7 +135,7 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
 
 def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv', include_labels=False):
     plt.ioff()  # Prevents plots from popping up
-    fig = plt.figure(figsize=(12, 2.5))
+    fig = plt.figure(figsize=(12, 3))
     plt.rcParams['image.origin'] = 'lower'
     # Retardance subplot
     plt.subplot(1, 3, 1)
@@ -167,6 +169,7 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv', 
         "text.usetex": False,
         "font.family": "sans-serif"
     })
+    plt.subplots_adjust(wspace=0.3, hspace=0)
     return fig
 
 
