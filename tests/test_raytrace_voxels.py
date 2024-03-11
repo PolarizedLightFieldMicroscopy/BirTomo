@@ -16,6 +16,17 @@ def has_common_number(lists):
     return True if common_elements else False
 
 
+def has_common_tuple(lists_of_tuples):
+    """Check if there exists a tuple that is in every list within the list of lists of tuples."""
+    # Use set intersection to find common elements
+    common_elements = set(lists_of_tuples[0])  # Start with elements from the first list
+    for lst in lists_of_tuples[1:]:
+        common_elements &= set(lst)  # Update the set with intersection
+        if not common_elements:
+            return False  # Early return if no common elements found
+    return True if common_elements else False
+
+
 @pytest.mark.parametrize("num_microlenses", [1, 3, 5, 7, 9])
 def test_raytrace_common_voxel(num_microlenses):
     optical_info = set_optical_info([3, 7, 7], 17, num_microlenses)
@@ -28,3 +39,16 @@ def test_raytrace_common_voxel(num_microlenses):
     ctr_idx = num_microlenses // 2
     vox_indices_list = simulator.rays.vox_indices_by_mla_idx[(ctr_idx, ctr_idx)]
     assert has_common_number(vox_indices_list) == True, err_msg
+
+
+@pytest.mark.parametrize("num_microlenses", [1, 3, 5, 7, 9])
+def test_raytrace_common_collision_voxel(num_microlenses):
+    """The common element should be:
+            (1, num_microlenses // 2, num_microlenses // 2).
+    """
+    optical_info = set_optical_info([3, 7, 7], 17, num_microlenses)
+    optical_system = {"optical_info": optical_info}
+    simulator = ForwardModel(optical_system, BackEnds.PYTORCH)
+    vox_indices_list = simulator.rays.ray_vol_colli_indices
+    err_msg = "All rays should pass through a common voxel for a single microlens."
+    assert has_common_tuple(vox_indices_list) == True, err_msg
