@@ -511,6 +511,8 @@ class RayTraceLFM(OpticalElement):
             self.ray_valid_indices = np.zeros((2, n_valid_rays), dtype=int)
         elif self.backend == BackEnds.PYTORCH:
             self.ray_valid_indices = torch.zeros(2, n_valid_rays, dtype=int)
+        else:
+            raise ValueError("Backend not recognized.")
 
         # Populate the ray valid indices array
         for ix, pixel_pos in enumerate(ray_valid_indices_by_ray_num):
