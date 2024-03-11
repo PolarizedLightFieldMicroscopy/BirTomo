@@ -7,6 +7,7 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
+from VolumeRaytraceLFM.visualization.plotting_rays import plot_ray_angles
 
 # Packages needed for siddon algorithm calculations
 from VolumeRaytraceLFM.my_siddon import (siddon_params, siddon_midpoints,
@@ -24,6 +25,8 @@ except:
             self, optic_config=None, members_to_learn=None,
         ):
             pass
+
+DEBUG = False
 
 class SimulType(Enum):
     ''' Defines which types of volumes we can have, as each type has a
@@ -398,8 +401,12 @@ class RayTraceLFM(OpticalElement):
         # Angles that reach the pixels
         cam_pixels_azim = np.arctan2(jv - ml_ctr[1], iv - ml_ctr[0])
         cam_pixels_azim[dist_from_ctr > ml_radius] = np.NaN
-        dist_from_ctr[dist_from_ctr > ml_radius] = np.NaN #
+        dist_from_ctr[dist_from_ctr > ml_radius] = np.NaN
         cam_pixels_tilt = np.arcsin(dist_from_ctr / ml_radius * naObj / nMedium)
+
+        # Plotting
+        if DEBUG:
+            plot_ray_angles(dist_from_ctr, cam_pixels_azim, cam_pixels_tilt)
 
         # Positions of the ray in volume coordinates
         # assuming rays pass through the center voxel

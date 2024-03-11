@@ -257,3 +257,30 @@ def plot_rays_at_sample(ray_entry, ray_exit, colormap='inferno', optical_config=
             )
 
         fig.show()
+
+
+def plot_ray_angles(dist_from_ctr, cam_pixels_azim, cam_pixels_tilt):
+    # Set up a figure with three subplots
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+    
+    # Plot Distance from Center
+    im1 = axs[0].imshow(dist_from_ctr, cmap='viridis')
+    axs[0].set_title('Distance from Center')
+    fig.colorbar(im1, ax=axs[0])  # Add a colorbar to the first plot
+    
+    # Plot Camera Pixels Azimuth
+    im2 = axs[1].imshow(cam_pixels_azim, cmap='hsv')
+    axs[1].set_title('Camera Pixels Azimuth')
+    fig.colorbar(im2, ax=axs[1])  # Add a colorbar to the second plot
+    
+    # Plot Camera Pixels Tilt
+    im3 = axs[2].imshow(cam_pixels_tilt, cmap='plasma')
+    axs[2].set_title('Camera Pixels Tilt')
+    fig.colorbar(im3, ax=axs[2])  # Add a colorbar to the third plot
+    
+    # Hide x and y ticks for all subplots
+    for ax in axs:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    
+    plt.show()
