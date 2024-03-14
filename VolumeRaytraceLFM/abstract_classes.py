@@ -374,7 +374,7 @@ class RayTraceLFM(OpticalElement):
         Parameters:
             pixels_per_ml (int): number of pixels per microlens in one direction,
                                     preferrable to be odd integer so there is a central
-                                    lenslet
+                                    pixel behind each lenslet
             naObj (float): numerical aperture of the objective lens
             nMedium (float): refractive index of the volume
             volume_ctr_um (np.array): 3D vector containing the coordinates of the center of the
