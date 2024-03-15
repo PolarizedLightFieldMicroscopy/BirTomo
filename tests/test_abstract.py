@@ -11,7 +11,7 @@ def ray_trace_lfm_instance(backend_fixture, optical_info_vol11):
     return RayTraceLFM(backend=backend_fixture, torch_args={}, optical_info=optical_info_vol11)
 
 
-def test_rays_through_vol(pixels_per_ml=5, naObj=60, nMedium=1.52, volume_ctr_um=np.array([0.5, 0.5, 0.5])):
+def test_rays_through_vol(pixels_per_ml=5, naObj=1.4, nMedium=1.52, volume_ctr_um=np.array([0.5, 0.5, 0.5])):
     ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
         pixels_per_ml, naObj, nMedium, volume_ctr_um
         )

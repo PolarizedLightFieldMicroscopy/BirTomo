@@ -138,3 +138,19 @@ class VolumeFileManager:
         data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n)
         data_grp.create_dataset(
             "optic_axis", optic_axis.shape, data=optic_axis)
+
+    def save_as_npz(self, filename, delta_n, optic_axis):
+        """
+        Saves the provided volume data as a NumPy NPZ file.
+
+        Args:
+        - filename (str): The file path where the NPZ file will be saved.
+        - delta_n (np.ndarray): Numpy array containing the birefringence information of the volume.
+        - optic_axis (np.ndarray): Numpy array containing the optic axis data of the volume.
+        """
+        try:
+            print(f'Saving volume to file: {filename}')
+            np.savez(filename, birefringence=delta_n, optic_axis=optic_axis)
+            print('Volume saved successfully as numpy arrays.')
+        except Exception as e:
+            print(f"Error saving file: {e}")

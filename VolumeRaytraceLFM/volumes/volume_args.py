@@ -84,6 +84,16 @@ sphere_args3 = {
     }
 }
 
+sphere_args3_ss3 = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [10.5, 10.5, 10.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': 0.01,
+        'border_thickness': 3
+    }
+}
+
 sphere_args4 = {
     'init_mode': 'ellipsoid',
     'init_args': {
@@ -151,6 +161,26 @@ shell_args = {
         'center': [0.5, 0.5, 0.5],
         'delta_n': -0.01,
         'border_thickness': 1
+    }
+}
+
+shell_pos_args = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [5.5, 9.5, 5.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': 0.01,
+        'border_thickness': 1
+    }
+}
+
+shell_pos_thick3_args = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [16.5, 28.5, 16.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': 0.01,
+        'border_thickness': 3
     }
 }
 
