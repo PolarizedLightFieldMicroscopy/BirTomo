@@ -177,7 +177,7 @@ shell_pos_args = {
 shell_pos_thick3_args = {
     'init_mode': 'ellipsoid',
     'init_args': {
-        'radius': [16.5, 28.5, 16.5] * 3,
+        'radius': [16.5, 28.5, 16.5],
         'center': [0.5, 0.5, 0.5],
         'delta_n': 0.01,
         'border_thickness': 3
