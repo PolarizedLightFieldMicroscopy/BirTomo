@@ -164,6 +164,26 @@ shell_args = {
     }
 }
 
+shell_pos_args = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [5.5, 9.5, 5.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': 0.01,
+        'border_thickness': 1
+    }
+}
+
+shell_pos_thick3_args = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [16.5, 28.5, 16.5] * 3,
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': 0.01,
+        'border_thickness': 3
+    }
+}
+
 shell1_args = {
     'init_mode': 'ellipsoid',
     'init_args': {

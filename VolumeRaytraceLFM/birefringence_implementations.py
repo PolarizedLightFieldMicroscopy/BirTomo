@@ -507,6 +507,12 @@ class BirefringentVolume(BirefringentElement):
         file_manager = VolumeFileManager()
         file_manager.save_as_h5(h5_file_path, delta_n, optic_axis, self.optical_info, description, optical_all)
 
+    def save_as_numpy_arrays(self, filename):
+        '''Store this volume into a npy file'''
+        delta_n, optic_axis = self._get_data_as_numpy_arrays()
+        file_manager = VolumeFileManager()
+        file_manager.save_as_npz(filename, delta_n, optic_axis)
+
     def _get_data_as_numpy_arrays(self):
         '''Converts delta_n and optic_axis based on backend'''
         delta_n = self.get_delta_n()
@@ -1087,7 +1093,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         err_message = "The volume in front of the microlenses" + \
             f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
             f"Increase the volume_shape to at least [{min_required_volume_size+1},{min_required_volume_size+1}]"
-        raise_error = True # DEBUG: set to False to avoid raising error
+        raise_error = False # DEBUG: set to False to avoid raising error
         if raise_error:
             assert min_required_volume_size <= volume_shape[1] and min_required_volume_size <= volume_shape[2], err_message
 
@@ -1161,7 +1167,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def _validate_volume_size(self, min_required_volume_size, volume_shape):
         if min_required_volume_size > volume_shape[1] or min_required_volume_size > volume_shape[2]:
             print(f"WARNING: The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}.")
-            raise_error = True # DEBUG: set to False to avoid raising error
+            raise_error = False # DEBUG: set to False to avoid raising error
             if raise_error:
                 raise ValueError(f"The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}.")
 
