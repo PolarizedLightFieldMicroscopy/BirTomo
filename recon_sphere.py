@@ -159,7 +159,7 @@ def recon_sphere6_thick():
         optical_info=recon_optical_info,
         volume_creation_args=volume_args.random_args
     )
-    recon_directory = create_unique_directory("reconstructions")
+    recon_directory = create_unique_directory("reconstructions", postfix='sphere6_thick2')
     if not simulate:
         volume_GT = initial_volume
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,

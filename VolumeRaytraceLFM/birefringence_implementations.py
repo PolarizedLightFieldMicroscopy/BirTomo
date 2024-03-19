@@ -1052,7 +1052,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 current_offset = self._calculate_current_offset(
                     ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
                     )
-                mla_index = (ml_ii_idx, ml_jj_idx)
+                mla_index = (ml_jj_idx, ml_ii_idx)
                 vox_list = self._gather_voxels_of_rays_pytorch(
                     current_offset, collision_indices
                     )
@@ -1131,12 +1131,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 # Generate (intensity or ret/azim) images for the current microlens,
                 #   by passing an offset to this function
                 #   depending on the microlens and the super resolution
-                current_mla_index = (ml_ii_idx, ml_jj_idx)
+                current_mla_index = (ml_jj_idx, ml_ii_idx)
                 start_time = time.time()
                 img_list = self.generate_images(volume_in, current_offset,
                                 intensity, mla_index=current_mla_index)
                 execution_time = time.time() - start_time
-                mla_index = (ml_ii_idx, ml_jj_idx)
+                mla_index = (ml_jj_idx, ml_ii_idx)
                 if mla_index not in self.mla_execution_times:
                     self.mla_execution_times[mla_index] = 0
                 self.mla_execution_times[mla_index] += execution_time
@@ -1567,7 +1567,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         count = Counter()
         for ml_ii_idx in range(n_micro_lenses):
             for ml_jj_idx in range(n_micro_lenses):
-                mla_index = (ml_ii_idx, ml_jj_idx)
+                mla_index = (ml_jj_idx, ml_ii_idx)
                 vox_indices = self.vox_indices_by_mla_idx[mla_index]
 
                 if zero_retardance_voxels:

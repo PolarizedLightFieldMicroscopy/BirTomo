@@ -465,9 +465,9 @@ class Reconstructor:
         if not torch.is_tensor(azimuth_meas):
             azimuth_meas = torch.tensor(azimuth_meas)
         # Vector difference GT
-        co_gt, ca_gt = retardance_meas * torch.cos(azimuth_meas), retardance_meas * torch.sin(azimuth_meas)
+        co_gt, ca_gt = retardance_meas * torch.cos(2*azimuth_meas), retardance_meas * torch.sin(2*azimuth_meas)
         # Compute data term loss
-        co_pred, ca_pred = retardance_pred * torch.cos(azimuth_pred), retardance_pred * torch.sin(azimuth_pred)
+        co_pred, ca_pred = retardance_pred * torch.cos(2*azimuth_pred), retardance_pred * torch.sin(2*azimuth_pred)
         data_term = ((co_gt - co_pred) ** 2 + (ca_gt - ca_pred) ** 2).mean()
 
         # Compute regularization term
@@ -478,6 +478,16 @@ class Reconstructor:
             (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
         )
 
+        # Try a scaled TV regularization
+        # avg_scale_1 = torch.abs((delta_n[1:, ...] + delta_n[:-1, ...])) / 2.0
+        # avg_scale_2 = torch.abs((delta_n[:, 1:, ...] + delta_n[:, :-1, ...])) / 2.0
+        # avg_scale_3 = torch.abs((delta_n[:, :, 1:] + delta_n[:, :, :-1])) / 2.0
+        # TV_reg_scaled = (
+        #     ((delta_n[1:, ...] - delta_n[:-1, ...]) * avg_scale_1).pow(2).sum() +
+        #     ((delta_n[:, 1:, ...] - delta_n[:, :-1, ...]) * avg_scale_2).pow(2).sum() +
+        #     ((delta_n[:, :, 1:] - delta_n[:, :, :-1]) * avg_scale_3).pow(2).sum()
+        # )        
+
         cos_sim_loss = weighted_local_cosine_similarity_loss(
             vol_pred.get_optic_axis(), vol_pred.get_delta_n()
         )
@@ -487,6 +497,7 @@ class Reconstructor:
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
 
         TV_term = params['TV_weight'] * TV_reg
+        # TV_term = params['TV_scaled_weight'] * TV_reg_scaled
         L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n ** 2).mean()
         cos_sim_term = params['cos_sim_weight'] * cos_sim_loss
         regularization_term = params['regularization_weight'] * (TV_term + L1_norm_term + cos_sim_term)
@@ -733,11 +744,11 @@ class Reconstructor:
         self.save_loss_lists_to_csv()
         my_description = "Volume estimation after " + \
             str(ep) + " iterations."
+        vol_save_path = os.path.join(output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5")
         self.volume_pred.save_as_file(
-            os.path.join(
-                output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
-            description=my_description
+            vol_save_path, description=my_description
         )
+        print("Saved the final volume estimation to", vol_save_path)
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
         plt.show()

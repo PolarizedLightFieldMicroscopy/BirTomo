@@ -134,6 +134,16 @@ sphere_args6_thick = {
     }
 }
 
+sphere_args6_thick_ss3 = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [19.5, 19.5, 19.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': 0.01,
+        'border_thickness': 6
+    }
+}
+
 sphere_shifted = {
     'init_mode': 'ellipsoid',
     'init_args': {

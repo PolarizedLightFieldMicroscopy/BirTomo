@@ -124,7 +124,7 @@ def recon_sphere():
         "config_settings/optical_config_sphere.json")
     postfix = get_forward_img_str_postfix(optical_info)
     forward_img_str = 'sphere3' + postfix + '.npy'
-    simulate = True
+    simulate = False
     if simulate:
         optical_system = {'optical_info': optical_info}
         # Initialize the forward model. Raytracing is performed as part of the initialization.
@@ -154,8 +154,8 @@ def recon_sphere():
             'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
-    recon_optical_info["n_voxels_per_ml"] = 3
-    recon_optical_info["volume_shape"] = [33, 75, 75]
+    # recon_optical_info["n_voxels_per_ml"] = 3
+    # recon_optical_info["volume_shape"] = [33, 75, 75]
     iteration_params = setup_iteration_parameters(
         "config_settings/iter_config_sphere.json")
     initial_volume = BirefringentVolume(
@@ -163,9 +163,14 @@ def recon_sphere():
         optical_info=recon_optical_info,
         volume_creation_args=volume_args.random_args
     )
-    recon_directory = create_unique_directory("reconstructions")
+    recon_directory = create_unique_directory("reconstructions", postfix='sphere3_abscos')
     if not simulate:
-        volume_GT = initial_volume
+        # volume_GT = initial_volume
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.sphere_args3
+        )
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
@@ -280,7 +285,7 @@ def recon_voxel():
             optical_info=recon_optical_info,
             volume_creation_args=volume_args.random_args
         )
-    recon_directory = create_unique_directory("reconstructions")
+    recon_directory = create_unique_directory("reconstructions", postfix='vox')
     if not simulate:
         volume_GT = initial_volume
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
@@ -289,8 +294,8 @@ def recon_voxel():
     recon_config.save(recon_directory)
 
     # Changes made for developing masking process
-    # reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
+    # reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     # reconstructor.rays._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
     # vox_list = reconstructor.rays.identify_voxels_repeated_zero_ret()
     # reconstructor.voxel_mask_setup()
@@ -341,7 +346,7 @@ def recon_voxel_shifted():
         optical_info=recon_optical_info,
         volume_creation_args=volume_args.random_args
     )
-    recon_directory = create_unique_directory("reconstructions")
+    recon_directory = create_unique_directory("reconstructions", postfix='voxshifted')
     if not simulate:
         volume_GT = initial_volume
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
@@ -502,6 +507,248 @@ def helix():
     recon_continuation(shape='helix', init_volume_path=helix_recon_path)
 
 
+def recon_voxel_noise():
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config_voxel.json")
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'voxel_pos' + postfix + '.npy'
+    percent_noise = 5
+    simulate = True
+    if simulate:
+        optical_system = {'optical_info': optical_info}
+        # Initialize the forward model. Raytracing is performed as part of the initialization.
+        simulator = ForwardModel(optical_system, backend=BACKEND)
+        # Volume creation
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.voxel_args
+        )
+        # visualize_volume(volume_GT, optical_info)
+
+        simulator.forward_model(volume_GT)
+        # simulator.view_images()
+        ret_image_meas = simulator.ret_img
+        azim_image_meas = simulator.azim_img
+        add_noise = True
+        if add_noise:
+            ret_numpy = ret_image_meas.detach().numpy()
+            azim_numpy = azim_image_meas.detach().numpy()
+            # Generate Gaussian noise
+            mean = 0
+            std = np.pi * percent_noise / 100
+            gaussian_noise = np.random.normal(mean, std, ret_numpy.shape)
+            arrays = [ret_numpy, azim_numpy]
+            array_names = ['ret_noise'+str(percent_noise), 'azim_noise'+str(percent_noise)]  # Names for saving files
+            for i, image in enumerate(arrays):
+                # Ensure the image array is a float type for noise addition
+                image_float = np.float32(image)
+                gaussian_noise = np.random.normal(mean, std, image.shape)
+                noisy_array = image_float + gaussian_noise
+                noisy_array = np.clip(noisy_array, 0, 255)
+                # Convert back to the original data type, e.g., uint8 if it was an image
+                # noisy_array = np.uint8(noisy_array)
+
+                save_path = f'forward_images/{array_names[i]}_' + forward_img_str
+                np.save(save_path, noisy_array)
+                print(f'Saved noisy array to {save_path}')
+
+    else:
+        pass
+        # ret_image_meas = np.load(os.path.join(
+        #     'forward_images', 'ret_' + forward_img_str))
+        # azim_image_meas = np.load(os.path.join(
+        #     'forward_images', 'azim_' + forward_img_str))
+    ret_image_meas = np.load(os.path.join(
+        'forward_images', 'ret_noise'+str(percent_noise)+'_' + forward_img_str))
+    azim_image_meas = np.load(os.path.join(
+        'forward_images', 'azim_noise'+str(percent_noise)+'_' + forward_img_str))
+
+    recon_optical_info = optical_info.copy()
+    # recon_optical_info["n_voxels_per_ml"] = 3
+    # recon_optical_info["volume_shape"] = [9, 17, 17]
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config.json")
+    continue_recon = False
+    if continue_recon:
+        volume_path = "reconstructions/2024-01-04_16-31-34/volume_ep_100.h5"
+        initial_volume = BirefringentVolume.init_from_file(
+        volume_path, BackEnds.PYTORCH, recon_optical_info)
+    else:
+        initial_volume = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=recon_optical_info,
+            volume_creation_args=volume_args.random_args
+        )
+    recon_directory = create_unique_directory("reconstructions")
+    if not simulate:
+        volume_GT = initial_volume
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
+        azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
+    )
+    recon_config.save(recon_directory)
+
+    # Changes made for developing masking process
+    reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
+    # reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor.reconstruct(output_dir=recon_directory)
+
+
+def recon_sphere_noise():
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config_sphere_ss3.json")
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'sphere3' + postfix + '_ss3.npy'
+    percent_noise = 5
+    simulate = False
+    if simulate:
+        optical_system = {'optical_info': optical_info}
+        # Initialize the forward model. Raytracing is performed as part of the initialization.
+        simulator = ForwardModel(optical_system, backend=BACKEND)
+        # Volume creation
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.sphere_args3_ss3
+        )
+        # visualize_volume(volume_GT, optical_info)
+
+        simulator.forward_model(volume_GT)
+        # simulator.view_images()
+        ret_image_meas = simulator.ret_img
+        azim_image_meas = simulator.azim_img
+
+        ret_numpy = ret_image_meas.detach().numpy()
+        azim_numpy = azim_image_meas.detach().numpy()
+        # Generate Gaussian noise
+        mean = 0
+        std = np.pi * percent_noise / 100
+        gaussian_noise = np.random.normal(mean, std, ret_numpy.shape)
+        arrays = [ret_numpy, azim_numpy]
+        array_names = ['ret_noise'+str(percent_noise), 'azim_noise'+str(percent_noise)]  # Names for saving files
+        for i, image in enumerate(arrays):
+            # Ensure the image array is a float type for noise addition
+            image_float = np.float32(image)
+            gaussian_noise = np.random.normal(mean, std, image.shape)
+            noisy_array = image_float + gaussian_noise
+            noisy_array = np.clip(noisy_array, 0, 255)
+            # Convert back to the original data type, e.g., uint8 if it was an image
+            # noisy_array = np.uint8(noisy_array)
+
+            save_path = f'forward_images/{array_names[i]}_' + forward_img_str
+            np.save(save_path, noisy_array)
+            print(f'Saved noisy array to {save_path}')
+    else:
+        pass
+    ret_image_meas = np.load(os.path.join(
+        'forward_images', 'ret_noise'+str(percent_noise)+'_' + forward_img_str))
+    azim_image_meas = np.load(os.path.join(
+        'forward_images', 'azim_noise'+str(percent_noise)+'_' + forward_img_str))
+
+    recon_optical_info = setup_optical_parameters(
+        "config_settings/optical_config_sphere.json")
+    # recon_optical_info = optical_info.copy()
+    # recon_optical_info["n_voxels_per_ml"] = 3
+    # recon_optical_info["volume_shape"] = [33, 75, 75]
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config_sphere.json")
+    initial_volume = BirefringentVolume(
+        backend=BackEnds.PYTORCH,
+        optical_info=recon_optical_info,
+        volume_creation_args=volume_args.random_args
+    )
+    recon_directory = create_unique_directory("reconstructions")
+    if not simulate:
+        volume_GT = initial_volume
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
+        azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
+    )
+    recon_config.save(recon_directory)
+    # reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
+    reconstructor.rays.verbose = False
+    reconstructor.reconstruct(output_dir=recon_directory)
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
+
+def recon_sphere6_noise():
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config_sphere6.json")
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'sphere6' + postfix + '.npy'
+    percent_noise = 5
+    simulate = False
+    if simulate:
+        optical_system = {'optical_info': optical_info}
+        # Initialize the forward model. Raytracing is performed as part of the initialization.
+        simulator = ForwardModel(optical_system, backend=BACKEND)
+        # Volume creation
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.sphere_args6_thick
+        )
+        # visualize_volume(volume_GT, optical_info)
+
+        simulator.forward_model(volume_GT)
+        simulator.view_images()
+        ret_image_meas = simulator.ret_img
+        azim_image_meas = simulator.azim_img
+
+        ret_numpy = ret_image_meas.detach().numpy()
+        azim_numpy = azim_image_meas.detach().numpy()
+        # Generate Gaussian noise
+        mean = 0
+        std = np.pi * percent_noise / 100
+        gaussian_noise = np.random.normal(mean, std, ret_numpy.shape)
+        arrays = [ret_numpy, azim_numpy]
+        array_names = ['ret_noise'+str(percent_noise), 'azim_noise'+str(percent_noise)]  # Names for saving files
+        for i, image in enumerate(arrays):
+            # Ensure the image array is a float type for noise addition
+            image_float = np.float32(image)
+            gaussian_noise = np.random.normal(mean, std, image.shape)
+            noisy_array = image_float + gaussian_noise
+            noisy_array = np.clip(noisy_array, 0, 255)
+            # Convert back to the original data type, e.g., uint8 if it was an image
+            # noisy_array = np.uint8(noisy_array)
+
+            save_path = f'forward_images/{array_names[i]}_' + forward_img_str
+            np.save(save_path, noisy_array)
+            print(f'Saved noisy array to {save_path}')
+    else:
+        pass
+    ret_image_meas = np.load(os.path.join(
+        'forward_images', 'ret_noise'+str(percent_noise)+'_' + forward_img_str))
+    azim_image_meas = np.load(os.path.join(
+        'forward_images', 'azim_noise'+str(percent_noise)+'_' + forward_img_str))
+
+    recon_optical_info = setup_optical_parameters(
+        "config_settings/optical_config_sphere6.json")
+    # recon_optical_info = optical_info.copy()
+    # recon_optical_info["n_voxels_per_ml"] = 3
+    # recon_optical_info["volume_shape"] = [33, 75, 75]
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config_sphere.json")
+    initial_volume = BirefringentVolume(
+        backend=BackEnds.PYTORCH,
+        optical_info=recon_optical_info,
+        volume_creation_args=volume_args.random_args
+    )
+    recon_directory = create_unique_directory("reconstructions", postfix="sphere6_noise_cos2")
+    if not simulate:
+        volume_GT = initial_volume
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
+        azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
+    )
+    recon_config.save(recon_directory)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=False, apply_volume_mask=True)
+    reconstructor.rays.verbose = False
+    reconstructor.reconstruct(output_dir=recon_directory)
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
+
+# Perform forward model with sphere_args6_thick_ss3
+
 def main():
     optical_info = setup_optical_parameters(
         "config_settings/optical_config_largemla.json")
@@ -540,8 +787,11 @@ def main():
 
 if __name__ == '__main__':
     # recon()
-    # recon_sphere()
-    recon_voxel()
+    recon_sphere()
+    # recon_voxel()
     # recon_voxel_shifted()
     # recon_sphere_from_prev_try()
     # helix()
+    # recon_voxel_noise()
+    # recon_sphere_noise()
+    # recon_sphere6_noise()

@@ -43,12 +43,12 @@ def recon_debug():
         optical_info=recon_optical_info,
         volume_creation_args = volume_args.random_args1
     )
-    recon_directory = create_unique_directory("reconstructions")
+    recon_directory = create_unique_directory("reconstructions", postfix='xylem_debug')
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
-    reconstructor.rays.verbose = False
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor.rays.verbose = True
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
     end_time = time.time()
@@ -66,11 +66,11 @@ def recon_xylem():
         optical_info=recon_optical_info,
         volume_creation_args = volume_args.random_args1
     )
-    recon_directory = create_unique_directory("reconstructions")
+    recon_directory = create_unique_directory("reconstructions", postfix='xylem_randstart')
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=False)
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
@@ -82,19 +82,15 @@ def recon_continuation(init_vol_path):
     iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem.json")
     ret_image_meas, azim_image_meas = get_ret_azim_images(recon_optical_info)
 
-    # reconstruction
     initial_volume = BirefringentVolume.init_from_file(
         init_vol_path, BackEnds.PYTORCH, recon_optical_info)
     visualize_volume(initial_volume, recon_optical_info)
-
-    recon_directory = create_unique_directory("reconstructions")
-
-    # Compute the reconstuction
+    recon_directory = create_unique_directory("reconstructions", postfix='xylem_continue')
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
         azim_image_meas, initial_volume, iteration_params, gt_vol=initial_volume
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(output_dir=recon_directory)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
