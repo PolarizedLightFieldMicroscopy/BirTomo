@@ -733,11 +733,11 @@ class Reconstructor:
         self.save_loss_lists_to_csv()
         my_description = "Volume estimation after " + \
             str(ep) + " iterations."
+        vol_save_path = os.path.join(output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5")
         self.volume_pred.save_as_file(
-            os.path.join(
-                output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
-            description=my_description
+            vol_save_path, description=my_description
         )
+        print("Saved the final volume estimation to", vol_save_path)
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
         plt.show()
