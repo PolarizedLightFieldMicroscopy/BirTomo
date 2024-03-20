@@ -9,6 +9,9 @@ from VolumeRaytraceLFM.birefringence_implementations import (
 from VolumeRaytraceLFM.visualization.plotting_ret_azim import (
     plot_retardance_orientation
 )
+from VolumeRaytraceLFM.visualization.plotting_intensity import (
+    plot_intensity_images
+)
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
 
 
@@ -142,7 +145,10 @@ class ForwardModel:
 
     def view_intensity_images(self):
         """View the simulated intensity images."""
-        pass
+        my_fig = plot_intensity_images(self.img_list)
+        my_fig.tight_layout()
+        plt.pause(0.2)
+        plt.show(block=True)
 
     def save_ret_azim_images(self):
         """Save the simulated retardance and azimuth images."""
@@ -203,10 +209,14 @@ class ForwardModel:
                 List of intensity images, created only if 'intensity' is True.
         """
         ret_image, azim_image = self.rays.ray_trace_through_volume(volume)
+        print("Retardance and azimuth images computed with LC-PolScope setup")
         self.ret_img = ret_image
         self.azim_img = azim_image
 
         if intensity and self.is_numpy_backend():
+            self.optical_info['analyzer'] = JonesMatrixGenerators.left_circular_polarizer()
+            self.optical_info['polarizer_swing'] = 0.03
             self.img_list = self.rays.ray_trace_through_volume(
                 volume, intensity=True
             )
+            print("Intensity images computed with LC-PolScope setup")
