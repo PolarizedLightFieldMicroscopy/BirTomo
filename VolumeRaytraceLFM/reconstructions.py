@@ -208,6 +208,7 @@ class Reconstructor:
         image_for_rays = None
         if omit_rays_based_on_pixels:
             image_for_rays = self.ret_img_meas
+            print("\nOmitting rays based on pixels with zero retardance.")
         self.rays = self.setup_raytracer(image=image_for_rays, device=device)
 
         self.apply_volume_mask = apply_volume_mask
@@ -228,7 +229,7 @@ class Reconstructor:
         self.loss_reg_term_list = []
 
         self.loss_TV_reg_list = []
-        self.loss_1000L1_list = []
+        self.loss_L1_list = []
         self.loss_cos_sim_list = []
 
     def _initialize_volume(self):
@@ -503,7 +504,7 @@ class Reconstructor:
         regularization_term = params['regularization_weight'] * (TV_term + L1_norm_term + cos_sim_term)
 
         self.loss_TV_reg_list.append(TV_term.item())
-        self.loss_1000L1_list.append(L1_norm_term.item())
+        self.loss_L1_list.append(L1_norm_term.item())
         self.loss_cos_sim_list.append(cos_sim_term.item())
 
         # Total loss
@@ -593,17 +594,17 @@ class Reconstructor:
             fig.canvas.flush_events()
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
-            if ep % 10 == 0:
-                filename = f"optim_ep_{'{:03d}'.format(ep)}.pdf"
+            if ep % 20 == 0:
+                filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
                 # self.save_loss_lists_to_csv()
             time.sleep(0.1)
-        if ep % 100 == 0:
+        if ep % 20 == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
                 os.path.join(
-                    output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
+                    output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5"),
                 description=my_description
             )
         return
@@ -686,10 +687,10 @@ class Reconstructor:
         with open(filepath_reg, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Total Variation of birefringence",
-                             "L1 norm of birefringence (x1000)",
+                             "L1 norm of birefringence",
                              "Cosine similarity of optic axis"])
             for TV_reg, L1_norm, cos_sim in zip(self.loss_TV_reg_list,
-                                                self.loss_1000L1_list,
+                                                self.loss_L1_list,
                                                 self.loss_cos_sim_list):
                 writer.writerow([TV_reg, L1_norm, cos_sim])
 
@@ -744,7 +745,7 @@ class Reconstructor:
         self.save_loss_lists_to_csv()
         my_description = "Volume estimation after " + \
             str(ep) + " iterations."
-        vol_save_path = os.path.join(output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5")
+        vol_save_path = os.path.join(output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5")
         self.volume_pred.save_as_file(
             vol_save_path, description=my_description
         )
