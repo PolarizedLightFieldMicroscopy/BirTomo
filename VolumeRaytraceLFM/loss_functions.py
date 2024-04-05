@@ -97,6 +97,7 @@ def weighted_local_cosine_similarity_loss(optic_axis, delta_n):
     
     The loss is between 0 and 2.
     """
+    # TODO: make unnormalized version to hopefully make this term decrease
     normalized_optic_axis = F.normalize(optic_axis, p=2, dim=0)
     normalized_delta_n = delta_n / delta_n.abs().max() / 2
     err_message = "Normalized birefringence values are not within the range [-0.5, 0.5]."

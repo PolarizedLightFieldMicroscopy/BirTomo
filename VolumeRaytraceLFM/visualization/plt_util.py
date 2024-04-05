@@ -1,8 +1,11 @@
 import matplotlib.pyplot as plt
 
 
-def setup_visualization(window_title):
-    plt.ion()
+def setup_visualization(window_title, plot_live=True):
+    if plot_live:
+        plt.ion()
+    else:
+        plt.ioff()
     fig_size = (10, 9)
     figure = plt.figure(figsize=fig_size)
     plt.rcParams['image.origin'] = 'lower'

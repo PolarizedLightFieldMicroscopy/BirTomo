@@ -1,5 +1,5 @@
 {
-    "volume_shape"      : [5, 11, 11],
+    "volume_shape"      : [7, 11, 11],
     "axial_voxel_size_um"     : 1.0,
     "cube_voxels"       : true,
     "pixels_per_ml"     : 17,

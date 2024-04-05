@@ -230,6 +230,7 @@ class Reconstructor:
 
         self.loss_TV_reg_list = []
         self.loss_L1_list = []
+        self.loss_L2_list = []
         self.loss_cos_sim_list = []
 
     def _initialize_volume(self):
@@ -474,9 +475,9 @@ class Reconstructor:
         # Compute regularization term
         delta_n = vol_pred.get_delta_n()
         TV_reg = (
-            (delta_n[1:, ...] - delta_n[:-1, ...]).pow(2).sum() +
-            (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
-            (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
+            (delta_n[1:, ...] - delta_n[:-1, ...]).pow(2).mean() +
+            (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).mean() +
+            (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).mean()
         )
 
         # Try a scaled TV regularization
@@ -497,20 +498,31 @@ class Reconstructor:
             params['regularization_weight'] = params['regularization_weight'][0]
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
 
+        # TODO: increase magnitude of all terms
         TV_term = params['TV_weight'] * TV_reg
         # TV_term = params['TV_scaled_weight'] * TV_reg_scaled
-        L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n ** 2).mean()
+        L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n.abs()).mean()
+        L2_norm_term = params['L2_norm_weight'] * (vol_pred.Delta_n ** 2).mean()
         cos_sim_term = params['cos_sim_weight'] * cos_sim_loss
-        regularization_term = params['regularization_weight'] * (TV_term + L1_norm_term + cos_sim_term)
+        regularization_term = params['regularization_weight'] * (TV_term + L2_norm_term + cos_sim_term)
 
         self.loss_TV_reg_list.append(TV_term.item())
         self.loss_L1_list.append(L1_norm_term.item())
+        self.loss_L2_list.append(L2_norm_term.item())
         self.loss_cos_sim_list.append(cos_sim_term.item())
 
         # Total loss
         loss = data_term + regularization_term
 
         return loss, data_term, regularization_term
+
+    def stay_on_sphere(self, volume_estimation):
+        """
+        Method to keep the optic axis on the unit sphere.
+        """
+        with torch.no_grad():
+            volume_estimation.optic_axis /= torch.norm(volume_estimation.optic_axis, dim=0)
+        return
 
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
@@ -543,6 +555,9 @@ class Reconstructor:
             # volume_estimation.optic_axis.grad *= self.mask
 
         optimizer.step()
+
+        # Keep the optic axis on the unit sphere
+        self.stay_on_sphere(volume_estimation)
 
         self.store_results(
             ret_image_current, azim_image_current,
@@ -594,12 +609,12 @@ class Reconstructor:
             fig.canvas.flush_events()
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
-            if ep % 20 == 0:
+            if ep % 5 == 0:
                 filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
                 # self.save_loss_lists_to_csv()
             time.sleep(0.1)
-        if ep % 20 == 0:
+        if ep % 5 == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
@@ -688,13 +703,15 @@ class Reconstructor:
             writer = csv.writer(file)
             writer.writerow(["Total Variation of birefringence",
                              "L1 norm of birefringence",
+                             "L2 norm of birefringence",
                              "Cosine similarity of optic axis"])
-            for TV_reg, L1_norm, cos_sim in zip(self.loss_TV_reg_list,
+            for TV_reg, L1_norm, L2_norm, cos_sim in zip(self.loss_TV_reg_list,
                                                 self.loss_L1_list,
+                                                self.loss_L2_list,
                                                 self.loss_cos_sim_list):
-                writer.writerow([TV_reg, L1_norm, cos_sim])
+                writer.writerow([TV_reg, L1_norm, L2_norm, cos_sim])
 
-    def reconstruct(self, output_dir=None, use_streamlit=False):
+    def reconstruct(self, output_dir=None, use_streamlit=False, plot_live=False):
         """
         Method to perform the actual reconstruction based on the provided parameters.
         """
@@ -717,7 +734,7 @@ class Reconstructor:
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        figure = setup_visualization(window_title=output_dir)
+        figure = setup_visualization(window_title=output_dir, plot_live=plot_live)
 
         n_epochs = self.iteration_params['n_epochs']
         if use_streamlit:
@@ -752,4 +769,7 @@ class Reconstructor:
         print("Saved the final volume estimation to", vol_save_path)
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
-        plt.show()
+        if plot_live:
+            plt.show()
+        else:
+            plt.close()
