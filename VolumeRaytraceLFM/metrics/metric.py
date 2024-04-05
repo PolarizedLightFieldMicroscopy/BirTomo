@@ -2,20 +2,20 @@ import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from VolumeRaytraceLFM.metrics.regularization import L1Regularization, L2Regularization
+from VolumeRaytraceLFM.metrics.regularization import l2_bir
 
-# REGULARIZATION_FNS = {
-#     'L1Regularization': L1Regularization,
-#     'L2Regularization': L2Regularization,
-#     # Add more functions here if needed
-# }
+
+REGULARIZATION_FNS = {
+    'birefringence L2': l2_bir,
+}
 
 
 class PolarimetricLossFunction:
-    def __init__(self, json_file=None):
-        if json_file:
-            with open(json_file, 'r') as f:
-                params = json.load(f)
+    def __init__(self, params=None, json_file=None):
+        if params or json_file:
+            if json_file:
+                with open(json_file, 'r') as f:
+                    params = json.load(f)
             self.weight_retardance = params.get('weight_retardance', 1.0)
             self.weight_orientation = params.get('weight_orientation', 1.0)
             self.weight_datafidelity = params.get('weight_datafidelity', 1.0)
@@ -23,16 +23,15 @@ class PolarimetricLossFunction:
                 'weight_regularization', 0.1)
             # Initialize any specific loss functions you might need
             self.mse_loss = nn.MSELoss()
-            # Initialize regularization functions
-            # self.regularization_fns = [(REGULARIZATION_FNS[fn_name], weight)
-            #                            for fn_name, weight in params.get('regularization_fns', [])]
+            self.regularization_fcns = [(REGULARIZATION_FNS[fn_name], weight)
+                                       for fn_name, weight in params.get('regularization_fcns', [])]
         else:
             self.weight_retardance = 1.0
             self.weight_orientation = 1.0
             self.weight_datafidelity = 1.0
             self.weight_regularization = 0.1
             self.mse_loss = nn.MSELoss()
-            self.regularization_fns = []
+            self.regularization_fcns = []
 
     def set_retardance_target(self, target):
         self.target_retardance = target
@@ -84,11 +83,22 @@ class PolarimetricLossFunction:
                         self.weight_regularization * orientation_loss)
         return data_loss
 
+    def reg_l2(self, data):
+        return l2_bir(data)
+
     def compute_regularization_term(self, data):
         '''Compute regularization term'''
-        regularization_loss = torch.tensor(0.)
-        for reg_fn, weight in self.regularization_fns:
+        if not self.regularization_fcns:
+            return torch.tensor(0., device=data.device)
+
+        # Start with the first regularization function directly
+        first_reg_fn, first_weight = self.regularization_fcns[0]
+        regularization_loss = first_weight * first_reg_fn(data)
+
+        # Sum up the rest of the regularization terms if any
+        for reg_fn, weight in self.regularization_fcns[1:]:
             regularization_loss += weight * reg_fn(data)
+
         return regularization_loss
 
     def compute_total_loss(self, pred_retardance, pred_orientation, data):

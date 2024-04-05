@@ -2,12 +2,12 @@
 import torch
 
 
-def l1(data, weight=1.0):
-    return weight * torch.abs(data).mean()
+def l1(data):
+    return torch.abs(data).mean()
 
 
-def l2(data, weight=1.0):
-    return weight * torch.pow(data, 2).mean()
+def l2(data):
+    return torch.pow(data, 2).mean()
 
 
 def linfinity(data, weight=1.0):

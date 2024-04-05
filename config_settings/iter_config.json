@@ -1,14 +1,17 @@
 {
-    "n_epochs": 101,
+    "n_epochs": 51,
     "azimuth_weight": 0.5,
     "regularization_weight": 0.1,
     "TV_weight": 100,
     "L1_norm_weight": 1000,
     "L2_norm_weight": 1000,
     "cos_sim_weight": 0.01,
-    "lr_birefringence": 1e-4,
+    "lr_birefringence": 1e-3,
     "lr_optic_axis": 1e-2,
     "output_posfix": "",
     "loss_function": "",
+    "regularization_fcns": [
+        ["birefringence L2", 1000]
+    ],
     "notes": ""
 }

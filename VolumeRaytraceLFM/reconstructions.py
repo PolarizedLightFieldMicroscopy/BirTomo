@@ -38,6 +38,7 @@ from VolumeRaytraceLFM.utils.dict_utils import (
 )
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
 
+
 COMBINING_DELTA_N = False
 DEBUG = False
 
@@ -467,11 +468,12 @@ class Reconstructor:
             retardance_meas = torch.tensor(retardance_meas)
         if not torch.is_tensor(azimuth_meas):
             azimuth_meas = torch.tensor(azimuth_meas)
-        LossFcn = PolarimetricLossFunction()
+
+        LossFcn = PolarimetricLossFunction(params=params)
         LossFcn.set_retardance_target(retardance_meas)
         LossFcn.set_orientation_target(azimuth_meas)
-        # data_term = LossFcn.vector_loss(retardance_pred, azimuth_pred)
         data_term = LossFcn.compute_datafidelity_term(retardance_pred, azimuth_pred, method='vector')
+
         # Compute regularization term
         delta_n = vol_pred.get_delta_n()
         TV_reg = (
@@ -502,7 +504,7 @@ class Reconstructor:
         TV_term = params['TV_weight'] * TV_reg
         # TV_term = params['TV_scaled_weight'] * TV_reg_scaled
         L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n.abs()).mean()
-        L2_norm_term = params['L2_norm_weight'] * (vol_pred.Delta_n ** 2).mean()
+        L2_norm_term = params['L2_norm_weight'] * LossFcn.reg_l2(vol_pred)
         cos_sim_term = params['cos_sim_weight'] * cos_sim_loss
         regularization_term = params['regularization_weight'] * (TV_term + L2_norm_term + cos_sim_term)
 

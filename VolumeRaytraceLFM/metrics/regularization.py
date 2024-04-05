@@ -1,11 +1,10 @@
 '''Regularization metrics for a birefringent volume'''
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
-from regularization_fundamentals import *
+from VolumeRaytraceLFM.metrics.regularization_fundamentals import *
 
 
 def l2_bir(volume: BirefringentVolume):
-    birefringence = volume.get_delta_n()
-    return l2(birefringence)
+    return l2(volume.Delta_n)
 
 
 def total_variation_bir(volume: BirefringentVolume):
