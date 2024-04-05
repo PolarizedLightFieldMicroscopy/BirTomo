@@ -2,13 +2,13 @@ import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from regularization import L1Regularization, L2Regularization
+# from VolumeRaytraceLFM.metrics.regularization import L1Regularization, L2Regularization
 
-REGULARIZATION_FNS = {
-    'L1Regularization': L1Regularization,
-    'L2Regularization': L2Regularization,
-    # Add more functions here if needed
-}
+# REGULARIZATION_FNS = {
+#     'L1Regularization': L1Regularization,
+#     'L2Regularization': L2Regularization,
+#     # Add more functions here if needed
+# }
 
 
 class PolarimetricLossFunction:
@@ -24,8 +24,8 @@ class PolarimetricLossFunction:
             # Initialize any specific loss functions you might need
             self.mse_loss = nn.MSELoss()
             # Initialize regularization functions
-            self.regularization_fns = [(REGULARIZATION_FNS[fn_name], weight)
-                                       for fn_name, weight in params.get('regularization_fns', [])]
+            # self.regularization_fns = [(REGULARIZATION_FNS[fn_name], weight)
+            #                            for fn_name, weight in params.get('regularization_fns', [])]
         else:
             self.weight_retardance = 1.0
             self.weight_orientation = 1.0
@@ -48,16 +48,40 @@ class PolarimetricLossFunction:
         # Add logic to transform data and compute orientation loss
         pass
 
-    def transform_input_data(self, data):
-        # Transform the input data into a vector form
-        pass
+    def transform_ret_azim_to_vector_form(self, ret, azim):
+        """ Transform the retardance (ret) and azimuth (azim) into vector form.
+        Args:
+        - ret (torch.Tensor): A tensor containing the retardance image.
+        - azim (torch.Tensor): A tensor containing the azimuth image.
+        Returns:
+        - (torch.Tensor, torch.Tensor): Two tensors representing the
+                        cosine and sine components of the vector form.
+        """
+        # Calculate the cosine and sine components
+        cosine_term = ret * torch.cos(2 * azim)
+        sine_term = ret * torch.sin(2 * azim)
+        return cosine_term, sine_term
 
-    def compute_datafidelity_term(self, pred_retardance, pred_orientation):
+    def vector_loss(self, ret_pred, azim_pred):
+        '''Compute the vector loss'''
+        ret_gt = self.target_retardance
+        azim_gt = self.target_orientation
+        cos_gt, sin_gt = self.transform_ret_azim_to_vector_form(ret_gt, azim_gt)
+        cos_pred, sin_pred = self.transform_ret_azim_to_vector_form(ret_pred, azim_pred)
+        loss_cos = F.mse_loss(cos_pred, cos_gt)
+        loss_sin = F.mse_loss(sin_pred, sin_gt)
+        loss = loss_cos + loss_sin
+        return loss
+
+    def compute_datafidelity_term(self, ret_pred, azim_pred, method='vector'):
         '''Incorporates the retardance and orientation losses'''
-        retardance_loss = self.compute_retardance_loss(pred_retardance)
-        orientation_loss = self.compute_orientation_loss(pred_orientation)
-        data_loss = (self.weight_retardance * retardance_loss +
-                     self.weight_regularization * orientation_loss)
+        if method == 'vector':
+            data_loss = self.vector_loss(ret_pred, azim_pred)
+        else:
+            retardance_loss = self.compute_retardance_loss(ret_pred)
+            orientation_loss = self.compute_orientation_loss(azim_pred)
+            data_loss = (self.weight_retardance * retardance_loss +
+                        self.weight_regularization * orientation_loss)
         return data_loss
 
     def compute_regularization_term(self, data):

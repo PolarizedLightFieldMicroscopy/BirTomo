@@ -36,6 +36,7 @@ from VolumeRaytraceLFM.utils.dict_utils import (
     extract_numbers_from_dict_of_lists,
     transform_dict_list_to_set
 )
+from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
 
 COMBINING_DELTA_N = False
 DEBUG = False
@@ -466,12 +467,11 @@ class Reconstructor:
             retardance_meas = torch.tensor(retardance_meas)
         if not torch.is_tensor(azimuth_meas):
             azimuth_meas = torch.tensor(azimuth_meas)
-        # Vector difference GT
-        co_gt, ca_gt = retardance_meas * torch.cos(2*azimuth_meas), retardance_meas * torch.sin(2*azimuth_meas)
-        # Compute data term loss
-        co_pred, ca_pred = retardance_pred * torch.cos(2*azimuth_pred), retardance_pred * torch.sin(2*azimuth_pred)
-        data_term = ((co_gt - co_pred) ** 2 + (ca_gt - ca_pred) ** 2).mean()
-
+        LossFcn = PolarimetricLossFunction()
+        LossFcn.set_retardance_target(retardance_meas)
+        LossFcn.set_orientation_target(azimuth_meas)
+        # data_term = LossFcn.vector_loss(retardance_pred, azimuth_pred)
+        data_term = LossFcn.compute_datafidelity_term(retardance_pred, azimuth_pred, method='vector')
         # Compute regularization term
         delta_n = vol_pred.get_delta_n()
         TV_reg = (
@@ -564,7 +564,6 @@ class Reconstructor:
             volume_estimation, loss, data_term, regularization_term
         )
         return
-
 
     def print_grad_info(self, volume_estimation):
         print("requires_grad:", volume_estimation.Delta_n_first_part.requires_grad)
