@@ -164,6 +164,8 @@ def plot_retardance_orientation(ret_image, azim_image, azimuth_plot_type='hsv', 
             plot_hue_map(ret_image, azim_image, ax=ax)
         else:
             plt.title('Retardance & Orientation')
+            plt.xticks([])
+            plt.yticks([])
             plot_birefringence_colorized(ret_image, azim_image)
     plt.rcParams.update({
         "text.usetex": False,

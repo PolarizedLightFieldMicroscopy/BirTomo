@@ -36,6 +36,8 @@ from VolumeRaytraceLFM.utils.dict_utils import (
     extract_numbers_from_dict_of_lists,
     transform_dict_list_to_set
 )
+from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
+
 
 COMBINING_DELTA_N = False
 DEBUG = False
@@ -208,6 +210,7 @@ class Reconstructor:
         image_for_rays = None
         if omit_rays_based_on_pixels:
             image_for_rays = self.ret_img_meas
+            print("\nOmitting rays based on pixels with zero retardance.")
         self.rays = self.setup_raytracer(image=image_for_rays, device=device)
 
         self.apply_volume_mask = apply_volume_mask
@@ -220,16 +223,11 @@ class Reconstructor:
         if self.apply_volume_mask:
             self.voxel_mask_setup()
             self.apply_mask_to_volume(self.volume_pred)
-            
 
         # Lists to store the loss after each iteration
         self.loss_total_list = []
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
-
-        self.loss_TV_reg_list = []
-        self.loss_1000L1_list = []
-        self.loss_cos_sim_list = []
 
     def _initialize_volume(self):
         """
@@ -459,57 +457,37 @@ class Reconstructor:
         retardance_meas = self.ret_img_meas
         azimuth_meas = self.azim_img_meas
 
-        loss_fcn_name = params.get('loss_fcn', 'L1_cos')
         if not torch.is_tensor(retardance_meas):
             retardance_meas = torch.tensor(retardance_meas)
         if not torch.is_tensor(azimuth_meas):
             azimuth_meas = torch.tensor(azimuth_meas)
-        # Vector difference GT
-        co_gt, ca_gt = retardance_meas * torch.cos(2*azimuth_meas), retardance_meas * torch.sin(2*azimuth_meas)
-        # Compute data term loss
-        co_pred, ca_pred = retardance_pred * torch.cos(2*azimuth_pred), retardance_pred * torch.sin(2*azimuth_pred)
-        data_term = ((co_gt - co_pred) ** 2 + (ca_gt - ca_pred) ** 2).mean()
+
+        LossFcn = PolarimetricLossFunction(params=params)
+        LossFcn.set_retardance_target(retardance_meas)
+        LossFcn.set_orientation_target(azimuth_meas)
+        data_term = LossFcn.compute_datafidelity_term(retardance_pred, azimuth_pred, method='vector')
 
         # Compute regularization term
-        delta_n = vol_pred.get_delta_n()
-        TV_reg = (
-            (delta_n[1:, ...] - delta_n[:-1, ...]).pow(2).sum() +
-            (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
-            (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
-        )
-
-        # Try a scaled TV regularization
-        # avg_scale_1 = torch.abs((delta_n[1:, ...] + delta_n[:-1, ...])) / 2.0
-        # avg_scale_2 = torch.abs((delta_n[:, 1:, ...] + delta_n[:, :-1, ...])) / 2.0
-        # avg_scale_3 = torch.abs((delta_n[:, :, 1:] + delta_n[:, :, :-1])) / 2.0
-        # TV_reg_scaled = (
-        #     ((delta_n[1:, ...] - delta_n[:-1, ...]) * avg_scale_1).pow(2).sum() +
-        #     ((delta_n[:, 1:, ...] - delta_n[:, :-1, ...]) * avg_scale_2).pow(2).sum() +
-        #     ((delta_n[:, :, 1:] - delta_n[:, :, :-1]) * avg_scale_3).pow(2).sum()
-        # )        
-
-        cos_sim_loss = weighted_local_cosine_similarity_loss(
-            vol_pred.get_optic_axis(), vol_pred.get_delta_n()
-        )
-        # cosine_similarity = torch.nn.CosineSimilarity(dim=0)
         if isinstance(params['regularization_weight'], list):
             params['regularization_weight'] = params['regularization_weight'][0]
-        # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
 
-        TV_term = params['TV_weight'] * TV_reg
-        # TV_term = params['TV_scaled_weight'] * TV_reg_scaled
-        L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n ** 2).mean()
-        cos_sim_term = params['cos_sim_weight'] * cos_sim_loss
-        regularization_term = params['regularization_weight'] * (TV_term + L1_norm_term + cos_sim_term)
+        reg_loss, reg_term_values = LossFcn.compute_regularization_term(vol_pred)
+        regularization_term = params['regularization_weight'] * reg_loss
 
-        self.loss_TV_reg_list.append(TV_term.item())
-        self.loss_1000L1_list.append(L1_norm_term.item())
-        self.loss_cos_sim_list.append(cos_sim_term.item())
+        self.reg_term_values = [reg.item() for reg in reg_term_values]
 
         # Total loss
         loss = data_term + regularization_term
 
         return loss, data_term, regularization_term
+
+    def stay_on_sphere(self, volume_estimation):
+        """
+        Method to keep the optic axis on the unit sphere.
+        """
+        with torch.no_grad():
+            volume_estimation.optic_axis /= torch.norm(volume_estimation.optic_axis, dim=0)
+        return
 
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
@@ -543,12 +521,14 @@ class Reconstructor:
 
         optimizer.step()
 
+        # Keep the optic axis on the unit sphere
+        self.stay_on_sphere(volume_estimation)
+
         self.store_results(
             ret_image_current, azim_image_current,
             volume_estimation, loss, data_term, regularization_term
         )
         return
-
 
     def print_grad_info(self, volume_estimation):
         print("requires_grad:", volume_estimation.Delta_n_first_part.requires_grad)
@@ -593,17 +573,18 @@ class Reconstructor:
             fig.canvas.flush_events()
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
-            if ep % 10 == 0:
-                filename = f"optim_ep_{'{:03d}'.format(ep)}.pdf"
+            self._save_regularization_terms_to_csv(ep)
+            if ep % 5 == 0:
+                filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
                 # self.save_loss_lists_to_csv()
             time.sleep(0.1)
-        if ep % 100 == 0:
+        if ep % 5 == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
                 os.path.join(
-                    output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5"),
+                    output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5"),
                 description=my_description
             )
         return
@@ -680,20 +661,25 @@ class Reconstructor:
                                                   self.loss_reg_term_list):
                 writer.writerow([total, data_term, reg_term])
 
-        filename_reg = "reg.csv"
-        filepath_reg = os.path.join(self.recon_directory, filename_reg)
-
-        with open(filepath_reg, mode='w', newline='') as file:
+    def _create_regularization_terms_csv(self):
+        """Create a csv file to store the regularization terms."""
+        filename = "regularization_terms.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+        reg_fcns = self.iteration_params['regularization_fcns']
+        fcn_names = [sublist[0] for sublist in reg_fcns]
+        with open(filepath, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Total Variation of birefringence",
-                             "L1 norm of birefringence (x1000)",
-                             "Cosine similarity of optic axis"])
-            for TV_reg, L1_norm, cos_sim in zip(self.loss_TV_reg_list,
-                                                self.loss_1000L1_list,
-                                                self.loss_cos_sim_list):
-                writer.writerow([TV_reg, L1_norm, cos_sim])
+            writer.writerow(["ep", *fcn_names])
+    
+    def _save_regularization_terms_to_csv(self, ep):
+        """Save the regularization terms to a csv file."""
+        filename = "regularization_terms.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+        with open(filepath, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([ep, *self.reg_term_values])
 
-    def reconstruct(self, output_dir=None, use_streamlit=False):
+    def reconstruct(self, output_dir=None, use_streamlit=False, plot_live=False):
         """
         Method to perform the actual reconstruction based on the provided parameters.
         """
@@ -716,7 +702,8 @@ class Reconstructor:
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        figure = setup_visualization(window_title=output_dir)
+        figure = setup_visualization(window_title=output_dir, plot_live=plot_live)
+        self._create_regularization_terms_csv()
 
         n_epochs = self.iteration_params['n_epochs']
         if use_streamlit:
@@ -744,11 +731,14 @@ class Reconstructor:
         self.save_loss_lists_to_csv()
         my_description = "Volume estimation after " + \
             str(ep) + " iterations."
-        vol_save_path = os.path.join(output_dir, f"volume_ep_{'{:03d}'.format(ep)}.h5")
+        vol_save_path = os.path.join(output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5")
         self.volume_pred.save_as_file(
             vol_save_path, description=my_description
         )
         print("Saved the final volume estimation to", vol_save_path)
         # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
-        plt.show()
+        if plot_live:
+            plt.show()
+        else:
+            plt.close()
