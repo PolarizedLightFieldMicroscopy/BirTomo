@@ -20,20 +20,18 @@ def elastic_net(data, weight1=1.0, weight2=1.0):
     return weight1 * l1_term + weight2 * l2_term
 
 
-def total_variation_3d_volumetric(data, weight=1.0):
+def total_variation_3d_volumetric(data):
     """
     Computes the Total Variation regularization for a 4D tensor representing volumetric data.
     Args:
-        data (torch.Tensor): The input 3D tensor with shape [depth, height, width].
-        weight (float): Weighting factor for the regularization term.
+        data (torch.Tensor): Input 3D tensor with shape [depth, height, width].
     Returns:
-        torch.Tensor: The computed Total Variation regularization term.
+        torch.Tensor: Computed Total Variation regularization term.
     """
     # Calculate the differences between adjacent elements along each spatial dimension
-    diff_depth = torch.pow(data[1:, :, :] - data[:-1, :, :], 2).sum()
-    diff_height = torch.pow(data[:, 1:, :] - data[:, :-1, :], 2).sum()
-    diff_width = torch.pow(data[:, :, 1:] - data[:, :, :-1], 2).sum()
+    diff_depth = torch.pow(data[1:, :, :] - data[:-1, :, :], 2).mean()
+    diff_height = torch.pow(data[:, 1:, :] - data[:, :-1, :], 2).mean()
+    diff_width = torch.pow(data[:, :, 1:] - data[:, :, :-1], 2).mean()
 
-    # Sum up the differences and apply the weight
-    tv_reg = weight * (diff_depth + diff_height + diff_width)
+    tv_reg = diff_depth + diff_height + diff_width
     return tv_reg

@@ -2,11 +2,17 @@ import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from VolumeRaytraceLFM.metrics.regularization import l2_bir
+from VolumeRaytraceLFM.metrics.regularization import (
+    l2_bir,
+    l1_bir,
+    total_variation_bir
+)
 
 
 REGULARIZATION_FNS = {
     'birefringence L2': l2_bir,
+    'birefringence L1': l1_bir,
+    'birefringence TV': total_variation_bir,
 }
 
 
@@ -20,8 +26,8 @@ class PolarimetricLossFunction:
             self.weight_orientation = params.get('weight_orientation', 1.0)
             self.weight_datafidelity = params.get('weight_datafidelity', 1.0)
             self.weight_regularization = params.get(
-                'weight_regularization', 0.1)
-            # Initialize any specific loss functions you might need
+                'regularization_weight', 1.0)
+            # Initialize specific loss functions
             self.mse_loss = nn.MSELoss()
             self.regularization_fcns = [(REGULARIZATION_FNS[fn_name], weight)
                                        for fn_name, weight in params.get('regularization_fcns', [])]
@@ -85,6 +91,12 @@ class PolarimetricLossFunction:
 
     def reg_l2(self, data):
         return l2_bir(data)
+
+    def reg_l1(self, data):
+        return l1_bir(data)
+
+    def reg_tv(self, data):
+        return total_variation_bir(data)
 
     def compute_regularization_term(self, data):
         '''Compute regularization term'''

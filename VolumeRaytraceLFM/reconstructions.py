@@ -475,12 +475,6 @@ class Reconstructor:
         data_term = LossFcn.compute_datafidelity_term(retardance_pred, azimuth_pred, method='vector')
 
         # Compute regularization term
-        delta_n = vol_pred.get_delta_n()
-        TV_reg = (
-            (delta_n[1:, ...] - delta_n[:-1, ...]).pow(2).mean() +
-            (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).mean() +
-            (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).mean()
-        )
 
         # Try a scaled TV regularization
         # avg_scale_1 = torch.abs((delta_n[1:, ...] + delta_n[:-1, ...])) / 2.0
@@ -501,12 +495,14 @@ class Reconstructor:
         # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
 
         # TODO: increase magnitude of all terms
-        TV_term = params['TV_weight'] * TV_reg
+        TV_term = params['TV_weight'] * LossFcn.reg_tv(vol_pred)
         # TV_term = params['TV_scaled_weight'] * TV_reg_scaled
         L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n.abs()).mean()
         L2_norm_term = params['L2_norm_weight'] * LossFcn.reg_l2(vol_pred)
         cos_sim_term = params['cos_sim_weight'] * cos_sim_loss
         regularization_term = params['regularization_weight'] * (TV_term + L2_norm_term + cos_sim_term)
+
+        # regularization_term1 = LossFcn.compute_regularization_term(vol_pred)
 
         self.loss_TV_reg_list.append(TV_term.item())
         self.loss_L1_list.append(L1_norm_term.item())

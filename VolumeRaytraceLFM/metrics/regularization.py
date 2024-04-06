@@ -6,6 +6,9 @@ from VolumeRaytraceLFM.metrics.regularization_fundamentals import *
 def l2_bir(volume: BirefringentVolume):
     return l2(volume.Delta_n)
 
+def l1_bir(volume: BirefringentVolume):
+    return l1(volume.Delta_n)
+
 
 def total_variation_bir(volume: BirefringentVolume):
     birefringence = volume.get_delta_n()
