@@ -108,20 +108,26 @@ class PolarimetricLossFunction:
         if not self.regularization_fcns:
             return torch.tensor(0., device=data.device)
 
+        term_values = []
+
         # Start with the first regularization function directly
         first_reg_fn, first_weight = self.regularization_fcns[0]
-        regularization_loss = first_weight * first_reg_fn(data)
+        first_term_value = first_weight * first_reg_fn(data)
+        term_values.append(first_term_value)
+        regularization_loss = first_term_value
 
         # Sum up the rest of the regularization terms if any
-        for reg_fn, weight in self.regularization_fcns[1:]:
-            regularization_loss += weight * reg_fn(data)
+        for reg_fcn, weight in self.regularization_fcns[1:]:
+            term_value = weight * reg_fcn(data)
+            term_values.append(term_value)
+            regularization_loss += term_value
 
-        return regularization_loss
+        return regularization_loss, term_values
 
-    def compute_total_loss(self, pred_retardance, pred_orientation, data):
+    def compute_total_loss(self, ret_pred, azim_pred, data):
         # Compute individual losses
         datafidelity_loss = self.compute_datafidelity_term(
-            pred_retardance, pred_orientation)
+            ret_pred, azim_pred)
         regularization_loss = self.compute_regularization_term(data)
 
         # Compute total loss with weighted sum

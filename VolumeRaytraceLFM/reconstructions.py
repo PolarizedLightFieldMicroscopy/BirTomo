@@ -223,17 +223,11 @@ class Reconstructor:
         if self.apply_volume_mask:
             self.voxel_mask_setup()
             self.apply_mask_to_volume(self.volume_pred)
-            
 
         # Lists to store the loss after each iteration
         self.loss_total_list = []
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
-
-        self.loss_TV_reg_list = []
-        self.loss_L1_list = []
-        self.loss_L2_list = []
-        self.loss_cos_sim_list = []
 
     def _initialize_volume(self):
         """
@@ -477,18 +471,10 @@ class Reconstructor:
         if isinstance(params['regularization_weight'], list):
             params['regularization_weight'] = params['regularization_weight'][0]
 
-        TV_term = params['TV_weight'] * LossFcn.reg_tv(vol_pred)
-        L1_norm_term = params['L1_norm_weight'] * LossFcn.reg_l1(vol_pred)
-        L2_norm_term = params['L2_norm_weight'] * LossFcn.reg_l2(vol_pred)
-        cos_sim_term = params['cos_sim_weight'] * LossFcn.reg_cosine_similarity(vol_pred)
-        regularization_term = params['regularization_weight'] * (TV_term + L2_norm_term + cos_sim_term)
+        reg_loss, reg_term_values = LossFcn.compute_regularization_term(vol_pred)
+        regularization_term = params['regularization_weight'] * reg_loss
 
-        # regularization_term1 = LossFcn.compute_regularization_term(vol_pred)
-
-        self.loss_TV_reg_list.append(TV_term.item())
-        self.loss_L1_list.append(L1_norm_term.item())
-        self.loss_L2_list.append(L2_norm_term.item())
-        self.loss_cos_sim_list.append(cos_sim_term.item())
+        self.reg_term_values = [reg.item() for reg in reg_term_values]
 
         # Total loss
         loss = data_term + regularization_term
@@ -587,6 +573,7 @@ class Reconstructor:
             fig.canvas.flush_events()
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
+            self._save_regularization_terms_to_csv(ep)
             if ep % 5 == 0:
                 filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
@@ -674,20 +661,23 @@ class Reconstructor:
                                                   self.loss_reg_term_list):
                 writer.writerow([total, data_term, reg_term])
 
-        filename_reg = "reg.csv"
-        filepath_reg = os.path.join(self.recon_directory, filename_reg)
-
-        with open(filepath_reg, mode='w', newline='') as file:
+    def _create_regularization_terms_csv(self):
+        """Create a csv file to store the regularization terms."""
+        filename = "regularization_terms.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+        reg_fcns = self.iteration_params['regularization_fcns']
+        fcn_names = [sublist[0] for sublist in reg_fcns]
+        with open(filepath, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Total Variation of birefringence",
-                             "L1 norm of birefringence",
-                             "L2 norm of birefringence",
-                             "Cosine similarity of optic axis"])
-            for TV_reg, L1_norm, L2_norm, cos_sim in zip(self.loss_TV_reg_list,
-                                                self.loss_L1_list,
-                                                self.loss_L2_list,
-                                                self.loss_cos_sim_list):
-                writer.writerow([TV_reg, L1_norm, L2_norm, cos_sim])
+            writer.writerow(["ep", *fcn_names])
+    
+    def _save_regularization_terms_to_csv(self, ep):
+        """Save the regularization terms to a csv file."""
+        filename = "regularization_terms.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+        with open(filepath, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([ep, *self.reg_term_values])
 
     def reconstruct(self, output_dir=None, use_streamlit=False, plot_live=False):
         """
@@ -713,6 +703,7 @@ class Reconstructor:
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
         figure = setup_visualization(window_title=output_dir, plot_live=plot_live)
+        self._create_regularization_terms_csv()
 
         n_epochs = self.iteration_params['n_epochs']
         if use_streamlit:
