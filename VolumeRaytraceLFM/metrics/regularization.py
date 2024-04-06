@@ -1,10 +1,12 @@
 '''Regularization metrics for a birefringent volume'''
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.metrics.regularization_fundamentals import *
+import torch.nn.functional as F
 
 
 def l2_bir(volume: BirefringentVolume):
     return l2(volume.Delta_n)
+
 
 def l1_bir(volume: BirefringentVolume):
     return l1(volume.Delta_n)
@@ -13,6 +15,20 @@ def l1_bir(volume: BirefringentVolume):
 def total_variation_bir(volume: BirefringentVolume):
     birefringence = volume.get_delta_n()
     return total_variation_3d_volumetric(birefringence)
+
+
+def total_variation_optax(volume: BirefringentVolume):
+    optax = volume.get_optic_axis()
+    return total_variation_3d_volumetric(optax)
+
+
+def cosine_similarity_neighbors(volume: BirefringentVolume):
+    """ Compute a loss that encourages each vector in optic_axis to
+    align with its neighbors, weighted by delta_n.
+    """
+    delta_n = volume.get_delta_n()
+    optic_axis = volume.get_optic_axis()
+    return weighted_local_cosine_similarity_loss(optic_axis, delta_n)
 
 
 class AnisotropyAnalysis:

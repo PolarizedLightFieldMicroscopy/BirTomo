@@ -5,7 +5,8 @@ import torch.nn.functional as F
 from VolumeRaytraceLFM.metrics.regularization import (
     l2_bir,
     l1_bir,
-    total_variation_bir
+    total_variation_bir,
+    cosine_similarity_neighbors,
 )
 
 
@@ -13,6 +14,7 @@ REGULARIZATION_FNS = {
     'birefringence L2': l2_bir,
     'birefringence L1': l1_bir,
     'birefringence TV': total_variation_bir,
+    'local cosine similarity': cosine_similarity_neighbors,
 }
 
 
@@ -97,6 +99,9 @@ class PolarimetricLossFunction:
 
     def reg_tv(self, data):
         return total_variation_bir(data)
+
+    def reg_cosine_similarity(self, data):
+        return cosine_similarity_neighbors(data)
 
     def compute_regularization_term(self, data):
         '''Compute regularization term'''

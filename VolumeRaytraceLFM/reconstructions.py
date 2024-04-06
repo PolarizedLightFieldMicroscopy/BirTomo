@@ -463,7 +463,6 @@ class Reconstructor:
         retardance_meas = self.ret_img_meas
         azimuth_meas = self.azim_img_meas
 
-        loss_fcn_name = params.get('loss_fcn', 'L1_cos')
         if not torch.is_tensor(retardance_meas):
             retardance_meas = torch.tensor(retardance_meas)
         if not torch.is_tensor(azimuth_meas):
@@ -475,31 +474,13 @@ class Reconstructor:
         data_term = LossFcn.compute_datafidelity_term(retardance_pred, azimuth_pred, method='vector')
 
         # Compute regularization term
-
-        # Try a scaled TV regularization
-        # avg_scale_1 = torch.abs((delta_n[1:, ...] + delta_n[:-1, ...])) / 2.0
-        # avg_scale_2 = torch.abs((delta_n[:, 1:, ...] + delta_n[:, :-1, ...])) / 2.0
-        # avg_scale_3 = torch.abs((delta_n[:, :, 1:] + delta_n[:, :, :-1])) / 2.0
-        # TV_reg_scaled = (
-        #     ((delta_n[1:, ...] - delta_n[:-1, ...]) * avg_scale_1).pow(2).sum() +
-        #     ((delta_n[:, 1:, ...] - delta_n[:, :-1, ...]) * avg_scale_2).pow(2).sum() +
-        #     ((delta_n[:, :, 1:] - delta_n[:, :, :-1]) * avg_scale_3).pow(2).sum()
-        # )        
-
-        cos_sim_loss = weighted_local_cosine_similarity_loss(
-            vol_pred.get_optic_axis(), vol_pred.get_delta_n()
-        )
-        # cosine_similarity = torch.nn.CosineSimilarity(dim=0)
         if isinstance(params['regularization_weight'], list):
             params['regularization_weight'] = params['regularization_weight'][0]
-        # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
 
-        # TODO: increase magnitude of all terms
         TV_term = params['TV_weight'] * LossFcn.reg_tv(vol_pred)
-        # TV_term = params['TV_scaled_weight'] * TV_reg_scaled
-        L1_norm_term = params['L1_norm_weight'] * (vol_pred.Delta_n.abs()).mean()
+        L1_norm_term = params['L1_norm_weight'] * LossFcn.reg_l1(vol_pred)
         L2_norm_term = params['L2_norm_weight'] * LossFcn.reg_l2(vol_pred)
-        cos_sim_term = params['cos_sim_weight'] * cos_sim_loss
+        cos_sim_term = params['cos_sim_weight'] * LossFcn.reg_cosine_similarity(vol_pred)
         regularization_term = params['regularization_weight'] * (TV_term + L2_norm_term + cos_sim_term)
 
         # regularization_term1 = LossFcn.compute_regularization_term(vol_pred)

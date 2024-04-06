@@ -11,7 +11,9 @@
     "output_posfix": "",
     "loss_function": "",
     "regularization_fcns": [
-        ["birefringence L2", 1000]
+        ["birefringence L2", 1000],
+        ["birefringence TV", 100],
+        ["local cosine similarity", 0.01]
     ],
     "notes": ""
 }
