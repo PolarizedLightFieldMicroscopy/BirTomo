@@ -758,9 +758,5 @@ class Reconstructor:
             vol_save_path, description=my_description
         )
         print("Saved the final volume estimation to", vol_save_path)
-        # Final visualizations after training completes
         plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
-        if plot_live:
-            plt.show()
-        else:
-            plt.close()
+        plt.close()
