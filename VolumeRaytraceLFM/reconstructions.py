@@ -379,10 +379,32 @@ class Reconstructor:
     def optimizer_setup(self, volume_estimation, training_params):
         """Setup optimizer."""
         trainable_parameters = volume_estimation.get_trainable_variables()
-        # The learning rates specified are starting points for the optimizer.
-        parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
-                    {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
-        return torch.optim.Adam(parameters)
+        optimizer_type = training_params.get('optimizer', 'Adam')
+        if optimizer_type == 'LBFGS':
+            parameters = trainable_parameters
+        else:
+            # The learning rates specified are starting points for the optimizer.
+            parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
+                        {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
+        optimizers = {
+            'Adam': lambda params: torch.optim.Adam(params),
+            'SGD': lambda params: torch.optim.SGD(params, nesterov=True, momentum=0.7),
+            'Adagrad': lambda params: torch.optim.Adagrad(params),
+            'ASGD': lambda params: torch.optim.ASGD(params),
+            'Nadam': lambda params: torch.optim.NAdam(params),
+            'Adamax': lambda params: torch.optim.Adamax(params),
+            'AdamW': lambda params: torch.optim.AdamW(params),
+            'RMSprop': lambda params: torch.optim.RMSprop(params)
+        }
+        print(f"Using optimizer: {optimizer_type}.")
+        if optimizer_type == 'LBFGS':
+            raise ValueError("LBFGS optimizer is not supported yet," +
+                             "because a closure is needed.")
+        elif optimizer_type not in optimizers:
+            raise ValueError(f"Unsupported optimizer type: {optimizer_type}." +
+                             f"Please choose from {list(optimizers.keys())}.")
+        optimizer = optimizers[optimizer_type](parameters)
+        return optimizer
 
     def voxel_mask_setup(self):
         """Extract volume voxel related information."""

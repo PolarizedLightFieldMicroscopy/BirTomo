@@ -1,15 +1,15 @@
 {
-    "n_epochs": 51,
-    "azimuth_weight": 0.5,
+    "n_epochs": 101,
     "regularization_weight": 0.2,
-    "TV_weight": 20,
-    "TV_scaled_weight": 0,
-    "L1_norm_weight": 1000,
-    "L2_norm_weight": 1000,
-    "cos_sim_weight": 0.001,
-    "lr_birefringence": 1e-4,
+    "lr_birefringence": 1e-3,
     "lr_optic_axis": 1e-2,
-    "output_posfix": "",
+    "optimizer": "Adam",
     "loss_function": "",
+    "regularization_fcns": [
+        ["birefringence L2", 1000],
+        ["birefringence TV", 20],
+        ["local cosine similarity", 0.001]
+    ],
+    "output_posfix": "",
     "notes": ""
 }
