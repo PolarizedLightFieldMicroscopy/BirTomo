@@ -501,7 +501,7 @@ class BirefringentVolume(BirefringentElement):
 
     def save_as_file(self, h5_file_path, description="Temporary description", optical_all=False):
         '''Store this volume into an h5 file'''
-        print(f'Saving volume to h5 file: {h5_file_path}')
+        print(f'\nSaving volume to h5 file: {h5_file_path}')
 
         delta_n, optic_axis = self._get_data_as_numpy_arrays()
         file_manager = VolumeFileManager()
@@ -1216,10 +1216,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """Generates images for a single microlens, by passing an offset
         to the ray tracing process."""
         if intensity:
-            return self.intensity_images(volume, microlens_offset=offset)
+            return self.intensity_images(
+                volume, microlens_offset=offset, mla_index=mla_index)
         else:
-            return self.ret_and_azim_images(volume, microlens_offset=offset,
-                                            mla_index=mla_index)
+            return self.ret_and_azim_images(
+                volume, microlens_offset=offset, mla_index=mla_index)
 
     def _concatenate_images(self, img_list1, img_list2, axis):
         if self.backend == BackEnds.NUMPY:
@@ -1317,7 +1318,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                         microlens_offset, mla_index=mla_index)
 
     def calc_cummulative_JM_of_ray_numpy(self, i, j,
-                                         volume_in : BirefringentVolume, microlens_offset=[0,0]):
+            volume_in : BirefringentVolume, microlens_offset=[0,0]):
         '''For the (i,j) pixel behind a single microlens'''
         # Fetch precomputed Siddon parameters
         voxels_of_segs, ell_in_voxels = self.ray_vol_colli_indices, self.ray_vol_colli_lengths
@@ -1823,21 +1824,23 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         )
         return mask
 
-    def intensity_images(self, volume_in : BirefringentVolume, microlens_offset=[0,0]):
+    def intensity_images(self, volume_in : BirefringentVolume,
+                         microlens_offset=[0,0], mla_index=(0, 0)):
         '''Calculate intensity images using Jones Calculus. The polarizer and
         analyzer are applied to the cummulated Jones matrices.'''
         analyzer = self.optical_info['analyzer']
         swing = self.optical_info['polarizer_swing']
         pixels_per_ml = self.optical_info['pixels_per_ml']
-        lenslet_JM = self.calc_cummulative_JM_lenslet(volume_in, microlens_offset)
+        lenslet_JM = self.calc_cummulative_JM_lenslet(
+            volume_in, microlens_offset, mla_index=mla_index)
         intensity_image_list = [np.zeros((pixels_per_ml, pixels_per_ml))] * 5
 
         # if not self.MLA_volume_geometry_ready:
         #     self.precompute_MLA_volume_geometry()
 
         for setting in range(5):
-            polarizer = JonesMatrixGenerators.universal_compensator_modes(setting=setting,
-                                                                          swing=swing)
+            polarizer = JonesMatrixGenerators.universal_compensator_modes(
+                setting=setting, swing=swing)
             pol_hor = polarizer @ JonesVectorGenerators.horizonal()
             if self.backend == BackEnds.NUMPY:
                 E_out = analyzer @ lenslet_JM @ pol_hor
@@ -1858,14 +1861,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return intensity_image_list
 
     def calc_cummulative_JM_lenslet(self, volume_in : BirefringentVolume,
-                                          microlens_offset=[0,0]):
+                                microlens_offset=[0,0], mla_index=(0, 0)):
         '''Calculate the Jones matrix associated with each pixel behind a lenslet.'''
         pixels_per_ml = self.optical_info['pixels_per_ml']
         lenslet = np.zeros((pixels_per_ml, pixels_per_ml, 2, 2), dtype=np.complex128)
         if self.backend == BackEnds.PYTORCH:
             lenslet = torch.from_numpy(lenslet).to(volume_in.Delta_n.device)
             is_nan = torch.isnan
-            lenslet = self.calc_cummulative_JM_of_ray_torch(volume_in, microlens_offset)
+            lenslet = self.calc_cummulative_JM_of_ray_torch(
+                volume_in, microlens_offset, mla_index=mla_index)
         else:
             is_nan = np.isnan
             for i in range(pixels_per_ml):
