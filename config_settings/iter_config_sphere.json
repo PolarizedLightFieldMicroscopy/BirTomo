@@ -1,10 +1,10 @@
 {
     "n_epochs": 101,
     "regularization_weight": 0.2,
-    "lr_birefringence": 1e-3,
+    "lr_birefringence": 1e-4,
     "lr_optic_axis": 1e-2,
     "optimizer": "Adam",
-    "loss_function": "",
+    "datafidelity": "vector",
     "regularization_fcns": [
         ["birefringence L2", 1000],
         ["birefringence TV", 20],

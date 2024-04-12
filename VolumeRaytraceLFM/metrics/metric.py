@@ -2,6 +2,10 @@ import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from VolumeRaytraceLFM.metrics.data_fidelity import (
+    poisson_loss,
+    gaussian_noise_loss,
+)
 from VolumeRaytraceLFM.metrics.regularization import (
     l2_bir,
     l1_bir,
@@ -10,7 +14,7 @@ from VolumeRaytraceLFM.metrics.regularization import (
 )
 
 
-REGULARIZATION_FNS = {
+REGULARIZATION_FCNS = {
     'birefringence L2': l2_bir,
     'birefringence L1': l1_bir,
     'birefringence TV': total_variation_bir,
@@ -30,15 +34,19 @@ class PolarimetricLossFunction:
             self.weight_regularization = params.get(
                 'regularization_weight', 1.0)
             # Initialize specific loss functions
-            self.mse_loss = nn.MSELoss()
-            self.regularization_fcns = [(REGULARIZATION_FNS[fn_name], weight)
-                                       for fn_name, weight in params.get('regularization_fcns', [])]
+            self.optimizer = params.get('optimizer', 'Adam')
+            self.datafidelity = params.get('datafidelity', 'vector')
+            self.regularization_fcns = [
+                (REGULARIZATION_FCNS[fn_name], weight)
+                for fn_name, weight in params.get('regularization_fcns', [])
+            ]
         else:
             self.weight_retardance = 1.0
             self.weight_orientation = 1.0
             self.weight_datafidelity = 1.0
             self.weight_regularization = 0.1
-            self.mse_loss = nn.MSELoss()
+            self.optimizer = 'Adam'
+            self.datafidelity = 'vector'
             self.regularization_fcns = []
 
     def set_retardance_target(self, target):
@@ -46,6 +54,9 @@ class PolarimetricLossFunction:
 
     def set_orientation_target(self, target):
         self.target_orientation = target
+
+    def set_intensity_list_target(self, target_list):
+        self.target_intensity_list = target_list
 
     def compute_retardance_loss(self, prediction):
         # Add logic to transform data and compute retardance loss
@@ -56,7 +67,7 @@ class PolarimetricLossFunction:
         pass
 
     def transform_ret_azim_to_vector_form(self, ret, azim):
-        """ Transform the retardance (ret) and azimuth (azim) into vector form.
+        """Transform the retardance (ret) and azimuth (azim) into vector form.
         Args:
         - ret (torch.Tensor): A tensor containing the retardance image.
         - azim (torch.Tensor): A tensor containing the azimuth image.
@@ -70,7 +81,7 @@ class PolarimetricLossFunction:
         return cosine_term, sine_term
 
     def vector_loss(self, ret_pred, azim_pred):
-        '''Compute the vector loss'''
+        """Compute the vector loss"""
         ret_gt = self.target_retardance
         azim_gt = self.target_orientation
         cos_gt, sin_gt = self.transform_ret_azim_to_vector_form(ret_gt, azim_gt)
@@ -80,15 +91,48 @@ class PolarimetricLossFunction:
         loss = loss_cos + loss_sin
         return loss
 
-    def compute_datafidelity_term(self, ret_pred, azim_pred, method='vector'):
-        '''Incorporates the retardance and orientation losses'''
-        if method == 'vector':
+    def intensity_loss(self, intensity_list_pred):
+        """Compute the intensity loss"""
+        intensity_list_gt = self.target_intensity_list
+        losses = [F.mse_loss(pred, gt) for pred, gt in zip(intensity_list_pred, intensity_list_gt)]
+        total_loss = torch.mean(torch.stack(losses)) * 10
+        return total_loss
+        
+
+    def compute_datafidelity_term(self, method, *args):
+        """Compares the predicted data with the target data.
+        Args:
+        method (str): The method to use, defaults to 'vector'.
+        *args: Depending on `method`:
+            - If 'vector', expects (ret_pred, azim_pred).
+            - If 'intensity', expects (intensity_list_pred).
+        """
+        first_word = method.split()[0]
+        second_word = method.split()[1] if len(method.split()) > 1 else None
+        if first_word == 'vector':
+            ret_pred, azim_pred = args[0]
             data_loss = self.vector_loss(ret_pred, azim_pred)
-        else:
-            retardance_loss = self.compute_retardance_loss(ret_pred)
-            orientation_loss = self.compute_orientation_loss(azim_pred)
+        elif first_word == 'intensity':
+            intensity_list_gt = self.target_intensity_list
+            intensity_list_pred = args[0]
+            if second_word == 'mse' or second_word is None:
+                losses = [F.mse_loss(pred, gt) for pred, gt in zip(intensity_list_pred, intensity_list_gt)]
+                data_loss = torch.mean(torch.stack(losses)) * 10
+            elif second_word == 'poisson':
+                losses = [poisson_loss(pred, gt) for pred, gt in zip(intensity_list_pred, intensity_list_gt)]
+                data_loss = torch.mean(torch.stack(losses))
+            elif second_word == 'gaussian':
+                losses = [gaussian_noise_loss(pred, gt, sigma=0.4) for pred, gt in zip(intensity_list_pred, intensity_list_gt)]
+                data_loss = torch.mean(torch.stack(losses)) * 0.05
+            else:
+                raise ValueError(f'Invalid intensity method: {method}')
+        elif first_word == 'retazim':
+            retardance_loss = self.compute_retardance_loss(args[0])
+            orientation_loss = self.compute_orientation_loss(args[1])
             data_loss = (self.weight_retardance * retardance_loss +
                         self.weight_regularization * orientation_loss)
+        else:
+            raise ValueError(f'Invalid data fidelity method: {method}')
         return data_loss
 
     def reg_l2(self, data):

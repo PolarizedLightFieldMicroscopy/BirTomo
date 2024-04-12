@@ -26,9 +26,6 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter
 )
-from VolumeRaytraceLFM.loss_functions import (
-    weighted_local_cosine_similarity_loss
-)
 from VolumeRaytraceLFM.utils.mask_utils import (
     create_half_zero_mask, create_half_zero_sandwich_mask
 )
@@ -36,6 +33,7 @@ from VolumeRaytraceLFM.utils.dict_utils import (
     extract_numbers_from_dict_of_lists,
     transform_dict_list_to_set
 )
+from VolumeRaytraceLFM.utils.json_utils import ComplexArrayEncoder
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
 
 
@@ -44,7 +42,9 @@ DEBUG = False
 
 
 class ReconstructionConfig:
-    def __init__(self, optical_info, ret_image, azim_image, initial_vol, iteration_params, loss_fcn=None, gt_vol=None):
+    def __init__(self, optical_info, ret_image, azim_image, initial_vol,
+                 iteration_params, loss_fcn=None, gt_vol=None,
+                 intensity_img_list=None):
         """
         Initialize the ReconstructorConfig with the provided parameters.
 
@@ -63,6 +63,12 @@ class ReconstructionConfig:
             initial_vol, BirefringentVolume), "Expected initial_volume to be of type BirefringentVolume"
         assert isinstance(iteration_params,
                           dict), "Expected iteration_params to be a dictionary"
+        if intensity_img_list:
+            assert isinstance(intensity_img_list, list), \
+                "Expected intensity_img_list to be a list"
+            for img in intensity_img_list:
+                assert isinstance(img, (torch.Tensor, np.ndarray)), \
+                    "Each image in intensity_img_list should be a Tensor or ndarray"
         if loss_fcn:
             assert callable(loss_fcn), "Expected loss_function to be callable"
         if gt_vol:
@@ -76,6 +82,10 @@ class ReconstructionConfig:
         self.interation_parameters = iteration_params
         self.loss_function = loss_fcn
         self.gt_volume = gt_vol
+        self.intensity_img_list = (
+            [self._to_numpy(img) for img in intensity_img_list]
+            if intensity_img_list else None
+        )
         self.ret_img_pred = None
         self.azim_img_pred = None
         self.recon_directory = None
@@ -122,9 +132,8 @@ class ReconstructionConfig:
         my_fig.savefig(os.path.join(directory, 'ret_azim.png'),
                        bbox_inches='tight', dpi=300)
         plt.close(my_fig)
-        # Save the dictionaries
         with open(os.path.join(directory, 'optical_info.json'), 'w') as f:
-            json.dump(self.optical_info, f, indent=4)
+            json.dump(self.optical_info, f, indent=4, cls=ComplexArrayEncoder)
         with open(os.path.join(directory, 'iteration_params.json'), 'w') as f:
             json.dump(self.interation_parameters, f, indent=4)
         # Save the volumes if the 'save_as_file' method exists
@@ -192,6 +201,7 @@ class Reconstructor:
         self.volume_initial_guess = recon_info.initial_volume
         self.iteration_params = recon_info.interation_parameters
         self.volume_ground_truth = recon_info.gt_volume
+        self.intensity_imgs_meas = recon_info.intensity_img_list
         self.recon_directory = recon_info.recon_directory
         if self.volume_ground_truth is not None:
             self.birefringence_simulated = self.volume_ground_truth.get_delta_n().detach()
@@ -206,6 +216,8 @@ class Reconstructor:
                 self.birefringence_simulated.unsqueeze(0))
             self.birefringence_mip_sim = prepare_plot_mip(
                 mip_image, plot=False)
+        if self.intensity_imgs_meas:
+            print("Intensity images were provided.")
 
         image_for_rays = None
         if omit_rays_based_on_pixels:
@@ -223,6 +235,14 @@ class Reconstructor:
         if self.apply_volume_mask:
             self.voxel_mask_setup()
             self.apply_mask_to_volume(self.volume_pred)
+
+        datafidelity_method = self.iteration_params['datafidelity']
+        first_word = datafidelity_method.split()[0]
+        if first_word == 'intensity':
+            self.intensity_bool = True
+            print("Using intensity images for data fidelity term.")
+        else:
+            self.intensity_bool = False
 
         # Lists to store the loss after each iteration
         self.loss_total_list = []
@@ -396,7 +416,7 @@ class Reconstructor:
             'AdamW': lambda params: torch.optim.AdamW(params),
             'RMSprop': lambda params: torch.optim.RMSprop(params)
         }
-        print(f"Using optimizer: {optimizer_type}.")
+        print(f"Using optimizer: {optimizer_type}")
         if optimizer_type == 'LBFGS':
             raise ValueError("LBFGS optimizer is not supported yet," +
                              "because a closure is needed.")
@@ -437,65 +457,49 @@ class Reconstructor:
         volume.Delta_n = torch.nn.Parameter(volume.Delta_n * self.mask)
         return
 
-    def compute_losses(self, ret_meas, azim_meas, ret_image_current, azim_current, volume_estimation, training_params):
-        if not torch.is_tensor(ret_meas):
-            ret_meas = torch.tensor(ret_meas)
-        if not torch.is_tensor(azim_meas):
-            azim_meas = torch.tensor(azim_meas)
-        # Vector difference GT
-        co_gt, ca_gt = ret_meas * torch.cos(azim_meas), ret_meas * torch.sin(azim_meas)
-        # Compute data term loss
-        co_pred, ca_pred = ret_image_current * torch.cos(azim_current), ret_image_current * torch.sin(azim_current)
-        data_term = ((co_gt - co_pred) ** 2 + (ca_gt - ca_pred) ** 2).mean()
-
-        # Compute regularization term
-        delta_n = volume_estimation.get_delta_n()
-        TV_reg = (
-            (delta_n[1:, ...] - delta_n[:-1, ...]).pow(2).sum() +
-            (delta_n[:, 1:, ...] - delta_n[:, :-1, ...]).pow(2).sum() +
-            (delta_n[:, :, 1:] - delta_n[:, :, :-1]).pow(2).sum()
-        )
-        axis_x = volume_estimation.get_optic_axis()[0, ...]
-        TV_reg_axis_x = (
-            (axis_x[1:, ...] - axis_x[:-1, ...]).pow(2).sum() +
-            (axis_x[:, 1:, ...] - axis_x[:, :-1, ...]).pow(2).sum() +
-            (axis_x[:, :, 1:] - axis_x[:, :, :-1]).pow(2).sum()
-        )
-        # regularization_term = TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean() + TV_reg_axis_x / 100000
-        regularization_term = training_params['regularization_weight'] * (0.5 * TV_reg + 1000 * (volume_estimation.Delta_n ** 2).mean())
-
-        # Total loss
-        loss = data_term + regularization_term
-        return loss, data_term, regularization_term
-
-    def _compute_loss(self, retardance_pred: torch.Tensor, azimuth_pred: torch.Tensor):
+    def _compute_loss(self, images_predicted: list):
         """
-        Compute the loss for the current iteration after the forward model is applied.
+        Compute the loss for the current iteration after the forward
+        model is applied.
 
-        Note: If ep is a class attibrute, then the loss function can depend on the current epoch.
+        Args:
+            images_predicted (list): A list of images that are output
+                from the forward model, could be ret/azim images or
+                intensity images.
+    
+        Returns:
+            loss (torch.Tensor): The total loss.
+
+        Note: If ep is a class attibrute, then the loss function can
+        depend on the current epoch.
         """
         vol_pred = self.volume_pred
         params = self.iteration_params
         retardance_meas = self.ret_img_meas
         azimuth_meas = self.azim_img_meas
+        intensity_imgs_meas = self.intensity_imgs_meas
 
         if not torch.is_tensor(retardance_meas):
             retardance_meas = torch.tensor(retardance_meas)
         if not torch.is_tensor(azimuth_meas):
             azimuth_meas = torch.tensor(azimuth_meas)
+        if intensity_imgs_meas is not None:
+            for i, img in enumerate(intensity_imgs_meas):
+                if not torch.is_tensor(img):
+                    intensity_imgs_meas[i] = torch.tensor(img)
 
+        # TODO: move these initializations so that they are only done once
         LossFcn = PolarimetricLossFunction(params=params)
         LossFcn.set_retardance_target(retardance_meas)
         LossFcn.set_orientation_target(azimuth_meas)
-        data_term = LossFcn.compute_datafidelity_term(retardance_pred, azimuth_pred, method='vector')
+        LossFcn.set_intensity_list_target(intensity_imgs_meas)
+        data_term = LossFcn.compute_datafidelity_term(LossFcn.datafidelity, images_predicted)
 
         # Compute regularization term
         if isinstance(params['regularization_weight'], list):
             params['regularization_weight'] = params['regularization_weight'][0]
-
         reg_loss, reg_term_values = LossFcn.compute_regularization_term(vol_pred)
         regularization_term = params['regularization_weight'] * reg_loss
-
         self.reg_term_values = [reg.item() for reg in reg_term_values]
 
         # Total loss
@@ -514,9 +518,9 @@ class Reconstructor:
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
 
-        # Apply forward model
-        [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
-        loss, data_term, regularization_term = self._compute_loss(ret_image_current, azim_image_current)
+        # Apply forward model and compute loss
+        img_list = self.rays.ray_trace_through_volume(volume_estimation, intensity=self.intensity_bool)
+        loss, data_term, regularization_term = self._compute_loss(img_list)
 
         # Verify the gradients before and after the backward pass
         if DEBUG:
@@ -546,10 +550,26 @@ class Reconstructor:
         # Keep the optic axis on the unit sphere
         self.stay_on_sphere(volume_estimation)
 
-        self.store_results(
-            ret_image_current, azim_image_current,
-            volume_estimation, loss, data_term, regularization_term
-        )
+        # TODO: fix so that measured images do not need to be placeholder for the predicted images
+        if self.intensity_bool:
+            [self.ret_img_pred, self.azim_img_pred] = self.ret_img_meas, self.azim_img_meas
+            self.volume_pred = volume_estimation
+            self.loss_total_list.append(loss.item())
+            self.loss_data_term_list.append(data_term.item())
+            self.loss_reg_term_list.append(regularization_term.item())
+            # Alternatively, the ray tracing can be done again without intensity boolean.
+            # with torch.no_grad():
+            #     [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
+            # self.store_results(
+            #     ret_image_current, azim_image_current,
+            #     volume_estimation, loss, data_term, regularization_term
+            # )
+        else:
+            [ret_image_current, azim_image_current] = img_list
+            self.store_results(
+                ret_image_current, azim_image_current,
+                volume_estimation, loss, data_term, regularization_term
+            )
         return
 
     def print_grad_info(self, volume_estimation):
@@ -557,7 +577,9 @@ class Reconstructor:
         print("Gradient for Delta_n_first_part:", volume_estimation.Delta_n_first_part.grad)
         print("Gradient for Delta_n_second_part:", volume_estimation.Delta_n_second_part.grad)
 
-    def store_results(self, ret_image_current, azim_image_current, volume_estimation, loss, data_term, regularization_term):
+    def store_results(self, ret_image_current, azim_image_current,
+                      volume_estimation, loss, data_term,
+                      regularization_term):
         self.ret_img_pred = ret_image_current.detach().cpu().numpy()
         self.azim_img_pred = azim_image_current.detach().cpu().numpy()
         self.volume_pred = volume_estimation
@@ -567,9 +589,12 @@ class Reconstructor:
 
     def visualize_and_save(self, ep, fig, output_dir):
         volume_estimation = self.volume_pred
-        # Delta_n_combined = torch.cat([volume_estimation.Delta_n_first_half, volume_estimation.Delta_n_second_half], dim=0)
+        # Delta_n_combined = torch.cat([volume_estimation.Delta_n_first_half,
+        #       volume_estimation.Delta_n_second_half], dim=0)
         # Delta_n_combined.retain_grad()
         # volume_estimation.Delta_n = torch.nn.Parameter(Delta_n_combined)
+
+        # TODO: only update every 1 epoch if plotting is live
         if ep % 1 == 0:
             # plt.clf()
             if COMBINING_DELTA_N:
@@ -596,11 +621,12 @@ class Reconstructor:
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
             self._save_regularization_terms_to_csv(ep)
+            # TODO: make saving frequency a parameter
             if ep % 5 == 0:
                 filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
-                # self.save_loss_lists_to_csv()
             time.sleep(0.1)
+        # TODO: make saving frequency a parameter
         if ep % 5 == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
@@ -741,6 +767,13 @@ class Reconstructor:
         for ep in tqdm(range(n_epochs), "Minimizing"):
             self.one_iteration(optimizer, self.volume_pred)
 
+            if ep % 20 == 0 and self.intensity_bool:
+                with torch.no_grad():
+                    [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(self.volume_pred)
+                self.ret_img_pred = ret_image_current.detach().cpu().numpy()
+                self.azim_img_pred = azim_image_current.detach().cpu().numpy()
+    
+            # TODO: verify that this damp mask is appropriate
             azim_damp_mask = self.ret_img_meas / self.ret_img_meas.max()
             self.azim_img_pred[azim_damp_mask == 0] = 0
 
