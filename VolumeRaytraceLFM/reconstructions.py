@@ -236,13 +236,14 @@ class Reconstructor:
             self.voxel_mask_setup()
             self.apply_mask_to_volume(self.volume_pred)
 
-        datafidelity_method = self.iteration_params['datafidelity']
+        datafidelity_method = self.iteration_params.get('datafidelity', 'vector')
         first_word = datafidelity_method.split()[0]
         if first_word == 'intensity':
             self.intensity_bool = True
-            print("Using intensity images for data fidelity term.")
+            print("Using intensity images for data-fidelity term.")
         else:
             self.intensity_bool = False
+            print("Using retardance and azimuth images for data-fidelity term.")
 
         # Lists to store the loss after each iteration
         self.loss_total_list = []
