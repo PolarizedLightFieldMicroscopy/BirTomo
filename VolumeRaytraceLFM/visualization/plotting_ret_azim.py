@@ -78,7 +78,7 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
     '''Plots the overlay of the retardance and orientation images with colorbars.'''
     # Note: may want to use interpolation="nearest" to avoid aliasing affects
     # Get pixel coords
-    colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[0], 3])
+    colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[1], 3])
     A = azimuth_img * 1
     colors[:, :, 0] = A / A.max()
     colors[:, :, 1] = 0.5
