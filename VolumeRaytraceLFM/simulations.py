@@ -145,6 +145,8 @@ class ForwardModel:
 
     def view_intensity_images(self):
         """View the simulated intensity images."""
+        for i in range(len(self.img_list)):
+            self.img_list[i] = self.convert_to_numpy(self.img_list[i])
         my_fig = plot_intensity_images(self.img_list)
         my_fig.tight_layout()
         plt.pause(0.2)
@@ -202,7 +204,7 @@ class ForwardModel:
                   parameters.
         Creates/Updates:
             self.ret_img (torch.Tensor or np.array):
-                The retardance imagecalculated by the model.
+                The retardance image calculated by the model.
             self.azim_img (torch.Tensor or np.array):
                 The azimuth image calculated by the model.
             self.img_list (list of np.arrays):
@@ -213,10 +215,10 @@ class ForwardModel:
         self.ret_img = ret_image
         self.azim_img = azim_image
 
-        if intensity and self.is_numpy_backend():
+        if intensity:
             self.optical_info['analyzer'] = JonesMatrixGenerators.left_circular_polarizer()
             self.optical_info['polarizer_swing'] = 0.03
             self.img_list = self.rays.ray_trace_through_volume(
                 volume, intensity=True
             )
-            print("Intensity images computed with LC-PolScope setup")
+            print("Intensity images computed according to the LC-PolScope setup")
