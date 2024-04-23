@@ -73,6 +73,62 @@ def recon_xylem():
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
+def recon_cpu():
+    start_time = time.time()
+    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
+    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem_quick.json")
+    ret_image_meas, azim_image_meas = prepare_ret_azim_images(
+        os.path.join('xylem', 'mla65', 'retardance.tif'),
+        os.path.join('xylem', 'mla65', 'azimuth.tif'),
+        60, recon_optical_info['wavelength']
+    )
+    initial_volume = BirefringentVolume(
+        backend=BackEnds.PYTORCH,
+        optical_info=recon_optical_info,
+        volume_creation_args = volume_args.random_args1
+    )
+    recon_directory = create_unique_directory("reconstructions")
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
+                                        initial_volume, iteration_params, gt_vol=initial_volume)
+    recon_config.save(recon_directory)
+    reconstructor = Reconstructor(recon_config)
+    reconstructor.reconstruct(output_dir=recon_directory)
+    # visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+    end_time = time.time()
+    print("CPU execution time: {:.2f} seconds".format(end_time - start_time))
+
+
+def recon_gpu():
+    '''Reconstruct a volume on the GPU.'''
+    start_time = time.time()
+    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
+    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem_quick.json")
+    ret_image_meas, azim_image_meas = prepare_ret_azim_images(
+        os.path.join('xylem', 'mla65', 'retardance.tif'),
+        os.path.join('xylem', 'mla65', 'azimuth.tif'),
+        60, recon_optical_info['wavelength']
+    )
+    initial_volume = BirefringentVolume(
+        backend=BackEnds.PYTORCH,
+        optical_info=recon_optical_info,
+        volume_creation_args = volume_args.random_args1
+    )
+    initial_volume.to(DEVICE)  # Move the volume to the GPU
+
+    recon_directory = create_unique_directory("reconstructions")
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
+                                        initial_volume, iteration_params, gt_vol=initial_volume)
+    recon_config.save(recon_directory)
+
+    reconstructor = Reconstructor(recon_config, device=DEVICE)
+    reconstructor.to_device(DEVICE)  # Move the reconstructor to the GPU
+
+    reconstructor.reconstruct(output_dir=recon_directory)
+    # visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+    end_time = time.time()
+    print("GPU execution time: {:.2f} seconds".format(end_time - start_time))
+
+
 def recon_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
     """Reconstruct the xylem data set from a previous reconstruction."""
     recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
@@ -98,6 +154,7 @@ def recon_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
 
 if __name__ == '__main__':
     recon_debug()
+    # recon_gpu()
     # recon_xylem()
     # saved_recon_dir = "reconstructions/saved/xylem"
     # recon_filename = "2024-03-25_04-26-10_xylem_highL2_lr5/volume_ep_0100.h5"
