@@ -632,6 +632,7 @@ class Reconstructor:
         # Delta_n_combined.retain_grad()
         # volume_estimation.Delta_n = torch.nn.Parameter(Delta_n_combined)
 
+        save_freq = self.iteration_params.get('save_freq', 5)
         # TODO: only update every 1 epoch if plotting is live
         if ep % 1 == 0:
             # plt.clf()
@@ -659,13 +660,11 @@ class Reconstructor:
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
             self._save_regularization_terms_to_csv(ep)
-            # TODO: make saving frequency a parameter
-            if ep % 5 == 0:
+            if ep % save_freq == 0:
                 filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
             time.sleep(0.1)
-        # TODO: make saving frequency a parameter
-        if ep % 5 == 0:
+        if ep % save_freq == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
