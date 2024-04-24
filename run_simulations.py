@@ -48,7 +48,8 @@ if __name__ == '__main__':
     )
     # volume_GT = adjust_volume(volume_GT)
     # volume_GT.save_as_file('volume_gt.h5', description="")
-    # visualize_volume(volume_GT, optical_info)
+    visualize_volume(volume_GT, optical_info)
 
+    # simulator.rays.store_shifted_vox_indices()
     simulator.forward_model(volume_GT)
     simulator.view_images()

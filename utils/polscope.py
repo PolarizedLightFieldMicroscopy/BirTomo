@@ -1,6 +1,7 @@
 '''Functions to adjust PolScope images'''
-
+import skimage.io as io
 import numpy as np
+import time
 
 
 def normalize_retardance(ret_image_polscope, ret_ceiling, wavelength=550):
@@ -19,7 +20,7 @@ def normalize_retardance(ret_image_polscope, ret_ceiling, wavelength=550):
     ret_image = (ret_image_nm / wavelength) * (2 * np.pi)
     assert np.min(ret_image) >= 0, f"Minimun retardance value is below zero: Min = {np.min(ret_image):.3f}"
     assert np.max(ret_image) <= np.pi, f"Maximum retardance value exceeded π: Max = {np.max(ret_image):.3f}"
-    return ret_image
+    return ret_image.astype('float32')
 
 
 def normalize_azimuth(azim_image_polscope):
@@ -36,4 +37,27 @@ def normalize_azimuth(azim_image_polscope):
     azim_image = azim_image_degrees * np.pi / 180
     assert np.min(azim_image) >= 0, f"Minimun azimuth value is below zero: Min = {np.min(azim_image):.3f}"
     assert np.max(azim_image) <= np.pi, f"Maximum azimuth value exceeded π: Max = {np.max(azim_image):.3f}"
-    return azim_image
+    return azim_image.astype('float32')
+
+
+def prepare_ret_azim_images(retardance_path, azimuth_path, ret_ceiling, wavelength_um):
+    '''Prepare the retardance and azimuth images for reconstruction that
+    were collected from the LC-PolScope.
+    Args:
+        retardance_path (str): path to the retardance image
+        azimuth_path (str): path to the azimuth image
+        ret_ceiling (scalar): maximum retardance value in nanometers
+        wavelength_um (scalar): wavelength of the light in micrometers
+    Returns:
+        ret_image (np.array): normalized retardance image in radians
+        azim_image (np.array): normalized azimuth image in radians
+    '''
+    start_time = time.perf_counter()
+    wavelength_nm = wavelength_um * 1000
+    ret_polscope = io.imread(retardance_path)
+    azim_polscope = io.imread(azimuth_path)
+    ret_image_meas = normalize_retardance(ret_polscope, ret_ceiling, wavelength=wavelength_nm)
+    azim_image_meas = normalize_azimuth(azim_polscope)
+    end_time = time.perf_counter()
+    print(f"Prepared measured images in {end_time - start_time:.3f} seconds")
+    return ret_image_meas, azim_image_meas

@@ -7,6 +7,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 import csv
+import pickle
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
@@ -53,6 +54,7 @@ class ReconstructionConfig:
         azimuth_image: Measured azimuth image.
         initial_volume: An initial estimation of the volume.
         """
+        start_time = time.perf_counter()
         assert isinstance(
             optical_info, dict), "Expected optical_info to be a dictionary"
         assert isinstance(ret_image, (torch.Tensor, np.ndarray)
@@ -89,6 +91,8 @@ class ReconstructionConfig:
         self.ret_img_pred = None
         self.azim_img_pred = None
         self.recon_directory = None
+        end_time = time.perf_counter()
+        print(f"ReconstructionConfig initialized in {end_time - start_time:.3f} seconds")
 
     def _to_numpy(self, image):
         """Convert image to a numpy array, if it's not already."""
@@ -117,6 +121,7 @@ class ReconstructionConfig:
         Class instance attributes modified:
             - self.recon_directory
         """
+        start_time = time.perf_counter()
         self.recon_directory = parent_directory
 
         directory = os.path.join(parent_directory, "config_parameters")
@@ -149,6 +154,8 @@ class ReconstructionConfig:
                 os.path.join(directory, 'gt_volume.h5'),
                 description=my_description
             )
+        end_time = time.perf_counter()
+        print(f"ReconstructionConfig saved in {end_time - start_time:.3f} seconds")
 
     @classmethod
     def load(cls, parent_directory):
@@ -194,6 +201,8 @@ class Reconstructor:
 
         recon_info (class): containing reconstruction parameters
         """
+        start_time = time.perf_counter()
+        print(f'\nInitializing a Reconstructor, using computing device {device}')
         self.optical_info = recon_info.optical_info
         self.ret_img_meas = recon_info.retardance_image
         self.azim_img_meas = recon_info.azimuth_image
@@ -222,7 +231,7 @@ class Reconstructor:
         image_for_rays = None
         if omit_rays_based_on_pixels:
             image_for_rays = self.ret_img_meas
-            print("\nOmitting rays based on pixels with zero retardance.")
+            print("Omitting rays based on pixels with zero retardance.")
         self.rays = self.setup_raytracer(image=image_for_rays, device=device)
 
         self.apply_volume_mask = apply_volume_mask
@@ -249,6 +258,8 @@ class Reconstructor:
         self.loss_total_list = []
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
+        end_time = time.perf_counter()
+        print(f"Reconstructor initialized in {end_time - start_time:.3f} seconds\n")
 
     def _initialize_volume(self):
         """
@@ -258,6 +269,15 @@ class Reconstructor:
         # Placeholder for volume initialization
         default_volume = None
         return default_volume
+
+    def _to_numpy(self, image):
+        """Convert image to a numpy array, if it's not already."""
+        if isinstance(image, torch.Tensor):
+            return image.detach().cpu().numpy()
+        elif isinstance(image, np.ndarray):
+            return image
+        else:
+            raise TypeError("Image must be a PyTorch Tensor or a numpy array")
 
     def to_device(self, device):
         """
@@ -429,20 +449,36 @@ class Reconstructor:
 
     def voxel_mask_setup(self):
         """Extract volume voxel related information."""
-        self.rays.store_shifted_vox_indices()
-        vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+        try:
+            vox_indices_path = self.iteration_params['vox_indices_by_mla_idx_path']
+            start_time = time.perf_counter()
+            with open(vox_indices_path, 'rb') as f:
+                vox_indices_by_mla_idx = pickle.load(f)
+            end_time = time.perf_counter()
+            print(f"Voxel indices by MLA index loaded in {end_time - start_time:.3f} seconds from {vox_indices_path}")
+            self.rays.vox_indices_by_mla_idx = vox_indices_by_mla_idx
+        except:
+            self.rays.store_shifted_vox_indices()
+            vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+            dict_save_dir = os.path.join(self.recon_directory, 'config_parameters')
+            if not os.path.exists(dict_save_dir):
+                os.makedirs(dict_save_dir)
+            dict_filename = 'vox_indices_by_mla_idx.pkl'
+            dict_save_path = os.path.join(dict_save_dir, dict_filename)
+            with open(dict_save_path, 'wb') as f:
+                pickle.dump(vox_indices_by_mla_idx, f)
+            print(f"Saving voxel indices by MLA index to {dict_save_path}")
+
         print("Collecting the set of voxels that are reached by the rays.")
+        start_time = time.perf_counter()
         vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
         sorted_vox_list = sorted(vox_set)
         vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
-        
         vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
-        
         filtered_vox_list = list(vox_set - set(vox_list_excluding))
         filter_out_repeat_zero_ret = True
         if filter_out_repeat_zero_ret:
             sorted_vox_list = sorted(filtered_vox_list)
-        
         print(f"Masking out voxels except for {len(sorted_vox_list)} voxels: {sorted_vox_list}")
         vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
         # Initialize a mask of the same size as Delta_n with False
@@ -450,8 +486,9 @@ class Reconstructor:
         mask = torch.zeros(Delta_n.shape[0], dtype=torch.bool)
         # Use tensor indexing to set True for indices in my_set
         mask[vox_set_tensor] = True
-
         self.mask = mask
+        end_time = time.perf_counter()
+        print(f"Voxel mask created in {end_time - start_time:.3f} seconds")
         return
     
     def apply_mask_to_volume(self, volume : BirefringentVolume):
@@ -595,6 +632,7 @@ class Reconstructor:
         # Delta_n_combined.retain_grad()
         # volume_estimation.Delta_n = torch.nn.Parameter(Delta_n_combined)
 
+        save_freq = self.iteration_params.get('save_freq', 5)
         # TODO: only update every 1 epoch if plotting is live
         if ep % 1 == 0:
             # plt.clf()
@@ -622,13 +660,11 @@ class Reconstructor:
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
             self._save_regularization_terms_to_csv(ep)
-            # TODO: make saving frequency a parameter
-            if ep % 5 == 0:
+            if ep % save_freq == 0:
                 filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
             time.sleep(0.1)
-        # TODO: make saving frequency a parameter
-        if ep % 5 == 0:
+        if ep % save_freq == 0:
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
@@ -732,6 +768,7 @@ class Reconstructor:
         """
         Method to perform the actual reconstruction based on the provided parameters.
         """
+        print(f"Beginning reconstruction iterations...")
         if output_dir is None:
             if self.recon_directory is not None:
                 output_dir = self.recon_directory
@@ -775,7 +812,7 @@ class Reconstructor:
                 self.azim_img_pred = azim_image_current.detach().cpu().numpy()
     
             # TODO: verify that this damp mask is appropriate
-            azim_damp_mask = self.ret_img_meas / self.ret_img_meas.max()
+            azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0
 
             if use_streamlit:

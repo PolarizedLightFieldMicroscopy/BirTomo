@@ -1,7 +1,7 @@
 {
     "n_epochs": 101,
     "regularization_weight": 0.1,
-    "lr_birefringence": 1e-3,
+    "lr_birefringence": 1e-4,
     "lr_optic_axis": 1e-2,
     "optimizer": "Adam",
     "datafidelity": "vector",
@@ -10,6 +10,7 @@
         ["birefringence TV", 100],
         ["local cosine similarity", 0.01]
     ],
+    "save_freq": 10,
     "output_posfix": "",
     "notes": ""
 }
