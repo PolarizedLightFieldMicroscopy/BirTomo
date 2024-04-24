@@ -77,7 +77,8 @@ def weighted_local_cosine_similarity_loss(vector_arr, scalar_arr):
 
         # Create the valid mask to avoid boundary elements
         valid_mask = torch.ones_like(weighted_cos_sim, dtype=torch.bool)
-        valid_mask.index_fill_(i-1, torch.tensor([weighted_cos_sim.size(i-1) - 1]), False)
+        index_tensor = torch.tensor([weighted_cos_sim.size(i-1) - 1], device=weighted_cos_sim.device)
+        valid_mask.index_fill_(i-1, index_tensor, False)
 
         cos_sim_loss += (1 - weighted_cos_sim[valid_mask]).sum()
         valid_comparisons += valid_mask.sum().item()

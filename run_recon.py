@@ -458,7 +458,7 @@ def recon_voxel():
     recon_config.save(recon_directory)
 
     # Changes made for developing masking process
-    reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     # reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     # reconstructor.rays._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
     # vox_list = reconstructor.rays.identify_voxels_repeated_zero_ret()

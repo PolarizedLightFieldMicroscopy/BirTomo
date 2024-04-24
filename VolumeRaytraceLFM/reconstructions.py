@@ -270,6 +270,15 @@ class Reconstructor:
         default_volume = None
         return default_volume
 
+    def _to_numpy(self, image):
+        """Convert image to a numpy array, if it's not already."""
+        if isinstance(image, torch.Tensor):
+            return image.detach().cpu().numpy()
+        elif isinstance(image, np.ndarray):
+            return image
+        else:
+            raise TypeError("Image must be a PyTorch Tensor or a numpy array")
+
     def to_device(self, device):
         """
         Move all tensors to the specified device.
@@ -804,7 +813,7 @@ class Reconstructor:
                 self.azim_img_pred = azim_image_current.detach().cpu().numpy()
     
             # TODO: verify that this damp mask is appropriate
-            azim_damp_mask = self.ret_img_meas / self.ret_img_meas.max()
+            azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0
 
             if use_streamlit:
