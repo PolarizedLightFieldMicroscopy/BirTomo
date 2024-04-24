@@ -4,7 +4,6 @@ and BirefringentRaytraceLFM class
 """
 from math import floor
 from tqdm import tqdm
-from timeit import default_timer as timer
 import time
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
@@ -12,7 +11,6 @@ from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count
-from utils import errors
 
 NORM_PROJ = False   # normalize the projection of the ray onto the optic axis
 OPTIMIZING_MODE = False # use the birefringence stored in Delta_n_combined
@@ -501,7 +499,7 @@ class BirefringentVolume(BirefringentElement):
 
     def save_as_file(self, h5_file_path, description="Temporary description", optical_all=False):
         '''Store this volume into an h5 file'''
-        print(f'\nSaving volume to h5 file: {h5_file_path}')
+        tqdm.write(f'Saving volume to h5 file: {h5_file_path}')
 
         delta_n, optic_axis = self._get_data_as_numpy_arrays()
         file_manager = VolumeFileManager()
@@ -1043,7 +1041,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_ml_half = floor(n_micro_lenses / 2.0)
         collision_indices = self.ray_vol_colli_indices
         if self.verbose:
-            print(f"Storing shifted voxel indices for each microlens")
+            print(f"Storing shifted voxel indices for each microlens:")
             row_iterable = tqdm(
                 range(n_micro_lenses),
                 desc=f'Computing rows of microlenses'

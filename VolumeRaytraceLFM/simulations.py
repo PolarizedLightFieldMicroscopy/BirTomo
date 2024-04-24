@@ -125,7 +125,7 @@ class ForwardModel:
         start_time = time.time()
         rays.compute_rays_geometry()
         self.ray_geometry_computation_time = time.time() - start_time
-        print(f'Raytracing time in seconds: {self.ray_geometry_computation_time:.4f}')
+        print(f'Raytracing time in seconds: {self.ray_geometry_computation_time:.3f}')
         return rays
 
     def view_images(self, azimuth_plot_type='hsv'):

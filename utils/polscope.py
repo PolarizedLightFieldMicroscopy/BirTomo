@@ -1,6 +1,7 @@
 '''Functions to adjust PolScope images'''
 import skimage.io as io
 import numpy as np
+import time
 
 
 def normalize_retardance(ret_image_polscope, ret_ceiling, wavelength=550):
@@ -51,9 +52,12 @@ def prepare_ret_azim_images(retardance_path, azimuth_path, ret_ceiling, waveleng
         ret_image (np.array): normalized retardance image in radians
         azim_image (np.array): normalized azimuth image in radians
     '''
+    start_time = time.perf_counter()
     wavelength_nm = wavelength_um * 1000
     ret_polscope = io.imread(retardance_path)
     azim_polscope = io.imread(azimuth_path)
     ret_image_meas = normalize_retardance(ret_polscope, ret_ceiling, wavelength=wavelength_nm)
     azim_image_meas = normalize_azimuth(azim_polscope)
+    end_time = time.perf_counter()
+    print(f"Prepared measured images in {end_time - start_time:.3f} seconds")
     return ret_image_meas, azim_image_meas
