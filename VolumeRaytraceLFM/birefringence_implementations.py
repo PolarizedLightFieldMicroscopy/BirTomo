@@ -12,7 +12,6 @@ from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count
 
-NORM_PROJ = False   # normalize the projection of the ray onto the optic axis
 OPTIMIZING_MODE = False # use the birefringence stored in Delta_n_combined
 
 ######################################################################
@@ -883,7 +882,7 @@ class BirefringentVolume(BirefringentElement):
         return volume
 
 
-############ Implementations
+############ Implementations ############
 class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     '''This class extends RayTraceLFM, and implements the forward function,
     where voxels contribute to ray's Jones-matrices with a retardance and axis
@@ -949,7 +948,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         \t\t\tGather params for voxRayJM: {rays_times['gather_params_for_voxRayJM']*1000: .2f} \n \
         \t\t\tvoxRayJM: {rays_times['voxRayJM']*1000: .2f} \n \
         \t\t\t\tret & azim for JM: {rays_times['calc_ret_azim_for_jones']*1000: .2f} \n \
-        \t\t\t\Jones matrix calculation: {rays_times['calc_jones']*1000: .2f} \n \
+        \t\t\t\tJones matrix calculation: {rays_times['calc_jones']*1000: .2f} \n \
         \t\t\tJones matrix multiplication: {rays_times['jones_matrix_multiplication']*1000: .2f} \n \
         \tRetardance from Jones: {rays_times['retardance_from_jones']*1000: .2f} \n \
         \tAzimuth from Jones: {rays_times['azimuth_from_jones']*1000: .2f}")
@@ -1118,7 +1117,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """
         start_time_raytrace = time.perf_counter()
         # volume_shape defines the size of the workspace
-        # the number of micro lenses defines the valid volume inside the workspace
+        # the number of microlenses defines the valid volume inside the workspace
         volume_shape = volume_in.optical_info['volume_shape']
         n_micro_lenses = self.optical_info['n_micro_lenses']
         n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
@@ -1126,81 +1125,40 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Check if the volume_size can fit these microlenses.
         # # considering that some rays go beyond the volume in front of the microlenses
-        # border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
+        if False:
+            border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
         min_required_volume_size = self._calculate_min_volume_size(n_micro_lenses, n_voxels_per_ml)
         self._validate_volume_size(min_required_volume_size, volume_shape)
-        # The following assert statement is redundant, but it is kept for clarity
-        err_message = "The volume in front of the microlenses" + \
-            f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. " + \
-            f"Increase the volume_shape to at least [{min_required_volume_size+1},{min_required_volume_size+1}]"
-        raise_error = False # DEBUG: set to False to avoid raising error
-        if raise_error:
-            assert min_required_volume_size <= volume_shape[1] and min_required_volume_size <= volume_shape[2], err_message
 
         # Traverse volume for every ray, and generate intensity images or retardance and azimuth images
 
-        # Initialize a list to store the final concatenated images
         full_img_list = [None] * 5
-
-        # Calculate shift for odd number of microlenses
-        odd_mla_shift = np.mod(n_micro_lenses, 2)
-
-        ml_ii_idx = 0
+        odd_mla_shift = n_micro_lenses % 2 # shift for odd number of microlenses
+        row_iterable = self._get_row_iterable(n_ml_half, odd_mla_shift)
         # Iterate over each row of microlenses (y direction)
-        if self.verbose:
-            row_iterable = tqdm(
-                range(-n_ml_half, n_ml_half + odd_mla_shift),
-                desc=f'Computing rows of microlenses {self.backend}'
-            )
-        else:
-            row_iterable = range(-n_ml_half, n_ml_half + odd_mla_shift)
-
-        for ml_ii in row_iterable:
+        for ml_ii_idx, ml_ii in enumerate(row_iterable):
             # Initialize a list for storing concatenated images of the current row
             full_img_row_list = [None] * 5
-            ml_jj_idx = 0
             # Iterate over each column of microlenses in the current row (x direction)
-            for ml_jj in range(-n_ml_half, n_ml_half+odd_mla_shift):
-
-                # Calculate the offset to the top corner of the volume in front of
-                #   the current microlens (ml_ii, ml_jj)
+            for ml_jj_idx, ml_jj in enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)):
                 current_offset = self._calculate_current_offset(
-                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
-                    )
-
-                # Generate (intensity or ret/azim) images for the current microlens,
-                #   by passing an offset to this function
-                #   depending on the microlens and the super resolution
-                current_mla_index = (ml_jj_idx, ml_ii_idx)
-                start_time = time.time()
+                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses)
                 img_list = self.generate_images(volume_in, current_offset,
-                                intensity, mla_index=current_mla_index)
-                execution_time = time.time() - start_time
-                mla_index = (ml_jj_idx, ml_ii_idx)
-                if mla_index not in self.mla_execution_times:
-                    self.mla_execution_times[mla_index] = 0
-                self.mla_execution_times[mla_index] += execution_time
-
+                                intensity, mla_index=(ml_jj_idx, ml_ii_idx))
                 # Concatenate the generated images with the images of the current row
-                if full_img_row_list[0] is None:
-                    full_img_row_list = img_list
-                else:
-                    full_img_row_list = self._concatenate_images(
-                        full_img_row_list, img_list, axis=0
-                        )
-
-                ml_jj_idx += 1
-
+                full_img_row_list = self._concatenate_images(
+                    full_img_row_list, img_list, axis=0)
             # Concatenate the row images with the full image list
-            if full_img_list[0] is None:
-                full_img_list = full_img_row_list
-            else:
-                full_img_list = self._concatenate_images(full_img_list, full_img_row_list, axis=1)
-
-            ml_ii_idx += 1
+            full_img_list = self._concatenate_images(full_img_list, full_img_row_list, axis=1)
         end_time_raytrace = time.perf_counter()
         self.times['ray_trace_through_volume'] += end_time_raytrace - start_time_raytrace
         return full_img_list
+
+    def _get_row_iterable(self, n_ml_half, odd_mla_shift):
+        range_iterable = range(-n_ml_half, n_ml_half + odd_mla_shift)
+        if self.verbose:
+            return tqdm(range_iterable, desc=f'Computing rows of microlenses {self.backend}')
+        return range_iterable
 
     def _calculate_min_volume_size(self, num_microlenses, num_voxels_per_ml):
         return int(self.voxel_span_per_ml + (num_microlenses * num_voxels_per_ml))
@@ -1217,7 +1175,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """Maps the position of a microlens in its array to the corresponding
         position in the volumetric data, identified by its row and column
         indices. This function calculates the offset to the top corner of the
-        volume in front of the current microlens.
+        volume in front of the current microlens (row_index, col_index).
 
         Args:
             row_index (int): The row index of the current microlens in the
@@ -1250,15 +1208,27 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def generate_images(self, volume, offset, intensity, mla_index=(0, 0)):
         """Generates images for a single microlens, by passing an offset
-        to the ray tracing process."""
+        to the ray tracing process. The offset shifts the volume indices
+        reached by each ray, depending on the microlens position and the
+        supersampling factor."""
+        start_time = time.time()
         if intensity:
-            return self.intensity_images(
+            image_list = self.intensity_images(
                 volume, microlens_offset=offset, mla_index=mla_index)
         else:
-            return self.ret_and_azim_images(
+            image_list = self.ret_and_azim_images(
                 volume, microlens_offset=offset, mla_index=mla_index)
+        self._update_mla_execution_time(mla_index, time.time() - start_time)
+        return image_list
+
+    def _update_mla_execution_time(self, mla_index, execution_time):
+        if mla_index not in self.mla_execution_times:
+            self.mla_execution_times[mla_index] = 0
+        self.mla_execution_times[mla_index] += execution_time
 
     def _concatenate_images(self, img_list1, img_list2, axis):
+        if img_list1[0] is None:
+            return img_list2
         if self.backend == BackEnds.NUMPY:
             return [np.concatenate((img1, img2), axis) for img1, img2 in zip(img_list1, img_list2)]
         elif self.backend == BackEnds.PYTORCH:
