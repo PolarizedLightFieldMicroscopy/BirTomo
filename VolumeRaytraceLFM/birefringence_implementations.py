@@ -903,6 +903,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.mla_execution_times = {}
         self.vox_indices_ml_shifted = {}
         self.vox_indices_by_mla_idx = {}
+        self.times = {
+            "ray_trace_through_volume": 0,
+            "cummulative_JM": 0,
+            "prep_for_cummulative_JM": 0,
+            "loop_through_vox_collisions": 0,
+            "voxRayJM": 0,
+            "calc_ret_azim_for_JM": 0,
+            "calc_JM": 0,
+        }
 
     def __str__(self):
         info = (
@@ -1080,6 +1089,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         Returns:
             list[ImageType]: A list of images resulting from the ray tracing process.
         """
+        start_time_raytrace = time.perf_counter()
         # volume_shape defines the size of the workspace
         # the number of micro lenses defines the valid volume inside the workspace
         volume_shape = volume_in.optical_info['volume_shape']
@@ -1161,7 +1171,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 full_img_list = self._concatenate_images(full_img_list, full_img_row_list, axis=1)
 
             ml_ii_idx += 1
-
+        end_time_raytrace = time.perf_counter()
+        self.times['ray_trace_through_volume'] += end_time_raytrace - start_time_raytrace
         return full_img_list
 
     def _calculate_min_volume_size(self, num_microlenses, num_voxels_per_ml):
@@ -1399,6 +1410,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Note: This could allow the try statement to be removed, but it is kept for clarity
         material_JM = None
 
+        start_time = time.perf_counter()
         ###### Mask out the rays that lead to nonzero pixels
         if self.use_lenslet_based_filtering:
             # DEBUG
@@ -1430,11 +1442,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                         )
                     self.vox_indices_by_mla_idx[mla_index] = vox_list
                 voxels_of_segs = self.vox_indices_by_mla_idx[mla_index]
+        end_time = time.perf_counter()
+        self.times['prep_for_cummulative_JM'] += end_time - start_time
 
         # Process interactions of all rays with each voxel
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels,
         #   so we mask the rays valid with rays_with_voxels.
+        start_time_mloop = time.perf_counter()
         material_JM = self._get_default_JM()
         for m in range(ell_in_voxels.shape[1]):
             # Determine which rays have remaining voxels to traverse
@@ -1457,10 +1472,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 # Subset of precomputed ray directions that interact with voxels in this step
                 filtered_ray_directions = ray_dir_basis[:, rays_with_voxels, :]
 
+                start_time_voxRayJM = time.perf_counter()
                 # Compute the interaction from the rays with their corresponding voxels
                 JM = self.voxRayJM(Delta_n=Delta_n, opticAxis=opticAxis,
                                    rayDir=filtered_ray_directions, ell=ell,
                                    wavelength=self.optical_info['wavelength'])
+                end_time_voxRayJM = time.perf_counter()
+                self.times['voxRayJM'] += end_time_voxRayJM - start_time_voxRayJM
 
                 # Combine the current Jones Matrix with the cumulative one
                 if m == 0:
@@ -1477,6 +1495,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             except:
                 raise Exception("Cumulative Jones Matrix computation failed. " +
                     "Error accessing the volume, try increasing the volume size in Y-Z")
+        end_time_mloop = time.perf_counter()
+        self.times['loop_through_vox_collisions'] += end_time_mloop - start_time_mloop
 
         return material_JM
 
@@ -1733,9 +1753,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Fetch the number of pixels per microlens array from the optic configuration
         pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
 
+        start_time = time.perf_counter()
         # Calculate Jones Matrices for all rays given the volume and microlens offset
         effective_JM = self.calc_cummulative_JM_of_ray(volume_in,
                                         microlens_offset, mla_index=mla_index)
+        end_time = time.perf_counter()
+        self.times['cummulative_JM'] += end_time - start_time
 
         # Calculate retardance and azimuth from the effective Jones Matrices
         retardance = self.retardance(effective_JM)
@@ -1913,6 +1936,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # JM = np.array([[diag1, offdiag], [offdiag, diag2]])
             JM = JonesMatrixGenerators.linear_retarder(ret, azim)
         elif self.backend == BackEnds.PYTORCH:
+            start_time = time.perf_counter()
             number_of_voxels = opticAxis.shape[0]
             if not torch.is_tensor(opticAxis):
                 opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
@@ -1937,7 +1961,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 azim[Delta_n < 0] += torch.tensor(np.pi)
             else:
                 azim = azim_unadj
+            end_time = time.perf_counter()
+            self.times['calc_ret_azim_for_JM'] += end_time - start_time
 
+            start_time = time.perf_counter()
             # The following series of operations is an equivalent, but more
             # efficient method than:
             #   JM = JonesMatrixGenerators.linear_retarder(ret, azim, self.backend)
@@ -1958,6 +1985,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             except ValueError as e:
                 print(f"Error: {e}")
             assert not torch.isnan(JM).any(), "A Jones matrix contains NaN values."
+            end_time = time.perf_counter()
+            self.times['calc_JM'] += end_time - start_time
         return JM
 
     def vox_ray_ret_azim(self, Delta_n, opticAxis, rayDir, ell, wavelength):
