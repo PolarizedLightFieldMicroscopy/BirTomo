@@ -1,6 +1,5 @@
 import json
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from VolumeRaytraceLFM.metrics.data_fidelity import (
     poisson_loss,
@@ -133,7 +132,7 @@ class PolarimetricLossFunction:
                         self.weight_regularization * orientation_loss)
         else:
             raise ValueError(f'Invalid data fidelity method: {method}')
-        return data_loss
+        return data_loss * 1000
 
     def reg_l2(self, data):
         return l2_bir(data)
@@ -162,7 +161,7 @@ class PolarimetricLossFunction:
 
         # Sum up the rest of the regularization terms if any
         for reg_fcn, weight in self.regularization_fcns[1:]:
-            term_value = weight * reg_fcn(data)
+            term_value = weight * reg_fcn(data) * 1000
             term_values.append(term_value)
             regularization_loss += term_value
 
