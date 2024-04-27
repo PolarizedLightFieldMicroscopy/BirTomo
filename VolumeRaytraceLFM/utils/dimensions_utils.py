@@ -90,3 +90,55 @@ def store_as_pytorch_parameter(tensor, var_type: str):
     elif var_type == 'vector':
         parameter = torch.nn.Parameter(tensor.reshape(3, -1))
     return parameter
+
+
+def upscale_birefringence(bir_array, upscale_factor):
+    """Increase resolution of birefringence tensor by
+    tripling (if upscale_factor=3) each element along each dimension."""
+    # Upscale along dimension 0 (depth)
+    tensor_d0 = bir_array.repeat_interleave(upscale_factor, dim=0)
+    # Upscale along dimension 1 (rows)
+    tensor_d1 = tensor_d0.repeat_interleave(upscale_factor, dim=1)
+    # Upscale along dimension 2 (columns)
+    high_res_tensor = tensor_d1.repeat_interleave(upscale_factor, dim=2)
+    return high_res_tensor
+
+
+def upscale_optic_axis(optic_axis_array, upscale_factor):
+    """Increase resolution of optic axis tensor by
+    tripling (if upscale_factor=3) each element along each dimension."""
+    # Upscale along dimension 1 (depth)
+    tensor_d0 = optic_axis_array.repeat_interleave(upscale_factor, dim=1)
+    # Upscale along dimension 2 (rows)
+    tensor_d1 = tensor_d0.repeat_interleave(upscale_factor, dim=2)
+    # Upscale along dimension 3 (columns)
+    high_res_tensor = tensor_d1.repeat_interleave(upscale_factor, dim=3)
+    return high_res_tensor
+
+
+def upscale_voxel_resolution(volume, upscale_factor):
+    """
+    Increase resolution of birefringence and optic axis tensors by
+    tripling (if upscale_factor=3) each element along each dimension.
+    Args:
+        volume (BirefringentVolume): Volume to be upscaled.
+        upscale_factor (int): The factor by which each tensor element
+                            is repeated in all dimensions.
+    Returns:
+        BirefringentVolume: Updated volume with upscaled birefringence
+                            and optic axis.
+    """
+    vol_shape_og = list(volume.optical_info['volume_shape'])
+    bir_og = volume.get_delta_n()
+    optic_axis_og = volume.get_optic_axis()
+    bir_upscaled = upscale_birefringence(bir_og, upscale_factor)
+    optic_axis_upscaled = upscale_optic_axis(optic_axis_og, upscale_factor)
+    volume.Delta_n = store_as_pytorch_parameter(bir_upscaled, 'scalar')
+    volume.optic_axis = store_as_pytorch_parameter(optic_axis_upscaled, 'vector')
+    volume.optical_info['volume_shape'] = bir_upscaled.shape
+    volume.optical_info['n_voxels_per_ml'] *= upscale_factor
+    volume.optical_info['voxel_size_um'] = [
+        x / upscale_factor for x in volume.optical_info['voxel_size_um']]
+    vol_shape_final = list(volume.optical_info['volume_shape'])
+    print(f"Volume shape upscaled from {vol_shape_og} to {vol_shape_final}.")
+    return volume
