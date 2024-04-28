@@ -37,9 +37,9 @@ def recon_debug():
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory, omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.rays.verbose = True
-    reconstructor.reconstruct(output_dir=recon_directory, plot_live=True)
+    reconstructor.reconstruct(plot_live=True)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
@@ -61,9 +61,10 @@ def recon_xylem(recon_dir_postfix='xylem'):
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=False)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                                  omit_rays_based_on_pixels=True, apply_volume_mask=False)
     reconstructor.rays.verbose = False
-    reconstructor.reconstruct(output_dir=recon_directory)
+    reconstructor.reconstruct()
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
@@ -86,7 +87,7 @@ def recon_cpu():
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
     reconstructor = Reconstructor(recon_config)
-    reconstructor.reconstruct(output_dir=recon_directory)
+    reconstructor.reconstruct()
     # visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
     end_time = time.time()
     print(f"CPU execution time: {end_time - start_time:.2f} seconds")
@@ -114,10 +115,11 @@ def recon_gpu():
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
 
-    reconstructor = Reconstructor(recon_config, device=DEVICE)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                                  device=DEVICE)
     reconstructor.to_device(DEVICE)  # Move the reconstructor to the GPU
 
-    reconstructor.reconstruct(output_dir=recon_directory)
+    reconstructor.reconstruct()
     # visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
     end_time = time.time()
     print(f"GPU execution time: {end_time - start_time:.2f} seconds")
@@ -141,20 +143,21 @@ def recon_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
         azim_image_meas, initial_volume, iteration_params, gt_vol=initial_volume
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
-    reconstructor.rays.verbose = False
-    reconstructor.reconstruct(output_dir=recon_directory, plot_live=False)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                        omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor.rays.verbose = True
+    reconstructor.reconstruct(plot_live=False)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
 if __name__ == '__main__':
-    recon_debug()
+    # recon_debug()
     # recon_gpu()
     # recon_xylem(recon_dir_postfix='xylem_highreg')
-    # saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65')
-    # recon_filename = os.path.join('2024-04-23_14-15-55_xylem_highreg', 'volume_ep_0020.h5')
-    # xylem_vol_path = os.path.join(saved_recon_dir, recon_filename)
-    # recon_continuation(xylem_vol_path, recon_dir_postfix='xylem_highreg_cont')
+    saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65')
+    recon_upscaled_filename = os.path.join('2024-04-24_22-00-12_xylem_highreg_nadam', 'volume_ep_0100_upscaled3.h5')
+    xylem_vol_path = os.path.join(saved_recon_dir, recon_upscaled_filename)
+    recon_continuation(xylem_vol_path, recon_dir_postfix='xylem_from_upscaled3')
     
     # Visualize a volume
     # optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")

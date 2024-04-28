@@ -29,6 +29,7 @@ class OpticBlock(nn.Module):
     def get_trainable_variables(self):
         """
         Get the trainable variables of the optic block.
+        - named_parameters() is an iterator over module parameters
         Returns:
             list: List of trainable variables.
         """
@@ -36,7 +37,7 @@ class OpticBlock(nn.Module):
         for name, param in self.named_parameters():
             if name in self.members_to_learn:
                 trainable_vars.append(param)
-        return list(trainable_vars)
+        return trainable_vars
 
     def get_device(self):
         """

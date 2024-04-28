@@ -70,9 +70,9 @@ def recon_sphere():
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory, omit_rays_based_on_pixels=True)
     reconstructor.rays.verbose = False
-    reconstructor.reconstruct(output_dir=recon_directory)
+    reconstructor.reconstruct()
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
@@ -107,9 +107,9 @@ def recon_continuation(init_vol_path):
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory, omit_rays_based_on_pixels=True)
     reconstructor.rays.verbose = False
-    reconstructor.reconstruct(output_dir=recon_directory)
+    reconstructor.reconstruct()
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)  
 
 
@@ -166,10 +166,10 @@ def recon_sphere6_thick():
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, omit_rays_based_on_pixels=True, apply_volume_mask=True)
-    # reconstructor = Reconstructor(recon_config, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                    omit_rays_based_on_pixels=True, apply_volume_mask=True)
     reconstructor.rays.verbose = False
-    reconstructor.reconstruct(output_dir=recon_directory)
+    reconstructor.reconstruct()
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 

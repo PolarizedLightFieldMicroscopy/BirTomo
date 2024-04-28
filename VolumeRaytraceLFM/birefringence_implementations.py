@@ -60,6 +60,7 @@ class BirefringentVolume(BirefringentElement):
                                                  optical_info=optical_info
                                                  )
         self._initialize_volume_attributes(optical_info, Delta_n, optic_axis)
+        self.indices_active = None
 
         # Check if a volume creation was requested
         if volume_creation_args is not None:
@@ -1463,13 +1464,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
             # Get the voxel coordinates each ray interacts with
             vox = [vx[m] for ix, vx in enumerate(voxels_of_segs) if rays_with_voxels[ix]]
-
+            if 0 in vox:
+                print("DEBUG: 0 in vox")
             try:
                 start_time_gather_params = time.perf_counter()
                 # Extract the birefringence and optic axis information from the volume
-                Delta_n = (volume_in.Delta_n_combined[vox] if OPTIMIZING_MODE
-                           else volume_in.Delta_n[vox])
-                opticAxis = volume_in.optic_axis[:, vox].permute(1,0)
+                alt_props = False
+                if volume_in.indices_active is not None:
+                    alt_props = True
+                Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(volume_in, vox, active_props_only=alt_props)
 
                 # Subset of precomputed ray directions that interact with voxels in this step
                 filtered_ray_directions = ray_dir_basis[:, rays_with_voxels, :]
@@ -1505,6 +1508,21 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         end_time_cummulative_jones = time.perf_counter()
         self.times['cummulative_jones'] += end_time_cummulative_jones - start_time_cummulative_jones
         return material_jones
+
+    def retrieve_properties_from_vox_idx(self, volume, vox, active_props_only=False):
+        """Retrieves the birefringence and optic axis from the volume based on the
+        provided voxel indices. This function is used to retrieve the properties
+        of the voxels that each ray segment interacts with."""
+        if active_props_only:
+            idx_dict = volume.active_idx_to_spatial_idx
+            indices = torch.tensor([idx_dict.get(v, -1) for v in vox], dtype=torch.long)
+            safe_indices = torch.clamp(indices, min=0)
+            Delta_n = torch.where(indices >= 0, volume.birefringence_active[safe_indices], torch.tensor(0.0, requires_grad=True))
+            opticAxis = torch.where(indices >= 0, volume.optic_axis_active[:, safe_indices], torch.tensor(0.0, requires_grad=True))
+        else:
+            Delta_n = volume.Delta_n[vox]
+            opticAxis = volume.optic_axis[:, vox]
+        return Delta_n, opticAxis.permute(1,0)
 
     def _get_default_jones(self):
         """Returns the default Jones Matrix for a ray that does not
@@ -1571,7 +1589,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         return list_of_voxel_lists
 
-    def _count_vox_raytrace_occurrences(self, zero_retardance_voxels=False):
+    def _count_vox_raytrace_occurrences(self, zero_ret_voxels=False, nonzero_ret_voxels=False):
         """Counts occurances of voxels from ray tracing.
         Iterates over micro-lenses, aggregates voxel indices,
         and counts occurrences. Optionally filters for voxels
@@ -1600,12 +1618,18 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 mla_index = (ml_jj_idx, ml_ii_idx)
                 vox_indices = self.vox_indices_by_mla_idx[mla_index]
 
-                if zero_retardance_voxels:
+                if zero_ret_voxels:
                     # Get the boolean mask for the pixels that are not zero
                     nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
                     # Find the voxels that lead to a zero pixel in the retardance image
                     zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
                     vox_indices = zero_ret_vox_indices
+
+                elif nonzero_ret_voxels:
+                    nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
+                    # Find the voxels that lead to a non-zero pixel in the retardance image
+                    nonzero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if nonzero_bool]
+                    vox_indices = nonzero_ret_vox_indices
 
                 flat_list = [item for sublist in vox_indices for item in sublist]
                 count.update(flat_list)
@@ -1613,14 +1637,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return count
 
     def identify_voxels_repeated_zero_ret(self):
-        counts = self._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
+        counts = self._count_vox_raytrace_occurrences(zero_ret_voxels=True)
         vox_list = filter_keys_by_count(counts, 2)
+        return vox_list
+
+    def identify_voxels_at_least_one_nonzero_ret(self):
+        counts = self._count_vox_raytrace_occurrences(nonzero_ret_voxels=True)
+        vox_list = filter_keys_by_count(counts, 1)
         return vox_list
 
     def _filter_ray_data(self, mla_index):
         """
         Extract the ray tracing variables that contribute to the image.
-        This is done by applying a mask to the ray tracing varibles. No class
+        This is done by applying a mask to the ray tracing variables. No class
         attributes are modified, but several are accessed.
 
         Args:

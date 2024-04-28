@@ -46,7 +46,7 @@ def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
         )
     BF_raytrace.compute_rays_geometry()
     BF_raytrace.store_shifted_vox_indices()
-    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_retardance_voxels=False)
+    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_ret_voxels=False)
     
     assert len(counts) == vol_shape[0], f"Expected {vol_shape[0]} voxels raytraced"
 
@@ -58,7 +58,7 @@ def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
     [ret_image, _] = BF_raytrace.ray_trace_through_volume(voxel_volume)
     ret_image_np = ret_image.cpu().numpy()
     BF_raytrace.compute_rays_geometry(image=ret_image_np)
-    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_retardance_voxels=False)
+    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_ret_voxels=False)
     vox_list = BF_raytrace.identify_voxels_repeated_zero_ret()
 
     assert len(counts) == vol_shape[0], f"Expected {vol_shape[0]} voxels raytraced with volume"
@@ -71,14 +71,14 @@ def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
         )
     BF_raytrace.compute_rays_geometry()
     BF_raytrace.store_shifted_vox_indices()
-    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_retardance_voxels=False)
+    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_ret_voxels=False)
     
     assert len(counts) == 75, "Expected 75 voxels raytraced"
 
     [ret_image, _] = BF_raytrace.ray_trace_through_volume(voxel_volume)
     ret_image_np = ret_image.cpu().numpy()
     BF_raytrace.compute_rays_geometry(image=ret_image_np)
-    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_retardance_voxels=False)
+    counts = BF_raytrace._count_vox_raytrace_occurrences(zero_ret_voxels=False)
     vox_list = BF_raytrace.identify_voxels_repeated_zero_ret()
 
     assert len(counts) == 75, "Expected 75 voxels raytraced with volume"
