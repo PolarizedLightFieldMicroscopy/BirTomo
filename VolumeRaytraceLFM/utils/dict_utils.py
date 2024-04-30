@@ -42,5 +42,5 @@ def filter_keys_by_count(counter, count_ths):
         list: Keys with counts >= count_ths.
     """
     filtered_list = [key for key, count in counter.items() 
-                    if count >= count_ths]
+                    if count > count_ths - 1]
     return sorted(filtered_list)
