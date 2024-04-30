@@ -1467,8 +1467,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
             # Get the voxel coordinates each ray interacts with
             vox = [vx[m] for ix, vx in enumerate(voxels_of_segs) if rays_with_voxels[ix]]
-            if 0 in vox:
-                print("DEBUG: 0 in vox")
             try:
                 start_time_gather_params = time.perf_counter()
                 # Extract the birefringence and optic axis information from the volume
@@ -1533,7 +1531,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             return np.array([[1, 0], [0, 1]])
         elif self.backend == BackEnds.PYTORCH:
-            # .repeat(ell_in_voxels.shape[0], 1, 1)
             return torch.eye(2, dtype=torch.complex64)
         else:
             raise ValueError("Unsupported backend")
