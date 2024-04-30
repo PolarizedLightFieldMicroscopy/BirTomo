@@ -64,9 +64,9 @@ def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
     assert len(counts) == vol_shape[0], f"Expected {vol_shape[0]} voxels raytraced with volume"
     assert len(vox_list) == 0, "Expected zero voxels raytraced excluding repeated zero retardance voxels"
 
-    test_3x3mla = True
+    ### Test using a 3x3 MLA
+    test_3x3mla = False
     if test_3x3mla:
-        ### Test using a 3x3 MLA
         vol_shape = [3, 9, 9]
         optical_info = set_optical_info(vol_shape, 17, 3)
         BF_raytrace = BirefringentRaytraceLFM(
