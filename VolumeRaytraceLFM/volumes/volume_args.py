@@ -64,6 +64,14 @@ random_args1 = {
         }
     }
 
+random_args8 = {
+    'init_mode' : 'random',
+    'init_args' : {
+        'Delta_n_range' : [0, 0.008],
+        'axes_range' : [-1,1]
+        }
+    }
+
 sphere_args2 = {
     'init_mode': 'ellipsoid',
     'init_args': {

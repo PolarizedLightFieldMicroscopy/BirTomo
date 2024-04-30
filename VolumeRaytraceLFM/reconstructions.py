@@ -9,6 +9,9 @@ from tqdm import tqdm
 import csv
 import pickle
 import matplotlib.pyplot as plt
+## For analyzing the memory usage of a function
+# from memory_profiler import profile
+import gc
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentVolume,
@@ -27,19 +30,20 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter
 )
-from VolumeRaytraceLFM.utils.mask_utils import (
-    create_half_zero_mask, create_half_zero_sandwich_mask
-)
-from VolumeRaytraceLFM.utils.dict_utils import (
-    extract_numbers_from_dict_of_lists,
-    transform_dict_list_to_set
-)
+from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
 from VolumeRaytraceLFM.utils.json_utils import ComplexArrayEncoder
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
+from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr
 
 
-COMBINING_DELTA_N = False
 DEBUG = False
+
+if DEBUG:
+    print("Debug mode is on.")
+    from VolumeRaytraceLFM.utils.dict_utils import (
+        extract_numbers_from_dict_of_lists,
+        transform_dict_list_to_set
+    )    
 
 
 class ReconstructionConfig:
@@ -192,6 +196,7 @@ class Reconstructor:
 
     def __init__(self,
                  recon_info: ReconstructionConfig,
+                 output_dir=None,
                  device='cpu',
                  omit_rays_based_on_pixels=False,
                  apply_volume_mask=False
@@ -227,6 +232,10 @@ class Reconstructor:
                 mip_image, plot=False)
         if self.intensity_imgs_meas:
             print("Intensity images were provided.")
+        if output_dir is None:
+            self.recon_directory = create_unique_directory("reconstructions")
+        else:
+            self.recon_directory = output_dir
 
         image_for_rays = None
         if omit_rays_based_on_pixels:
@@ -239,11 +248,21 @@ class Reconstructor:
 
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
-        
+
+        self.remove_large_arrs = self.iteration_params.get(
+                                'free_memory_by_del_large_arrays', False)
+        if self.remove_large_arrs and self.apply_volume_mask:
+            raise ValueError("Cannot remove large arrays and apply mask to" \
+                                "volume gradient at the same time.")
+
+        # Basic mask setup
+        self.voxel_mask_setup()
         # Mask initial guess of volume
-        if self.apply_volume_mask:
-            self.voxel_mask_setup()
-            self.apply_mask_to_volume(self.volume_pred)
+        self.apply_mask_to_volume(self.volume_pred)
+
+        if self.remove_large_arrs:
+            del self.birefringence_simulated
+            gc.collect()
 
         datafidelity_method = self.iteration_params.get('datafidelity', 'vector')
         first_word = datafidelity_method.split()[0]
@@ -258,6 +277,7 @@ class Reconstructor:
         self.loss_total_list = []
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
+        self.adjusted_lrs_list = []
         end_time = time.perf_counter()
         print(f"Reconstructor initialized in {end_time - start_time:.3f} seconds\n")
 
@@ -323,49 +343,17 @@ class Reconstructor:
         start_time = time.time()
         rays.compute_rays_geometry(filename=None, image=image)
         print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
-
-        if False:
-            nonzero_pixels_dict = rays.identify_rays_from_pixels_mla(
-                self.ret_img_meas, rays.ray_valid_indices
-            )
         return rays
 
-    def setup_initial_volume(self):
-        """Setup initial estimated volume."""
-        initial_volume = BirefringentVolume(backend=BackEnds.PYTORCH,
-                                            optical_info=self.optical_info,
-                                            volume_creation_args={
-                                                'init_mode': 'random'}
-                                            )
-        # Let's rescale the random to initialize the volume
-        initial_volume.Delta_n.requires_grad = False
-        initial_volume.optic_axis.requires_grad = False
-        initial_volume.Delta_n *= -0.01
-        # # And mask out volume that is outside FOV of the microscope
-        mask = self.rays.get_volume_reachable_region()
-        initial_volume.Delta_n[mask.view(-1) == 0] = 0
-        initial_volume.Delta_n.requires_grad = True
-        initial_volume.optic_axis.requires_grad = True
-        # Indicate to this object that we are going to optimize Delta_n and optic_axis
-        initial_volume.members_to_learn.append('Delta_n')
-        initial_volume.members_to_learn.append('optic_axis')
-        return initial_volume
 
     def mask_outside_rays(self):
-        """
-        Mask out volume that is outside FOV of the microscope.
-        Original shapes of the volume are preserved.
-        """
+        """Mask out volume that is outside FOV of the microscope.
+        Original shapes of the volume are preserved."""
         mask = self.rays.get_volume_reachable_region()
         with torch.no_grad():
             self.volume_pred.Delta_n[mask.view(-1) == 0] = 0
             # Masking the optic axis caused NaNs in the Jones Matrix. So, we don't mask it.
             # self.volume_pred.optic_axis[:, mask.view(-1)==0] = 0
-
-    def generate_mask_and_apply_to_volume(self):
-        mask_shape = self.volume_pred.get_delta_n().shape
-        flattened_mask = create_half_zero_sandwich_mask(mask_shape)
-        self.volume_pred.Delta_n = torch.nn.Parameter(self.volume_pred.Delta_n * flattened_mask)
 
     def crop_pred_volume_to_reachable_region(self):
         """Crop the predicted volume to the region that is reachable by the microscope.
@@ -424,6 +412,8 @@ class Reconstructor:
         if optimizer_type == 'LBFGS':
             parameters = trainable_parameters
         else:
+            assert len(trainable_parameters[0].shape) == 2, "1st parameter should be the optic axis"
+            assert len(trainable_parameters[1].shape) == 1, "2nd parameter should be the birefringence."
             # The learning rates specified are starting points for the optimizer.
             parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
                         {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
@@ -471,15 +461,16 @@ class Reconstructor:
 
         print("Collecting the set of voxels that are reached by the rays.")
         start_time = time.perf_counter()
-        vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
-        sorted_vox_list = sorted(vox_set)
-        vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
+        ### Examining values in terms of sets
+        # vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
+        # vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
+        vox_set = set(self.rays.identify_voxels_at_least_one_nonzero_ret())
+        # Excluding voxels that are a part of multiple zero-retardance rays
         vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
         filtered_vox_list = list(vox_set - set(vox_list_excluding))
-        filter_out_repeat_zero_ret = True
-        if filter_out_repeat_zero_ret:
-            sorted_vox_list = sorted(filtered_vox_list)
-        print(f"Masking out voxels except for {len(sorted_vox_list)} voxels: {sorted_vox_list}")
+        sorted_vox_list = sorted(filtered_vox_list)
+        print(f"Masking out voxels except for {len(sorted_vox_list)} voxels. " +
+              f"First, at most, 20 voxels are {sorted_vox_list[:20]}")
         vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
         # Initialize a mask of the same size as Delta_n with False
         Delta_n = self.volume_pred.Delta_n
@@ -545,20 +536,35 @@ class Reconstructor:
 
         return loss, data_term, regularization_term
 
-    def stay_on_sphere(self, volume_estimation):
+    def stay_on_sphere(self, volume):
         """
         Method to keep the optic axis on the unit sphere.
         """
+        if volume.indices_active is not None:
+            optic_axis = volume.optic_axis_active
+        else:
+            optic_axis = volume.optic_axis
         with torch.no_grad():
-            volume_estimation.optic_axis /= torch.norm(volume_estimation.optic_axis, dim=0)
+            norms = torch.norm(optic_axis, dim=0)
+            zero_norm_mask = norms == 0
+            norms[zero_norm_mask] = 1
+            optic_axis /= norms
         return
 
+    # @profile # to see the memory breakdown of the function
     def one_iteration(self, optimizer, volume_estimation):
         optimizer.zero_grad()
-
         # Apply forward model and compute loss
         img_list = self.rays.ray_trace_through_volume(volume_estimation, intensity=self.intensity_bool)
+        # In case the entire volume is needed for the loss computation:
+        total_vol_needed = False
+        if total_vol_needed and self.volume_pred.indices_active is not None:
+            with torch.no_grad():
+                self.volume_pred.Delta_n[self.volume_pred.indices_active] = self.volume_pred.birefringence_active
+                self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = self.volume_pred.optic_axis_active
         loss, data_term, regularization_term = self._compute_loss(img_list)
+        if self.rays.verbose:
+            tqdm.write(f"Computed the loss: {loss.item():.5}")
 
         # Verify the gradients before and after the backward pass
         if DEBUG:
@@ -571,76 +577,79 @@ class Reconstructor:
             print("\nAfter backward pass:")
             self.print_grad_info(volume_estimation)
 
+        # Apply voxel-specific mask
         if self.apply_volume_mask:
-            ## Apply a generic mask
-            # mask_shape = volume_estimation.get_delta_n().shape
-            # flattened_mask = create_half_zero_sandwich_mask(mask_shape)
-            # volume_estimation.Delta_n.grad *= flattened_mask
-
-            ## Apply voxel-specific mask
-            # volume_estimation.Delta_n.grad = volume_estimation.Delta_n.grad[self.mask]
-            # volume_estimation.optic_axis.grad = volume_estimation.optic_axis.grad[:, self.mask]
-            volume_estimation.Delta_n.grad *= self.mask
-            # volume_estimation.optic_axis.grad *= self.mask
+            with torch.no_grad():
+                self.volume_pred.Delta_n.grad *= self.mask
 
         optimizer.step()
+        adj_lrs_dict = calculate_adjusted_lr(optimizer)
+        adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
 
         # Keep the optic axis on the unit sphere
         self.stay_on_sphere(volume_estimation)
 
         # TODO: fix so that measured images do not need to be placeholder for the predicted images
         if self.intensity_bool:
-            [self.ret_img_pred, self.azim_img_pred] = self.ret_img_meas, self.azim_img_meas
-            self.volume_pred = volume_estimation
-            self.loss_total_list.append(loss.item())
-            self.loss_data_term_list.append(data_term.item())
-            self.loss_reg_term_list.append(regularization_term.item())
-            # Alternatively, the ray tracing can be done again without intensity boolean.
-            # with torch.no_grad():
-            #     [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
-            # self.store_results(
-            #     ret_image_current, azim_image_current,
-            #     volume_estimation, loss, data_term, regularization_term
-            # )
+            regenerate = False
+            if regenerate:
+                # Alternatively, the ray tracing can be done again without intensity boolean.
+                with torch.no_grad():
+                    [ret_image_current, azim_image_current] = self.rays.ray_trace_through_volume(volume_estimation)
+                self.store_results(
+                    ret_image_current, azim_image_current,
+                    volume_estimation, loss, data_term, regularization_term,
+                    adjusted_lrs)
+            else:
+                [self.ret_img_pred, self.azim_img_pred] = self.ret_img_meas, self.azim_img_meas
+                self.volume_pred = volume_estimation
+                self.loss_total_list.append(loss.item())
+                self.loss_data_term_list.append(data_term.item())
+                self.loss_reg_term_list.append(regularization_term.item())
+                self.adjusted_lrs_list.append(adjusted_lrs)
+
+
         else:
             [ret_image_current, azim_image_current] = img_list
             self.store_results(
                 ret_image_current, azim_image_current,
-                volume_estimation, loss, data_term, regularization_term
+                volume_estimation, loss, data_term, regularization_term,
+                adjusted_lrs
             )
         return
 
     def print_grad_info(self, volume_estimation):
-        print("requires_grad:", volume_estimation.Delta_n_first_part.requires_grad)
-        print("Gradient for Delta_n_first_part:", volume_estimation.Delta_n_first_part.grad)
-        print("Gradient for Delta_n_second_part:", volume_estimation.Delta_n_second_part.grad)
+        print("Delta_n requires_grad:", volume_estimation.Delta_n.requires_grad,
+              "birefringence_active requires_grad:", volume_estimation.birefringence_active.requires_grad)
+        print("Gradient for Delta_n:", volume_estimation.Delta_n.grad)
+        print("Gradient for birefringence_active:", volume_estimation.birefringence_active.grad)
 
     def store_results(self, ret_image_current, azim_image_current,
                       volume_estimation, loss, data_term,
-                      regularization_term):
+                      regularization_term, adjusted_lrs):
         self.ret_img_pred = ret_image_current.detach().cpu().numpy()
         self.azim_img_pred = azim_image_current.detach().cpu().numpy()
         self.volume_pred = volume_estimation
         self.loss_total_list.append(loss.item())
         self.loss_data_term_list.append(data_term.item())
         self.loss_reg_term_list.append(regularization_term.item())
+        self.adjusted_lrs_list.append(adjusted_lrs)
 
     def visualize_and_save(self, ep, fig, output_dir):
         volume_estimation = self.volume_pred
-        # Delta_n_combined = torch.cat([volume_estimation.Delta_n_first_half,
-        #       volume_estimation.Delta_n_second_half], dim=0)
-        # Delta_n_combined.retain_grad()
-        # volume_estimation.Delta_n = torch.nn.Parameter(Delta_n_combined)
+        if self.remove_large_arrs:
+            vol_shape = self.optical_info['volume_shape']
+            temp_bir = torch.zeros(vol_shape).flatten()
+            volume_estimation.Delta_n = torch.nn.Parameter(temp_bir, requires_grad=False)
+        if self.volume_pred.indices_active is not None:
+            with torch.no_grad():
+                volume_estimation.Delta_n[volume_estimation.indices_active] = volume_estimation.birefringence_active
 
         save_freq = self.iteration_params.get('save_freq', 5)
         # TODO: only update every 1 epoch if plotting is live
         if ep % 1 == 0:
             # plt.clf()
-            if COMBINING_DELTA_N:
-                Delta_n = volume_estimation.Delta_n_combined.view(
-                    self.optical_info['volume_shape']).detach().unsqueeze(0)
-            else:
-                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
+            Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             mip_image = convert_volume_to_2d_mip(Delta_n)
             mip_image_np = prepare_plot_mip(mip_image, plot=False)
             plot_iteration_update_gridspec(
@@ -665,6 +674,12 @@ class Reconstructor:
                 plt.savefig(os.path.join(output_dir, filename))
             time.sleep(0.1)
         if ep % save_freq == 0:
+            if self.remove_large_arrs:
+                vol_size_flat = volume_estimation.Delta_n.size(0)
+                volume_estimation.optic_axis = torch.nn.Parameter(torch.zeros(3, vol_size_flat), requires_grad=False)
+            if self.volume_pred.indices_active is not None:
+                with torch.no_grad():
+                    volume_estimation.optic_axis[:, volume_estimation.indices_active] = volume_estimation.optic_axis_active
             my_description = "Volume estimation after " + \
                 str(ep) + " iterations."
             volume_estimation.save_as_file(
@@ -672,40 +687,14 @@ class Reconstructor:
                     output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5"),
                 description=my_description
             )
+            if self.remove_large_arrs:
+                del volume_estimation.optic_axis
+                gc.collect()
+        if self.remove_large_arrs:
+            del volume_estimation.Delta_n
+            gc.collect()
         return
 
-    def modify_volume(self):
-        """
-        Method to modify the initial volume guess.
-        """
-        volume = self.volume_pred
-        Delta_n = volume.Delta_n
-        length = Delta_n.size(0)
-        half_length = length // 2
-
-        # Split Delta_n into two parts
-        # volume.Delta_n_first_half = torch.nn.Parameter(Delta_n[:half_length].clone())
-        # volume.Delta_n_second_half = torch.nn.Parameter(Delta_n[half_length:].clone(), requires_grad=False)
-
-        Delta_n_reshaped = Delta_n.clone().view(3, 7, 7)
-
-        # Extract the middle row of each plane
-        # The middle row index in each 7x7 plane is 3
-        Delta_n_first_part = Delta_n_reshaped[:, 3, :]  # Shape: (3, 7)
-        volume.Delta_n_first_part = torch.nn.Parameter(
-            Delta_n_first_part.flatten())
-
-        # Concatenate slices before and after the middle row for each plane
-        Delta_n_second_part = torch.cat([Delta_n_reshaped[:, :3, :],  # Rows before the middle
-                                        Delta_n_reshaped[:, 4:, :]],  # Rows after the middle
-                                        dim=1)  # Concatenate along the row dimension
-        volume.Delta_n_second_part = torch.nn.Parameter(
-            Delta_n_second_part.flatten(), requires_grad=False
-        )
-
-        # Unsure the affect of turning off the gradients for Delta_n
-        Delta_n.requires_grad = False
-        return
 
     def __visualize_and_update_streamlit(self, progress_bar, ep, n_epochs, recon_img_plot, my_loss):
         import pandas as pd
@@ -734,17 +723,19 @@ class Reconstructor:
         - self.loss_total_list
         - self.loss_data_term_list
         - self.loss_reg_term_list
+        - self.adjusted_lrs_list
         """
         filename = "loss.csv"
         filepath = os.path.join(self.recon_directory, filename)
 
         with open(filepath, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Total Loss", "Data Term Loss", "Regularization Term Loss"])
-            for total, data_term, reg_term in zip(self.loss_total_list, 
-                                                  self.loss_data_term_list, 
-                                                  self.loss_reg_term_list):
-                writer.writerow([total, data_term, reg_term])
+            writer.writerow(["Total Loss", "Data Term Loss", "Regularization Term Loss",
+                             "Optic Axis Learning Rate", "Birefringence Learning Rate"])
+            zipped_lists = zip(self.loss_total_list, self.loss_data_term_list,
+                               self.loss_reg_term_list, self.adjusted_lrs_list)
+            for total, data_term, reg_term, (optax_lr, bir_lr) in zipped_lists:
+                writer.writerow([total, data_term, reg_term, optax_lr, bir_lr])
 
     def _create_regularization_terms_csv(self):
         """Create a csv file to store the regularization terms."""
@@ -764,31 +755,43 @@ class Reconstructor:
             writer = csv.writer(file)
             writer.writerow([ep, *self.reg_term_values])
 
-    def reconstruct(self, output_dir=None, use_streamlit=False, plot_live=False):
+    def create_parameters_from_mask(self, volume, mask):
+        """Create volume attributes from the volume prperties and
+        the mask. These attributes are intended for optimization."""
+        active_indices = torch.where(mask)[0]
+        volume.indices_active = active_indices
+        idx_dict = {index.item(): pos for pos, index in enumerate(active_indices)}
+        volume.active_idx_to_spatial_idx = idx_dict
+        volume.optic_axis_active = torch.nn.Parameter(volume.optic_axis[:, active_indices])
+        volume.birefringence_active = torch.nn.Parameter(volume.Delta_n[active_indices])
+
+    def reconstruct(self, use_streamlit=False, plot_live=False, all_prop_elements=False):
         """
         Method to perform the actual reconstruction based on the provided parameters.
         """
         print(f"Beginning reconstruction iterations...")
-        if output_dir is None:
-            if self.recon_directory is not None:
-                output_dir = self.recon_directory
-            else:
-                output_dir = create_unique_directory("reconstructions")
-
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
 
-        # Adjust the estimated volume variable
-        # self.restrict_volume_to_reachable_region()
-        if COMBINING_DELTA_N:
-            self.modify_volume()
-            param_list = ['Delta_n_first_part', 'optic_axis'] # 'Delta_n_second_part'
-        else:
+        # Specify variables to learn
+        if all_prop_elements:
             param_list = ['Delta_n', 'optic_axis']
+        else:
+            self.create_parameters_from_mask(self.volume_pred, self.mask)
+            param_list = ['birefringence_active', 'optic_axis_active']
+            if self.remove_large_arrs:
+                del self.volume_pred.Delta_n
+                del self.volume_pred.optic_axis
+                gc.collect()
+            else:
+                self.volume_pred.Delta_n.detach()
+                self.volume_pred.Delta_n.requires_grad = False
+                self.volume_pred.optic_axis.detach()
+                self.volume_pred.optic_axis.requires_grad = False                
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        figure = setup_visualization(window_title=output_dir, plot_live=plot_live)
+        figure = setup_visualization(window_title=self.recon_directory, plot_live=plot_live)
         self._create_regularization_terms_csv()
 
         n_epochs = self.iteration_params['n_epochs']
@@ -802,7 +805,9 @@ class Reconstructor:
             progress_bar = st.progress(0)
 
         # Iterations
-        for ep in tqdm(range(n_epochs), "Minimizing"):
+        for ep in tqdm(range(1, n_epochs + 1), "Minimizing"):
+            check_for_inf_or_nan(self.volume_pred.birefringence_active)
+            check_for_inf_or_nan(self.volume_pred.optic_axis_active)
             self.one_iteration(optimizer, self.volume_pred)
 
             if ep % 20 == 0 and self.intensity_bool:
@@ -814,20 +819,28 @@ class Reconstructor:
             # TODO: verify that this damp mask is appropriate
             azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0
-
             if use_streamlit:
                 self.__visualize_and_update_streamlit(
                     progress_bar, ep, n_epochs, my_recon_img_plot, my_loss
                 )
-            self.visualize_and_save(ep, figure, output_dir)
+            self.visualize_and_save(ep, figure, self.recon_directory)
 
         self.save_loss_lists_to_csv()
+        if self.remove_large_arrs:
+            vol_shape = self.optical_info['volume_shape']
+            temp_bir = torch.zeros(vol_shape).flatten()
+            self.volume_pred.Delta_n = torch.nn.Parameter(temp_bir, requires_grad=False)
+            self.volume_pred.Delta_n[self.volume_pred.indices_active] = self.volume_pred.birefringence_active
+            vol_size_flat = self.volume_pred.Delta_n.size(0)
+            self.volume_pred.optic_axis = torch.nn.Parameter(torch.zeros(3, vol_size_flat), requires_grad=False)
+            self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = self.volume_pred.optic_axis_active
+            
         my_description = "Volume estimation after " + \
             str(ep) + " iterations."
-        vol_save_path = os.path.join(output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5")
+        vol_save_path = os.path.join(self.recon_directory, f"volume_ep_{'{:04d}'.format(ep)}.h5")
         self.volume_pred.save_as_file(
             vol_save_path, description=my_description
         )
         print("Saved the final volume estimation to", vol_save_path)
-        plt.savefig(os.path.join(output_dir, "optim_final.pdf"))
+        plt.savefig(os.path.join(self.recon_directory, "optim_final.pdf"))
         plt.close()

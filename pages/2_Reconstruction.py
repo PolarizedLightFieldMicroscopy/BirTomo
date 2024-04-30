@@ -300,7 +300,7 @@ if st.button("**Reconstruct birefringent volume with classes!**"):
     recon_config = ReconstructionConfig(recon_optical_info, output_ret_image, output_azim_image,
                                         initial_volume, iteration_params, gt_vol=st.session_state.GT)
     reconstructor = Reconstructor(recon_config)
-    reconstructor.reconstruct(output_dir=None, use_streamlit=True)
+    reconstructor.reconstruct(use_streamlit=True)
 
     st.success("Done reconstructing! How does it look?", icon="✅")
     st.session_state['vol_est'] = reconstructor.volume_pred

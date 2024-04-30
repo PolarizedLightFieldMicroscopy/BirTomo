@@ -21,6 +21,10 @@ def elastic_net(data, weight1=1.0, weight2=1.0):
     return weight1 * l1_term + weight2 * l2_term
 
 
+def negative_penalty(data):
+    return torch.relu(-data).mean()
+
+
 def total_variation_3d_volumetric(data):
     """
     Computes the Total Variation regularization for a 4D tensor representing volumetric data.

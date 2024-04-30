@@ -8,6 +8,10 @@ def l2_bir(volume: BirefringentVolume):
     return l2(volume.Delta_n)
 
 
+def l2_bir_active(volume: BirefringentVolume):
+    return l2(volume.birefringence_active)
+
+
 def l1_bir(volume: BirefringentVolume):
     return l1(volume.Delta_n)
 
@@ -29,6 +33,10 @@ def cosine_similarity_neighbors(volume: BirefringentVolume):
     delta_n = volume.get_delta_n()
     optic_axis = volume.get_optic_axis()
     return weighted_local_cosine_similarity_loss(optic_axis, delta_n)
+
+
+def neg_penalty_bir_active(volume: BirefringentVolume):
+    return negative_penalty(volume.birefringence_active)
 
 
 class AnisotropyAnalysis:

@@ -10,6 +10,7 @@
         ["birefringence TV", 20],
         ["local cosine similarity", 0.001]
     ],
+    "save_freq": 20,
     "output_posfix": "",
     "notes": ""
 }

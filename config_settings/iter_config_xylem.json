@@ -1,17 +1,17 @@
 {
-    "n_epochs": 201,
+    "n_epochs": 20,
     "regularization_weight": 0.5,
-    "lr_birefringence": 1e-5,
-    "lr_optic_axis": 1e-2,
-    "optimizer": "Adam",
+    "lr_birefringence": 1.6e-7,
+    "lr_optic_axis": 1.6e-3,
+    "optimizer": "Nadam",
     "datafidelity": "vector",
     "regularization_fcns": [
-        ["birefringence L2", 1000],
-        ["birefringence TV", 600],
-        ["local cosine similarity", 0.002]
+        ["birefringence active L2", 1000],
+        ["birefringence active negative penalty", 1000]
     ],
     "vox_indices_by_mla_idx_path": "config_settings/vox_indices_dicts/xylem_mla65_20_100_100.pkl",
-    "save_freq": 10,
+    "free_memory_by_del_large_arrays": true,
+    "save_freq": 5,
     "output_posfix": "",
     "notes": ""
 }
