@@ -37,9 +37,10 @@ def recon_debug():
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas, azim_image_meas,
                                         initial_volume, iteration_params, gt_vol=initial_volume)
     recon_config.save(recon_directory)
-    reconstructor = Reconstructor(recon_config, output_dir=recon_directory, omit_rays_based_on_pixels=True, apply_volume_mask=True)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                                  omit_rays_based_on_pixels=True, apply_volume_mask=False)
     reconstructor.rays.verbose = True
-    reconstructor.reconstruct(plot_live=True)
+    reconstructor.reconstruct(plot_live=False)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
@@ -140,27 +141,64 @@ def recon_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
     # visualize_volume(initial_volume, recon_optical_info)
     recon_directory = create_unique_directory("reconstructions", postfix=recon_dir_postfix)
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
-        azim_image_meas, initial_volume, iteration_params, gt_vol=initial_volume
+        azim_image_meas, initial_volume, iteration_params
     )
     recon_config.save(recon_directory)
     reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
-                        omit_rays_based_on_pixels=True, apply_volume_mask=True)
+                        omit_rays_based_on_pixels=True, apply_volume_mask=False)
     reconstructor.rays.verbose = True
-    reconstructor.reconstruct(plot_live=False)
+    reconstructor.reconstruct(all_prop_elements=False, plot_live=False)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
+
+def recon_up3_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
+    """Reconstruct the xylem data set from a previous reconstruction."""
+    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem_upscaled3.json")
+    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem_ss3.json")
+    iteration_params["initial volume path"] = init_vol_path
+    ret_image_meas, azim_image_meas = prepare_ret_azim_images(
+        os.path.join('xylem', 'mla65', 'retardance.tif'),
+        os.path.join('xylem', 'mla65', 'azimuth.tif'),
+        60, recon_optical_info['wavelength']
+    )
+    initial_volume = BirefringentVolume.init_from_file(
+        init_vol_path, BackEnds.PYTORCH, recon_optical_info)
+    # visualize_volume(initial_volume, recon_optical_info)
+    recon_directory = create_unique_directory("reconstructions", postfix=recon_dir_postfix)
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
+        azim_image_meas, initial_volume, iteration_params
+    )
+    recon_config.save(recon_directory)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                        omit_rays_based_on_pixels=True, apply_volume_mask=False)
+    reconstructor.rays.verbose = True
+    reconstructor.reconstruct(all_prop_elements=False, plot_live=False)
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
 
 
 if __name__ == '__main__':
     # recon_debug()
     # recon_gpu()
-    # recon_xylem(recon_dir_postfix='xylem_highreg')
-    saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65')
-    recon_upscaled_filename = os.path.join('2024-04-24_22-00-12_xylem_highreg_nadam', 'volume_ep_0100_upscaled3.h5')
-    xylem_vol_path = os.path.join(saved_recon_dir, recon_upscaled_filename)
-    recon_continuation(xylem_vol_path, recon_dir_postfix='xylem_from_upscaled3')
+    # recon_xylem(recon_dir_postfix='xylem_from_random')
+    
+    up3 = True
+    if not up3:
+        saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65')
+        recon_filename = os.path.join('2024-04-30_13-38-11_xylem_lr16', 'volume_ep_0010.h5')
+        xylem_vol_path = os.path.join(saved_recon_dir, recon_filename)
+        recon_continuation(xylem_vol_path, recon_dir_postfix='xylem_neg_penalty')
+    else:
+        # saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65_up3')
+        # # recon_upscaled_filename = os.path.join('2024-04-29_18-09-12_xylem_lr6', 'volume_ep_0010_up3.h5')
+        # recon_upscaled_filename = os.path.join('2024-04-30_11-51-25_xylem_up3_filled', 'volume_ep_0005.h5')
+        # xylem_vol_path = os.path.join(saved_recon_dir, recon_upscaled_filename)
+        xylem_vol_path = os.path.join('objects', 'random_vol_60_300_300.h5')
+        recon_up3_continuation(xylem_vol_path, recon_dir_postfix='xylem_args8')
     
     # Visualize a volume
     # optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
+    # # optical_info['volume_shape'] = [20, 100, 100]
     # volume = BirefringentVolume.init_from_file(
     #     xylem_vol_path, BackEnds.PYTORCH, optical_info)
     # visualize_volume(volume, optical_info)

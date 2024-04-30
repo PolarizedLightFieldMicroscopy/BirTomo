@@ -11,8 +11,8 @@ from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count
+# from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
 
-OPTIMIZING_MODE = False # use the birefringence stored in Delta_n_combined
 
 ######################################################################
 class BirefringentVolume(BirefringentElement):
@@ -1080,7 +1080,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             print(f"Storing shifted voxel indices for each microlens:")
             row_iterable = tqdm(
                 range(n_micro_lenses),
-                desc=f'Computing rows of microlenses'
+                desc=f'Computing rows of microlenses for storing voxel indices',
+                position=1, leave=True
             )
         else:
             row_iterable = range(n_micro_lenses)
@@ -1158,7 +1159,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def _get_row_iterable(self, n_ml_half, odd_mla_shift):
         range_iterable = range(-n_ml_half, n_ml_half + odd_mla_shift)
         if self.verbose:
-            return tqdm(range_iterable, desc=f'Computing rows of microlenses {self.backend}')
+            return tqdm(range_iterable,
+                        desc=f'Computing rows of microlenses {self.backend}',
+                        position=1, leave=False)
         return range_iterable
 
     def _calculate_min_volume_size(self, num_microlenses, num_voxels_per_ml):
@@ -1501,8 +1504,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     f"The max of the list of voxel indices (length {len(vox)}) is {max(vox)}.")
                 raise IndexError(err_msg)
             except:
-                raise Exception("Cumulative Jones Matrix computation failed. " +
-                    "Error accessing the volume, try increasing the volume size in Y-Z")
+                raise Exception("Cumulative Jones Matrix computation failed.")
         end_time_mloop = time.perf_counter()
         self.times['loop_through_vox_collisions'] += end_time_mloop - start_time_mloop
         end_time_cummulative_jones = time.perf_counter()
@@ -1998,8 +2000,27 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         '''Calculate the Jones matrix from a given retardance and
         azimuth angle.'''
         start_time = time.perf_counter()
+        shortcut_identiy_matrix_calcs = False
+        # TODO: consider checking for NaN values
+        # check_for_inf_or_nan(ret)
         if self.backend == BackEnds.NUMPY:
             jones = JonesMatrixGenerators.linear_retarder(ret, azim)
+        elif shortcut_identiy_matrix_calcs:
+            nonzero_indices = ret != 0
+            cos_ret = torch.cos(ret[nonzero_indices])
+            sin_ret = torch.sin(ret[nonzero_indices])
+            cos_azim = torch.cos(azim[nonzero_indices])
+            sin_azim = torch.sin(azim[nonzero_indices])
+            offdiag = 1j * sin_azim * sin_ret
+            diag1 = cos_ret + 1j * cos_azim * sin_ret
+            diag2 = torch.conj(diag1)
+            # Initialize the Jones matrix array with identity matrices
+            jones = torch.eye(2, dtype=torch.complex64, device=ret.device).repeat(len(ret), 1, 1)
+            # Fill the non-identity elements
+            jones[nonzero_indices, 0, 0] = diag1
+            jones[nonzero_indices, 0, 1] = offdiag
+            jones[nonzero_indices, 1, 0] = offdiag
+            jones[nonzero_indices, 1, 1] = diag2
         else:
             cos_ret = torch.cos(ret)
             sin_ret = torch.sin(ret)

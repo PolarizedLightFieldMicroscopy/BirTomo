@@ -7,17 +7,21 @@ from VolumeRaytraceLFM.metrics.data_fidelity import (
 )
 from VolumeRaytraceLFM.metrics.regularization import (
     l2_bir,
+    l2_bir_active,
     l1_bir,
     total_variation_bir,
     cosine_similarity_neighbors,
+    neg_penalty_bir_active,
 )
 
 
 REGULARIZATION_FCNS = {
     'birefringence L2': l2_bir,
+    'birefringence active L2': l2_bir_active,
     'birefringence L1': l1_bir,
     'birefringence TV': total_variation_bir,
     'local cosine similarity': cosine_similarity_neighbors,
+    'birefringence active negative penalty': neg_penalty_bir_active,
 }
 
 
@@ -155,7 +159,7 @@ class PolarimetricLossFunction:
 
         # Start with the first regularization function directly
         first_reg_fn, first_weight = self.regularization_fcns[0]
-        first_term_value = first_weight * first_reg_fn(data)
+        first_term_value = first_weight * first_reg_fn(data) * 1000
         term_values.append(first_term_value)
         regularization_loss = first_term_value
 

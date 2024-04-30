@@ -478,7 +478,7 @@ def recon_voxel():
     # with profiler.profile(profile_memory=True, use_cuda=True) as prof:
     #     reconstructor = Reconstructor(recon_config, output_dir=recon_directory, apply_volume_mask=True)
     # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
-    reconstructor.reconstruct(plot_live=True)
+    reconstructor.reconstruct(all_prop_elements=False, plot_live=False)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
@@ -519,8 +519,8 @@ def recon_voxel_upsampled():
     recon_optical_info = setup_optical_parameters(
         "config_settings/optical_config_voxel_upsample.json")
     ideal_volume_path = "objects/upsampled_voxel.h5"
-    # ideal_volume = BirefringentVolume.init_from_file(
-    #     ideal_volume_path, BackEnds.PYTORCH, recon_optical_info)
+    ideal_volume = BirefringentVolume.init_from_file(
+        ideal_volume_path, BackEnds.PYTORCH, recon_optical_info)
     iteration_params = setup_iteration_parameters(
         "config_settings/iter_config.json")
     continue_recon = False
@@ -535,15 +535,15 @@ def recon_voxel_upsampled():
             volume_creation_args=volume_args.random_args
         )
     recon_directory = create_unique_directory("reconstructions", postfix='vox_upsample')
-    if not simulate:
-        volume_GT = initial_volume
+    volume_GT = ideal_volume
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
     recon_config.save(recon_directory)
 
     # Changes made for developing masking process
-    reconstructor = Reconstructor(recon_config, output_dir=recon_directory, omit_rays_based_on_pixels=True, apply_volume_mask=False)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                        omit_rays_based_on_pixels=True, apply_volume_mask=False)
     # reconstructor.rays._count_vox_raytrace_occurrences(zero_retardance_voxels=True)
     # vox_list = reconstructor.rays.identify_voxels_repeated_zero_ret()
     # reconstructor.voxel_mask_setup()

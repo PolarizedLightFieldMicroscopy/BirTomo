@@ -1,5 +1,5 @@
 import torch
-
+import copy
 
 def get_region_of_ones_shape(mask):
     """
@@ -128,17 +128,18 @@ def upscale_voxel_resolution(volume, upscale_factor):
         BirefringentVolume: Updated volume with upscaled birefringence
                             and optic axis.
     """
-    vol_shape_og = list(volume.optical_info['volume_shape'])
-    bir_og = volume.get_delta_n()
-    optic_axis_og = volume.get_optic_axis()
+    vol = copy.deepcopy(volume)
+    vol_shape_og = list(vol.optical_info['volume_shape'])
+    bir_og = vol.get_delta_n()
+    optic_axis_og = vol.get_optic_axis()
     bir_upscaled = upscale_birefringence(bir_og, upscale_factor)
     optic_axis_upscaled = upscale_optic_axis(optic_axis_og, upscale_factor)
-    volume.Delta_n = store_as_pytorch_parameter(bir_upscaled, 'scalar')
-    volume.optic_axis = store_as_pytorch_parameter(optic_axis_upscaled, 'vector')
-    volume.optical_info['volume_shape'] = bir_upscaled.shape
-    volume.optical_info['n_voxels_per_ml'] *= upscale_factor
-    volume.optical_info['voxel_size_um'] = [
-        x / upscale_factor for x in volume.optical_info['voxel_size_um']]
-    vol_shape_final = list(volume.optical_info['volume_shape'])
+    vol.Delta_n = store_as_pytorch_parameter(bir_upscaled, 'scalar')
+    vol.optic_axis = store_as_pytorch_parameter(optic_axis_upscaled, 'vector')
+    vol.optical_info['volume_shape'] = bir_upscaled.shape
+    vol.optical_info['n_voxels_per_ml'] *= upscale_factor
+    vol.optical_info['voxel_size_um'] = [
+        x / upscale_factor for x in vol.optical_info['voxel_size_um']]
+    vol_shape_final = list(vol.optical_info['volume_shape'])
     print(f"Volume shape upscaled from {vol_shape_og} to {vol_shape_final}.")
-    return volume
+    return vol
