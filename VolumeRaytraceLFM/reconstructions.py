@@ -9,7 +9,8 @@ from tqdm import tqdm
 import csv
 import pickle
 import matplotlib.pyplot as plt
-from memory_profiler import profile
+## For analyzing the memory usage of a function
+# from memory_profiler import profile
 import gc
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
@@ -29,10 +30,6 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter
 )
-from VolumeRaytraceLFM.utils.dict_utils import (
-    extract_numbers_from_dict_of_lists,
-    transform_dict_list_to_set
-)
 from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
 from VolumeRaytraceLFM.utils.json_utils import ComplexArrayEncoder
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
@@ -40,6 +37,13 @@ from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr
 
 
 DEBUG = False
+
+if DEBUG:
+    print("Debug mode is on.")
+    from VolumeRaytraceLFM.utils.dict_utils import (
+        extract_numbers_from_dict_of_lists,
+        transform_dict_list_to_set
+    )    
 
 
 class ReconstructionConfig:
