@@ -1,4 +1,5 @@
 """Utility functions for optimizers."""
+from tqdm import tqdm
 
 
 def calculate_adjusted_lr(optimizer):
@@ -57,3 +58,21 @@ def print_adjusted_learning_rates(optimizer):
                 print(f"Param ID: {id(p)} - Adjusted LR: {adjusted_lr}")
             else:
                 print(f"Param ID: {id(p)} - Adjusted LR: Not yet adjusted")
+
+
+def print_moments(optimizer):
+    # Print the first moment (m) and second moment (v) for each parameter
+    for group in optimizer.param_groups:
+        for p in group['params']:
+            param_state = optimizer.state[p]
+            if 'exp_avg' in param_state and 'exp_avg_sq' in param_state:
+                try:
+                    tqdm.write(f"Parameter group: {group['name']}")
+                except:
+                    tqdm.write(f"Parameter ID: {id(p)}")
+                exp_avg = param_state['exp_avg']
+                exp_avg_sq = param_state['exp_avg_sq']
+                exp_avg_beg = exp_avg[:, :5] if p.dim() > 1 else exp_avg[:5]
+                exp_avg_sq_beg = exp_avg_sq[:, :5] if p.dim() > 1 else exp_avg_sq[:5]
+                tqdm.write(f"exp_avg (m) [at most 5 values]: {exp_avg_beg}")
+                tqdm.write(f"exp_avg_sq (v) [at most 5 values]: {exp_avg_sq_beg}")

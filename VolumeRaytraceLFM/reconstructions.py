@@ -30,10 +30,14 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter
 )
-from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
+from VolumeRaytraceLFM.utils.error_handling import (
+    check_for_inf_or_nan,
+    check_for_negative_values,
+    check_for_negative_values_dict
+)
 from VolumeRaytraceLFM.utils.json_utils import ComplexArrayEncoder
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
-from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr
+from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr, print_moments
 
 
 DEBUG = False
@@ -408,6 +412,7 @@ class Reconstructor:
     def optimizer_setup(self, volume_estimation, training_params):
         """Setup optimizer."""
         trainable_parameters = volume_estimation.get_trainable_variables()
+        trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
         optimizer_type = training_params.get('optimizer', 'Adam')
         if optimizer_type == 'LBFGS':
             parameters = trainable_parameters
@@ -415,8 +420,8 @@ class Reconstructor:
             assert len(trainable_parameters[0].shape) == 2, "1st parameter should be the optic axis"
             assert len(trainable_parameters[1].shape) == 1, "2nd parameter should be the birefringence."
             # The learning rates specified are starting points for the optimizer.
-            parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
-                        {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
+            parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis'], 'name': trainable_vars_names[0]},
+                        {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence'], 'name': trainable_vars_names[1]}]
         optimizers = {
             'Adam': lambda params: torch.optim.Adam(params),
             'SGD': lambda params: torch.optim.SGD(params, nesterov=True, momentum=0.7),
@@ -458,6 +463,8 @@ class Reconstructor:
             with open(dict_save_path, 'wb') as f:
                 pickle.dump(vox_indices_by_mla_idx, f)
             print(f"Saving voxel indices by MLA index to {dict_save_path}")
+        if DEBUG:
+            check_for_negative_values_dict(vox_indices_by_mla_idx)
 
         print("Collecting the set of voxels that are reached by the rays.")
         start_time = time.perf_counter()
@@ -467,6 +474,8 @@ class Reconstructor:
         vox_set = set(self.rays.identify_voxels_at_least_one_nonzero_ret())
         # Excluding voxels that are a part of multiple zero-retardance rays
         vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+        if DEBUG:
+            check_for_negative_values(vox_list_excluding)
         filtered_vox_list = list(vox_set - set(vox_list_excluding))
         sorted_vox_list = sorted(filtered_vox_list)
         print(f"Masking out voxels except for {len(sorted_vox_list)} voxels. " +
@@ -553,7 +562,11 @@ class Reconstructor:
 
     # @profile # to see the memory breakdown of the function
     def one_iteration(self, optimizer, volume_estimation):
-        optimizer.zero_grad()
+        if not self.apply_volume_mask:
+            optimizer.zero_grad()
+        else:
+            # improving memory usage by setting gradients to None
+            optimizer.zero_grad(set_to_none=True)
         # Apply forward model and compute loss
         img_list = self.rays.ray_trace_through_volume(volume_estimation, intensity=self.intensity_bool)
         # In case the entire volume is needed for the loss computation:
@@ -585,6 +598,7 @@ class Reconstructor:
         optimizer.step()
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
         adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
+        print_moments(optimizer)
 
         # Keep the optic axis on the unit sphere
         self.stay_on_sphere(volume_estimation)
@@ -619,10 +633,20 @@ class Reconstructor:
         return
 
     def print_grad_info(self, volume_estimation):
-        print("Delta_n requires_grad:", volume_estimation.Delta_n.requires_grad,
-              "birefringence_active requires_grad:", volume_estimation.birefringence_active.requires_grad)
-        print("Gradient for Delta_n:", volume_estimation.Delta_n.grad)
-        print("Gradient for birefringence_active:", volume_estimation.birefringence_active.grad)
+        print("Delta_n requires_grad:",
+              volume_estimation.Delta_n.requires_grad,
+              "birefringence_active requires_grad:",
+              volume_estimation.birefringence_active.requires_grad)
+        if volume_estimation.Delta_n.grad is not None:
+            print("Gradient for Delta_n (up to 10 values):",
+                  volume_estimation.Delta_n.grad[:10])
+        else:
+            print("Gradient for Delta_n is None")
+        if volume_estimation.birefringence_active.grad is not None:
+            print("Gradient for birefringence_active (up to 10 values):",
+                  volume_estimation.birefringence_active.grad[:10])
+        else:
+            print("Gradient for birefringence_active is None")
 
     def store_results(self, ret_image_current, azim_image_current,
                       volume_estimation, loss, data_term,
@@ -791,6 +815,7 @@ class Reconstructor:
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
+        # optimizer.param_groups[0]['betas'] = (0.8, 0.999) # (0.9, 0.999)
         figure = setup_visualization(window_title=self.recon_directory, plot_live=plot_live)
         self._create_regularization_terms_csv()
 
