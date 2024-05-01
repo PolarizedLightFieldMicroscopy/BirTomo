@@ -233,6 +233,9 @@ class BirefringentVolume(BirefringentElement):
 
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
+        if 'voxel_size_um' not in optical_info:
+            optical_info['voxel_size_um'] = [1, 1, 1]
+            print("Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned.")
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
 
@@ -352,6 +355,9 @@ class BirefringentVolume(BirefringentElement):
 
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
+        if 'voxel_size_um' not in optical_info:
+            optical_info['voxel_size_um'] = [1, 1, 1]
+            print("Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned.")
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         # Define grid
         coords = np.indices(np.array(voxels.shape)).astype(float)
