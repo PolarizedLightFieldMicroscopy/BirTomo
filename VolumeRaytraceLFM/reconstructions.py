@@ -815,7 +815,10 @@ class Reconstructor:
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        # optimizer.param_groups[0]['betas'] = (0.8, 0.999) # (0.9, 0.999)
+        optax_betas = self.iteration_params.get('optax_betas', (0.9, 0.999))
+        bir_betas = self.iteration_params.get('bir_betas', (0.9, 0.999))
+        optimizer.param_groups[0]['betas'] = tuple(optax_betas)
+        optimizer.param_groups[1]['betas'] = tuple(bir_betas)
         figure = setup_visualization(window_title=self.recon_directory, plot_live=plot_live)
         self._create_regularization_terms_csv()
 
