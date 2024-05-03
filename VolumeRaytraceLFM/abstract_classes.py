@@ -577,12 +577,9 @@ class RayTraceLFM(OpticalElement):
 
         # Re-assign instance attributes
         self.ray_vol_colli_indices = filtered_ray_vol_colli_indices
-        self.ray_vol_colli_lengths = nn.Parameter(
-            filtered_ray_vol_colli_lengths, requires_grad=False
-            )
-        self.ray_valid_direction = nn.Parameter(
-            filtered_ray_valid_direction, requires_grad=False
-            )
+        self.ray_vol_colli_lengths = filtered_ray_vol_colli_lengths
+        self.ray_valid_direction = filtered_ray_valid_direction
+
         # Transpose back to get the filtered self.ray_valid_indices
         self.ray_valid_indices = filtered_reshaped_indices.T
 
@@ -773,9 +770,9 @@ class RayTraceLFM(OpticalElement):
             self.ray_vol_colli_lengths = np.zeros([n_valid_rays, max_num_collisions])
             self.ray_valid_direction = np.zeros([n_valid_rays, 3])
         elif self.backend == BackEnds.PYTORCH:
-            self.ray_vol_colli_lengths = nn.Parameter(torch.zeros(n_valid_rays, max_num_collisions))
+            self.ray_vol_colli_lengths = torch.zeros(n_valid_rays, max_num_collisions)
             self.ray_vol_colli_lengths.requires_grad = False
-            self.ray_valid_direction = nn.Parameter(torch.zeros(n_valid_rays, 3))
+            self.ray_valid_direction = torch.zeros(n_valid_rays, 3)
             self.ray_valid_direction.requires_grad = False
 
         # Process each valid ray
@@ -868,11 +865,9 @@ class RayTraceLFM(OpticalElement):
                 for ray in self.ray_valid_direction
             ]
         elif self.backend == BackEnds.PYTORCH:
-            self.ray_direction_basis = nn.Parameter(
-                RayTraceLFM.calc_ray_direction_torch(
+            self.ray_direction_basis = RayTraceLFM.calc_ray_direction_torch(
                     self.ray_valid_direction
                 )
-            )
 
     # Helper functions to load/save the whole class to disk
     def pickle(self, filename):

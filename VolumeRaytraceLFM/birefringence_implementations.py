@@ -934,7 +934,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             f"\nMLA_volume_geometry_ready={self.MLA_volume_geometry_ready}"
             f"\nvox_ctr_idx={self.vox_ctr_idx}"
             f"\nvoxel_span_per_ml={self.voxel_span_per_ml}"
-            f"\nray_valid_indices={self.ray_valid_indices}"
+            f"\nray_valid_indices[:, 0:3]={self.ray_valid_indices[:, 0:3]}"
             f"\nray_valid_indices_all={self.ray_valid_indices_all}"
             f"\nray_direction_basis[0][0]={self.ray_direction_basis[0][0]}"
             f"\nray_vol_colli_indices[0]={self.ray_vol_colli_indices[0]}"
@@ -1044,10 +1044,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                                                iix * n_pixels_per_ml]).unsqueeze(1)),
                         1)
         # Replicate ray info for all the microlenses
-        self.ray_vol_colli_lengths = nn.Parameter(
+        self.ray_vol_colli_lengths = torch.Tensor(
             self.ray_vol_colli_lengths.repeat(n_micro_lenses ** 2, 1)
             )
-        self.ray_direction_basis = nn.Parameter(
+        self.ray_direction_basis = torch.Tensor(
             self.ray_direction_basis.repeat(1, n_micro_lenses ** 2, 1)
             )
 
@@ -1793,7 +1793,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     image and one for the azimuth image.
         """
         # Fetch the number of pixels per microlens array from the optic configuration
-        pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
+        pixels_per_ml = self.optical_info['pixels_per_ml']
 
         # Calculate Jones Matrices for all rays given the volume and microlens offset
         effective_jones = self.calc_cummulative_JM_of_ray(volume_in,
