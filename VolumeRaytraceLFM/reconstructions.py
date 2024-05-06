@@ -633,15 +633,16 @@ class Reconstructor:
         return
 
     def print_grad_info(self, volume_estimation):
-        print("Delta_n requires_grad:",
-              volume_estimation.Delta_n.requires_grad,
-              "birefringence_active requires_grad:",
-              volume_estimation.birefringence_active.requires_grad)
-        if volume_estimation.Delta_n.grad is not None:
-            print("Gradient for Delta_n (up to 10 values):",
-                  volume_estimation.Delta_n.grad[:10])
-        else:
-            print("Gradient for Delta_n is None")
+        if False:
+            print("Delta_n requires_grad:",
+                volume_estimation.Delta_n.requires_grad,
+                "birefringence_active requires_grad:",
+                volume_estimation.birefringence_active.requires_grad)
+            if volume_estimation.Delta_n.grad is not None:
+                print("Gradient for Delta_n (up to 10 values):",
+                    volume_estimation.Delta_n.grad[:10])
+            else:
+                print("Gradient for Delta_n is None")
         if volume_estimation.birefringence_active.grad is not None:
             print("Gradient for birefringence_active (up to 10 values):",
                   volume_estimation.birefringence_active.grad[:10])

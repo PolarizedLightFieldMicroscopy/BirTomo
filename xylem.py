@@ -139,7 +139,8 @@ def recon_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
     initial_volume = BirefringentVolume.init_from_file(
         init_vol_path, BackEnds.PYTORCH, recon_optical_info)
     # visualize_volume(initial_volume, recon_optical_info)
-    recon_directory = create_unique_directory("reconstructions", postfix=recon_dir_postfix)
+    parent_dir = os.path.join('reconstructions', 'xylem_20_100_100')
+    recon_directory = create_unique_directory(parent_dir, postfix=recon_dir_postfix)
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
         azim_image_meas, initial_volume, iteration_params
     )
@@ -164,7 +165,8 @@ def recon_up3_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
     initial_volume = BirefringentVolume.init_from_file(
         init_vol_path, BackEnds.PYTORCH, recon_optical_info)
     # visualize_volume(initial_volume, recon_optical_info)
-    recon_directory = create_unique_directory("reconstructions", postfix=recon_dir_postfix)
+    parent_dir = os.path.join('reconstructions', 'xylem_60_300_300')
+    recon_directory = create_unique_directory(parent_dir, postfix=recon_dir_postfix)
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
         azim_image_meas, initial_volume, iteration_params
     )
@@ -184,21 +186,23 @@ if __name__ == '__main__':
     
     up3 = True
     if not up3:
-        saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65')
-        recon_filename = os.path.join('2024-04-30_13-38-11_xylem_lr16', 'volume_ep_0010.h5')
+        saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65', 'cont_with_subset')
+        recon_filename = os.path.join('2024-04-30_14-17-15_xylem_neg_penalty', 'volume_ep_0020.h5')
         xylem_vol_path = os.path.join(saved_recon_dir, recon_filename)
-        recon_continuation(xylem_vol_path, recon_dir_postfix='xylem_neg_penalty')
+        recon_continuation(xylem_vol_path, recon_dir_postfix='xylem_neg_penalty_small')
     else:
-        # saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65_up3')
-        # # recon_upscaled_filename = os.path.join('2024-04-29_18-09-12_xylem_lr6', 'volume_ep_0010_up3.h5')
-        # recon_upscaled_filename = os.path.join('2024-04-30_11-51-25_xylem_up3_filled', 'volume_ep_0005.h5')
-        # xylem_vol_path = os.path.join(saved_recon_dir, recon_upscaled_filename)
-        xylem_vol_path = os.path.join('objects', 'random_vol_60_300_300.h5')
-        recon_up3_continuation(xylem_vol_path, recon_dir_postfix='xylem_args8')
+        saved_recon_dir = os.path.join('reconstructions', 'saved', 'xylem65_up3', 'subset_from_beg')
+        recon_upscaled_filename = os.path.join('2024-05-01_22-25-35_xylem_low_betas_high_lr_cont', 'volume_ep_0050.h5')
+        xylem_vol_path = os.path.join(saved_recon_dir, recon_upscaled_filename)
+        # xylem_vol_path = os.path.join('objects', 'random_vol_60_300_300.h5')
+        # recon_up3_continuation(xylem_vol_path, recon_dir_postfix='xylem_low_betas24')
     
     # Visualize a volume
-    # optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
-    # # optical_info['volume_shape'] = [20, 100, 100]
-    # volume = BirefringentVolume.init_from_file(
-    #     xylem_vol_path, BackEnds.PYTORCH, optical_info)
-    # visualize_volume(volume, optical_info)
+    optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
+    # optical_info['volume_shape'] = [20, 100, 100]
+    xylem_vol_path = r"reconstructions\saved\xylem65_up3\upsampled_recon\2024-04-30_10-51-45_xylem_up3_from_lr6_crash\volume_ep_0001.h5"
+    xylem_vol_path = r"reconstructions\saved\xylem65_up3\upsampled_recon\2024-04-30_13-24-52_xylem_up3_filled\volume_ep_0004.h5"
+    xylem_vol_path = r"C:\Users\Geneva\Documents\Code\GeoBirT\reconstructions\xylem_60_300_300\2024-05-02_19-23-25_xylem_low_betas24\volume_ep_0030.h5"
+    volume = BirefringentVolume.init_from_file(
+        xylem_vol_path, BackEnds.PYTORCH, optical_info)
+    visualize_volume(volume, optical_info)
