@@ -21,8 +21,8 @@ DEVICE = torch.device(
 
 def recon_debug():
     """Reconstruct the xylem data set for debugging purposes."""
-    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
-    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem.json")
+    recon_optical_info = setup_optical_parameters("config_settings/xylem/optical_config_xylem.json")
+    iteration_params = setup_iteration_parameters("config_settings/xylem/iter_config_xylem.json")
     ret_image_meas, azim_image_meas = prepare_ret_azim_images(
         os.path.join('xylem', 'mla65', 'retardance.tif'),
         os.path.join('xylem', 'mla65', 'azimuth.tif'),
@@ -46,8 +46,8 @@ def recon_debug():
 
 def recon_xylem(recon_dir_postfix='xylem'):
     """Reconstruct the xylem data set."""
-    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
-    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem.json")
+    recon_optical_info = setup_optical_parameters("config_settings/xylem/optical_config_xylem.json")
+    iteration_params = setup_iteration_parameters("config_settings/xylem/iter_config_xylem.json")
     ret_image_meas, azim_image_meas = prepare_ret_azim_images(
         os.path.join('xylem', 'mla65', 'retardance.tif'),
         os.path.join('xylem', 'mla65', 'azimuth.tif'),
@@ -71,8 +71,8 @@ def recon_xylem(recon_dir_postfix='xylem'):
 
 def recon_cpu():
     start_time = time.time()
-    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
-    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem_quick.json")
+    recon_optical_info = setup_optical_parameters("config_settings/xylem/optical_config_xylem.json")
+    iteration_params = setup_iteration_parameters("config_settings/xylem/iter_config_xylem_quick.json")
     ret_image_meas, azim_image_meas = prepare_ret_azim_images(
         os.path.join('xylem', 'mla65', 'retardance.tif'),
         os.path.join('xylem', 'mla65', 'azimuth.tif'),
@@ -97,8 +97,8 @@ def recon_cpu():
 def recon_gpu():
     '''Reconstruct a volume on the GPU.'''
     start_time = time.time()
-    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
-    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem_quick.json")
+    recon_optical_info = setup_optical_parameters("config_settings/xylem/optical_config_xylem.json")
+    iteration_params = setup_iteration_parameters("config_settings/xylem/iter_config_xylem_quick.json")
     ret_image_meas, azim_image_meas = prepare_ret_azim_images(
         os.path.join('xylem', 'mla65', 'retardance.tif'),
         os.path.join('xylem', 'mla65', 'azimuth.tif'),
@@ -128,8 +128,8 @@ def recon_gpu():
 
 def recon_continuation(init_vol_path, recon_dir_postfix='xylem_continue'):
     """Reconstruct the xylem data set from a previous reconstruction."""
-    recon_optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
-    iteration_params = setup_iteration_parameters("config_settings/iter_config_xylem.json")
+    recon_optical_info = setup_optical_parameters("config_settings/xylem/optical_config_xylem.json")
+    iteration_params = setup_iteration_parameters("config_settings/xylem/iter_config_xylem.json")
     iteration_params["initial volume path"] = init_vol_path
     ret_image_meas, azim_image_meas = prepare_ret_azim_images(
         os.path.join('xylem', 'mla65', 'retardance.tif'),
@@ -198,7 +198,7 @@ if __name__ == '__main__':
         # recon_up3_continuation(xylem_vol_path, recon_dir_postfix='xylem_low_betas24')
     
     # Visualize a volume
-    optical_info = setup_optical_parameters("config_settings/optical_config_xylem.json")
+    optical_info = setup_optical_parameters("config_settings/xylem/optical_config_xylem.json")
     # optical_info['volume_shape'] = [20, 100, 100]
     xylem_vol_path = r"reconstructions\saved\xylem65_up3\upsampled_recon\2024-04-30_10-51-45_xylem_up3_from_lr6_crash\volume_ep_0001.h5"
     xylem_vol_path = r"reconstructions\saved\xylem65_up3\upsampled_recon\2024-04-30_13-24-52_xylem_up3_filled\volume_ep_0004.h5"
