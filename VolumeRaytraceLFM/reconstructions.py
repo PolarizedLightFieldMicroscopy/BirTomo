@@ -473,7 +473,7 @@ class Reconstructor:
         # vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
         vox_set = set(self.rays.identify_voxels_at_least_one_nonzero_ret())
         # Excluding voxels that are a part of multiple zero-retardance rays
-        vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+        vox_list_excluding = self.rays.identify_voxels_zero_ret_lenslet()
         if DEBUG:
             check_for_negative_values(vox_list_excluding)
         filtered_vox_list = list(vox_set - set(vox_list_excluding))

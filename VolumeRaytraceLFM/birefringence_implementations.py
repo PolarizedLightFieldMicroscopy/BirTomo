@@ -1594,7 +1594,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         return list_of_voxel_lists
 
-    def _count_vox_raytrace_occurrences(self, zero_ret_voxels=False, nonzero_ret_voxels=False):
+    def _count_vox_raytrace_occurrences(self, zero_ret_voxels=False,
+            nonzero_ret_voxels=False, zero_ret_entire_lenslet_voxels=False):
         """Counts occurances of voxels from ray tracing.
         Iterates over micro-lenses, aggregates voxel indices,
         and counts occurrences. Optionally filters for voxels
@@ -1629,7 +1630,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     # Find the voxels that lead to a zero pixel in the retardance image
                     zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
                     vox_indices = zero_ret_vox_indices
-
+                elif zero_ret_entire_lenslet_voxels:
+                    # Get the boolean mask for the pixels that are not zero
+                    nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
+                    # Find the voxels that lead to a zero retardance lenslet image
+                    if np.all(~nonzero_mask):
+                        # Find the voxels that lead to a zero pixel in the retardance image
+                        zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
+                        vox_indices = zero_ret_vox_indices
+                    else:
+                        vox_indices = [[]]
                 elif nonzero_ret_voxels:
                     nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
                     # Find the voxels that lead to a non-zero pixel in the retardance image
@@ -1647,6 +1657,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             print("DEBUG: ", sorted([(key, count) for key, count in counts.items()]))
         vox_list = filter_keys_by_count(counts, 2)
         return vox_list
+
+    def identify_voxels_zero_ret_lenslet(self):
+        counts = self._count_vox_raytrace_occurrences(zero_ret_entire_lenslet_voxels=True)
+        if False: # DEBUG
+            print("DEBUG: ", sorted([(key, count) for key, count in counts.items()]))
+        vox_list = filter_keys_by_count(counts, 2)
+        return vox_list    
 
     def identify_voxels_at_least_one_nonzero_ret(self):
         counts = self._count_vox_raytrace_occurrences(nonzero_ret_voxels=True)
