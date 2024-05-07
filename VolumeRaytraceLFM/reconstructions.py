@@ -264,6 +264,13 @@ class Reconstructor:
         # Mask initial guess of volume
         self.apply_mask_to_volume(self.volume_pred)
 
+        self.mla_rays_at_once = self.iteration_params.get('mla_rays_at_once', False)
+        if self.mla_rays_at_once:
+            self.rays.use_lenslet_based_filtering = False
+            self.rays.create_colli_indices_all()
+            self.rays.create_ray_valid_indices_all()
+            self.rays.replicate_ray_info_each_microlens()
+
         if self.remove_large_arrs:
             del self.birefringence_simulated
             gc.collect()
@@ -568,7 +575,9 @@ class Reconstructor:
             # improving memory usage by setting gradients to None
             optimizer.zero_grad(set_to_none=True)
         # Apply forward model and compute loss
-        img_list = self.rays.ray_trace_through_volume(volume_estimation, intensity=self.intensity_bool)
+        img_list = self.rays.ray_trace_through_volume(
+            volume_estimation, intensity=self.intensity_bool,
+            all_rays_at_once=self.mla_rays_at_once)
         # In case the entire volume is needed for the loss computation:
         total_vol_needed = False
         if total_vol_needed and self.volume_pred.indices_active is not None:
