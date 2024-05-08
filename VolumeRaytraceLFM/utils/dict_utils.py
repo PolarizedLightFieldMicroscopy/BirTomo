@@ -1,4 +1,5 @@
 """Ultility functions for dictionaries."""
+import torch
 
 def extract_numbers_from_dict_of_lists(input_dict):
     """
@@ -44,3 +45,12 @@ def filter_keys_by_count(counter, count_ths):
     filtered_list = [key for key, count in counter.items() 
                     if count > count_ths - 1]
     return sorted(filtered_list)
+
+
+def idx_dict_to_tensor(idx_dict):
+    max_key = max(idx_dict.keys())
+    # Initialize all to -1
+    idx_tensor = torch.full((max_key + 1,), -1, dtype=torch.long)
+    for k, v in idx_dict.items():
+        idx_tensor[k] = v
+    return idx_tensor

@@ -258,6 +258,8 @@ class Reconstructor:
         if self.remove_large_arrs and self.apply_volume_mask:
             raise ValueError("Cannot remove large arrays and apply mask to" \
                                 "volume gradient at the same time.")
+        self.two_optic_axis_components = self.iteration_params.get(
+            'two_optic_axis_components', False)
 
         # Basic mask setup
         self.voxel_mask_setup()
@@ -266,10 +268,7 @@ class Reconstructor:
 
         self.mla_rays_at_once = self.iteration_params.get('mla_rays_at_once', False)
         if self.mla_rays_at_once:
-            self.rays.use_lenslet_based_filtering = False
-            self.rays.create_colli_indices_all()
-            self.rays.create_ray_valid_indices_all()
-            self.rays.replicate_ray_info_each_microlens()
+            self.rays.prepare_for_all_rays_at_once()
 
         if self.remove_large_arrs:
             del self.birefringence_simulated
@@ -567,6 +566,20 @@ class Reconstructor:
             optic_axis /= norms
         return
 
+    def fill_optaxis_component(self, volume):
+        """Method to fill the axial component of the optic axis
+        with the square root of the remaining components.
+        
+        Also, here the updated optic axis is stored in the volume object.
+        """
+        with torch.no_grad():
+            optic_axis = volume.optic_axis_active
+            optic_axis[1:, :] = volume.optic_axis_planar
+            square_sum = torch.sum(optic_axis[1:, :]**2, dim=0)
+            optic_axis[0, :] = torch.sqrt(1 - square_sum)
+            optic_axis[0, torch.isnan(optic_axis[0, :])] = 0
+        return
+
     # @profile # to see the memory breakdown of the function
     def one_iteration(self, optimizer, volume_estimation):
         if not self.apply_volume_mask:
@@ -610,6 +623,8 @@ class Reconstructor:
         print_moments(optimizer)
 
         # Keep the optic axis on the unit sphere
+        if self.two_optic_axis_components:
+            self.fill_optaxis_component(volume_estimation)
         self.stay_on_sphere(volume_estimation)
 
         # TODO: fix so that measured images do not need to be placeholder for the predicted images
@@ -630,8 +645,6 @@ class Reconstructor:
                 self.loss_data_term_list.append(data_term.item())
                 self.loss_reg_term_list.append(regularization_term.item())
                 self.adjusted_lrs_list.append(adjusted_lrs)
-
-
         else:
             [ret_image_current, azim_image_current] = img_list
             self.store_results(
@@ -729,7 +742,6 @@ class Reconstructor:
             gc.collect()
         return
 
-
     def __visualize_and_update_streamlit(self, progress_bar, ep, n_epochs, recon_img_plot, my_loss):
         import pandas as pd
         percent_complete = int(ep / n_epochs * 100)
@@ -794,10 +806,25 @@ class Reconstructor:
         the mask. These attributes are intended for optimization."""
         active_indices = torch.where(mask)[0]
         volume.indices_active = active_indices
-        idx_dict = {index.item(): pos for pos, index in enumerate(active_indices)}
-        volume.active_idx_to_spatial_idx = idx_dict
-        volume.optic_axis_active = torch.nn.Parameter(volume.optic_axis[:, active_indices])
+        max_index = mask.size()[0]
+        idx_tensor = torch.full((max_index + 1,), -1, dtype=torch.long)
+        positions = torch.arange(len(active_indices), dtype=torch.long)
+        idx_tensor[active_indices] = positions
+        volume.active_idx2spatial_idx_tensor = idx_tensor
+        if self.two_optic_axis_components:
+            volume.optic_axis.requires_grad = False
+            volume.optic_axis_active = volume.optic_axis[:, active_indices]
+            volume.optic_axis_planar = torch.nn.Parameter(volume.optic_axis_active[1:, :])
+        else:
+            volume.optic_axis_active = torch.nn.Parameter(volume.optic_axis[:, active_indices])
         volume.birefringence_active = torch.nn.Parameter(volume.Delta_n[active_indices])
+
+    def prepare_volume_for_recon(self, volume):
+        if self.two_optic_axis_components:
+            self.fill_optaxis_component(volume)
+        self.stay_on_sphere(volume)
+        check_for_inf_or_nan(volume.birefringence_active)
+        check_for_inf_or_nan(volume.optic_axis_active)
 
     def reconstruct(self, use_streamlit=False, plot_live=False, all_prop_elements=False):
         """
@@ -812,7 +839,10 @@ class Reconstructor:
             param_list = ['Delta_n', 'optic_axis']
         else:
             self.create_parameters_from_mask(self.volume_pred, self.mask)
-            param_list = ['birefringence_active', 'optic_axis_active']
+            if self.two_optic_axis_components:
+                param_list = ['birefringence_active', 'optic_axis_planar']
+            else:
+                param_list = ['birefringence_active', 'optic_axis_active']
             if self.remove_large_arrs:
                 del self.volume_pred.Delta_n
                 del self.volume_pred.optic_axis
@@ -842,11 +872,12 @@ class Reconstructor:
             my_3D_plot = st.empty()  # set up a place holder for the 3D plot
             progress_bar = st.progress(0)
 
+        self.prepare_volume_for_recon(self.volume_pred)
         # Iterations
         for ep in tqdm(range(1, n_epochs + 1), "Minimizing"):
-            check_for_inf_or_nan(self.volume_pred.birefringence_active)
-            check_for_inf_or_nan(self.volume_pred.optic_axis_active)
             self.one_iteration(optimizer, self.volume_pred)
+            if ep % 5 == 0 and DEBUG:
+                self.rays.print_timing_info()
 
             if ep % 20 == 0 and self.intensity_bool:
                 with torch.no_grad():
@@ -854,7 +885,6 @@ class Reconstructor:
                 self.ret_img_pred = ret_image_current.detach().cpu().numpy()
                 self.azim_img_pred = azim_image_current.detach().cpu().numpy()
     
-            # TODO: verify that this damp mask is appropriate
             azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0
             if use_streamlit:
