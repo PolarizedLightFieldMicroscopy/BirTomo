@@ -573,6 +573,87 @@ def test_torch_auto_differentiation(global_data, volume_init_mode):
     assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume was not updated correctly. Nothing changed in the volume after the optimization step.'
     assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume was not updated correctly. Nothing changed in the volume after the optimization step.'
 
+
+@pytest.mark.parametrize('volume_init_mode', [
+    'single_voxel',
+    'random',
+    'ellipsoid',
+    '1planes',
+    '3planes'
+])
+def test_torch_auto_differentiation_subsets(global_data, volume_init_mode):
+    # Enable torch gradients
+    torch.set_grad_enabled(True)
+    # Gather global data
+    local_data = copy.deepcopy(global_data)
+    optical_info = local_data['optical_info']
+
+    # Simplify the settings, so it's fast to compute
+    volume_shape = [7, 7, 7]
+    optical_info['volume_shape'] = volume_shape
+    optical_info['pixels_per_ml'] = 17
+    optical_info['n_micro_lenses'] = 3
+
+    BF_raytrace_torch = BirefringentRaytraceLFM(
+        backend=BackEnds.PYTORCH, optical_info=optical_info)
+    BF_raytrace_torch.compute_rays_geometry()
+
+    volume_torch_random = BirefringentVolume(
+        backend=BackEnds.PYTORCH,  optical_info=optical_info, volume_creation_args={'init_mode': volume_init_mode})
+    num_elements = volume_torch_random.Delta_n.shape[0]
+    num_ones = num_elements // 2
+    num_ones += num_elements % 2
+    mask = torch.zeros(num_elements, dtype=torch.bool)
+    mask[:num_ones] = True
+    active_indices = torch.where(mask)[0]
+    volume_torch_random.indices_active = active_indices
+    max_index = mask.size()[0]
+    idx_tensor = torch.full((max_index + 1,), -1, dtype=torch.long)
+    positions = torch.arange(len(active_indices), dtype=torch.long)
+    idx_tensor[active_indices] = positions
+    volume_torch_random.active_idx2spatial_idx_tensor = idx_tensor
+    volume_torch_random.optic_axis_active = torch.nn.Parameter(volume_torch_random.optic_axis[:, active_indices])
+    volume_torch_random.birefringence_active = torch.nn.Parameter(volume_torch_random.Delta_n[active_indices])
+    # make volume trainable, by telling waveblocks which variables to optimize
+    volume_torch_random.members_to_learn.append('birefringence_active')
+    volume_torch_random.members_to_learn.append('optic_axis_active')
+
+    # Create optimizer, which will take care of applying the gradients to the volume once computed
+    optimizer = torch.optim.Adam(
+        volume_torch_random.get_trainable_variables(), lr=1e-1)
+    # Set all gradients to zero
+    optimizer.zero_grad()
+
+    # Compute a forward projection
+    [ret_image, azim_image] = BF_raytrace_torch.ray_trace_through_volume(
+        volume_torch_random)
+    # Calculate a loss, for example minimizing the mean of both images
+    L = ret_image.mean() + azim_image.mean()
+
+    # Compute and propagate the gradients
+    L.backward()
+
+    # TODO: check that the none of the gradients are nans
+    # Check if the gradients where properly propagated
+    assert volume_torch_random.birefringence_active.grad is not None, 'Gradients were not propagated to the volumes Delta_n correctly'
+    assert volume_torch_random.optic_axis_active.grad is not None, 'Gradients were not propagated to the volumes optic_axis correctly'
+
+    # Calculate the volume values before updating the values with the gradients
+    Delta_n_sum_initial = volume_torch_random.birefringence_active.sum()
+    optic_axis_sum_initial = volume_torch_random.optic_axis_active.sum()
+
+    # Update the volume
+    optimizer.step()
+
+    # Calculate the volume values before updating the values with the gradients
+    Delta_n_sum_final = volume_torch_random.birefringence_active.sum()
+    optic_axis_sum_final = volume_torch_random.optic_axis_active.sum()
+
+    # These should be different
+    assert Delta_n_sum_initial != Delta_n_sum_final, 'Seems like the volume was not updated correctly. Nothing changed in the volume after the optimization step.'
+    assert optic_axis_sum_initial != optic_axis_sum_final, 'Seems like the volume was not updated correctly. Nothing changed in the volume after the optimization step.'
+
+
 # @pytest.mark.parametrize('volume_init_mode', [
 #         'random',
 #         'ellipsoid',

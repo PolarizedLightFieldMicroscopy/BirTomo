@@ -30,10 +30,14 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter
 )
-from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
+from VolumeRaytraceLFM.utils.error_handling import (
+    check_for_inf_or_nan,
+    check_for_negative_values,
+    check_for_negative_values_dict
+)
 from VolumeRaytraceLFM.utils.json_utils import ComplexArrayEncoder
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
-from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr
+from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr, print_moments
 
 
 DEBUG = False
@@ -254,11 +258,17 @@ class Reconstructor:
         if self.remove_large_arrs and self.apply_volume_mask:
             raise ValueError("Cannot remove large arrays and apply mask to" \
                                 "volume gradient at the same time.")
+        self.two_optic_axis_components = self.iteration_params.get(
+            'two_optic_axis_components', False)
 
         # Basic mask setup
         self.voxel_mask_setup()
         # Mask initial guess of volume
         self.apply_mask_to_volume(self.volume_pred)
+
+        self.mla_rays_at_once = self.iteration_params.get('mla_rays_at_once', False)
+        if self.mla_rays_at_once:
+            self.rays.prepare_for_all_rays_at_once()
 
         if self.remove_large_arrs:
             del self.birefringence_simulated
@@ -408,6 +418,7 @@ class Reconstructor:
     def optimizer_setup(self, volume_estimation, training_params):
         """Setup optimizer."""
         trainable_parameters = volume_estimation.get_trainable_variables()
+        trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
         optimizer_type = training_params.get('optimizer', 'Adam')
         if optimizer_type == 'LBFGS':
             parameters = trainable_parameters
@@ -415,8 +426,8 @@ class Reconstructor:
             assert len(trainable_parameters[0].shape) == 2, "1st parameter should be the optic axis"
             assert len(trainable_parameters[1].shape) == 1, "2nd parameter should be the birefringence."
             # The learning rates specified are starting points for the optimizer.
-            parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis']},
-                        {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence']}]
+            parameters = [{'params': trainable_parameters[0], 'lr': training_params['lr_optic_axis'], 'name': trainable_vars_names[0]},
+                        {'params': trainable_parameters[1], 'lr': training_params['lr_birefringence'], 'name': trainable_vars_names[1]}]
         optimizers = {
             'Adam': lambda params: torch.optim.Adam(params),
             'SGD': lambda params: torch.optim.SGD(params, nesterov=True, momentum=0.7),
@@ -458,6 +469,8 @@ class Reconstructor:
             with open(dict_save_path, 'wb') as f:
                 pickle.dump(vox_indices_by_mla_idx, f)
             print(f"Saving voxel indices by MLA index to {dict_save_path}")
+        if DEBUG:
+            check_for_negative_values_dict(vox_indices_by_mla_idx)
 
         print("Collecting the set of voxels that are reached by the rays.")
         start_time = time.perf_counter()
@@ -466,7 +479,9 @@ class Reconstructor:
         # vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
         vox_set = set(self.rays.identify_voxels_at_least_one_nonzero_ret())
         # Excluding voxels that are a part of multiple zero-retardance rays
-        vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+        vox_list_excluding = self.rays.identify_voxels_zero_ret_lenslet()
+        if DEBUG:
+            check_for_negative_values(vox_list_excluding)
         filtered_vox_list = list(vox_set - set(vox_list_excluding))
         sorted_vox_list = sorted(filtered_vox_list)
         print(f"Masking out voxels except for {len(sorted_vox_list)} voxels. " +
@@ -551,11 +566,31 @@ class Reconstructor:
             optic_axis /= norms
         return
 
+    def fill_optaxis_component(self, volume):
+        """Method to fill the axial component of the optic axis
+        with the square root of the remaining components.
+        
+        Also, here the updated optic axis is stored in the volume object.
+        """
+        with torch.no_grad():
+            optic_axis = volume.optic_axis_active
+            optic_axis[1:, :] = volume.optic_axis_planar
+            square_sum = torch.sum(optic_axis[1:, :]**2, dim=0)
+            optic_axis[0, :] = torch.sqrt(1 - square_sum)
+            optic_axis[0, torch.isnan(optic_axis[0, :])] = 0
+        return
+
     # @profile # to see the memory breakdown of the function
     def one_iteration(self, optimizer, volume_estimation):
-        optimizer.zero_grad()
+        if not self.apply_volume_mask:
+            optimizer.zero_grad()
+        else:
+            # improving memory usage by setting gradients to None
+            optimizer.zero_grad(set_to_none=True)
         # Apply forward model and compute loss
-        img_list = self.rays.ray_trace_through_volume(volume_estimation, intensity=self.intensity_bool)
+        img_list = self.rays.ray_trace_through_volume(
+            volume_estimation, intensity=self.intensity_bool,
+            all_rays_at_once=self.mla_rays_at_once)
         # In case the entire volume is needed for the loss computation:
         total_vol_needed = False
         if total_vol_needed and self.volume_pred.indices_active is not None:
@@ -585,8 +620,11 @@ class Reconstructor:
         optimizer.step()
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
         adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
+        print_moments(optimizer)
 
         # Keep the optic axis on the unit sphere
+        if self.two_optic_axis_components:
+            self.fill_optaxis_component(volume_estimation)
         self.stay_on_sphere(volume_estimation)
 
         # TODO: fix so that measured images do not need to be placeholder for the predicted images
@@ -607,8 +645,6 @@ class Reconstructor:
                 self.loss_data_term_list.append(data_term.item())
                 self.loss_reg_term_list.append(regularization_term.item())
                 self.adjusted_lrs_list.append(adjusted_lrs)
-
-
         else:
             [ret_image_current, azim_image_current] = img_list
             self.store_results(
@@ -619,10 +655,21 @@ class Reconstructor:
         return
 
     def print_grad_info(self, volume_estimation):
-        print("Delta_n requires_grad:", volume_estimation.Delta_n.requires_grad,
-              "birefringence_active requires_grad:", volume_estimation.birefringence_active.requires_grad)
-        print("Gradient for Delta_n:", volume_estimation.Delta_n.grad)
-        print("Gradient for birefringence_active:", volume_estimation.birefringence_active.grad)
+        if False:
+            print("Delta_n requires_grad:",
+                volume_estimation.Delta_n.requires_grad,
+                "birefringence_active requires_grad:",
+                volume_estimation.birefringence_active.requires_grad)
+            if volume_estimation.Delta_n.grad is not None:
+                print("Gradient for Delta_n (up to 10 values):",
+                    volume_estimation.Delta_n.grad[:10])
+            else:
+                print("Gradient for Delta_n is None")
+        if volume_estimation.birefringence_active.grad is not None:
+            print("Gradient for birefringence_active (up to 10 values):",
+                  volume_estimation.birefringence_active.grad[:10])
+        else:
+            print("Gradient for birefringence_active is None")
 
     def store_results(self, ret_image_current, azim_image_current,
                       volume_estimation, loss, data_term,
@@ -695,7 +742,6 @@ class Reconstructor:
             gc.collect()
         return
 
-
     def __visualize_and_update_streamlit(self, progress_bar, ep, n_epochs, recon_img_plot, my_loss):
         import pandas as pd
         percent_complete = int(ep / n_epochs * 100)
@@ -760,10 +806,25 @@ class Reconstructor:
         the mask. These attributes are intended for optimization."""
         active_indices = torch.where(mask)[0]
         volume.indices_active = active_indices
-        idx_dict = {index.item(): pos for pos, index in enumerate(active_indices)}
-        volume.active_idx_to_spatial_idx = idx_dict
-        volume.optic_axis_active = torch.nn.Parameter(volume.optic_axis[:, active_indices])
+        max_index = mask.size()[0]
+        idx_tensor = torch.full((max_index + 1,), -1, dtype=torch.long)
+        positions = torch.arange(len(active_indices), dtype=torch.long)
+        idx_tensor[active_indices] = positions
+        volume.active_idx2spatial_idx_tensor = idx_tensor
+        if self.two_optic_axis_components:
+            volume.optic_axis.requires_grad = False
+            volume.optic_axis_active = volume.optic_axis[:, active_indices]
+            volume.optic_axis_planar = torch.nn.Parameter(volume.optic_axis_active[1:, :])
+        else:
+            volume.optic_axis_active = torch.nn.Parameter(volume.optic_axis[:, active_indices])
         volume.birefringence_active = torch.nn.Parameter(volume.Delta_n[active_indices])
+
+    def prepare_volume_for_recon(self, volume):
+        if self.two_optic_axis_components:
+            self.fill_optaxis_component(volume)
+        self.stay_on_sphere(volume)
+        check_for_inf_or_nan(volume.birefringence_active)
+        check_for_inf_or_nan(volume.optic_axis_active)
 
     def reconstruct(self, use_streamlit=False, plot_live=False, all_prop_elements=False):
         """
@@ -778,7 +839,10 @@ class Reconstructor:
             param_list = ['Delta_n', 'optic_axis']
         else:
             self.create_parameters_from_mask(self.volume_pred, self.mask)
-            param_list = ['birefringence_active', 'optic_axis_active']
+            if self.two_optic_axis_components:
+                param_list = ['birefringence_active', 'optic_axis_planar']
+            else:
+                param_list = ['birefringence_active', 'optic_axis_active']
             if self.remove_large_arrs:
                 del self.volume_pred.Delta_n
                 del self.volume_pred.optic_axis
@@ -791,6 +855,10 @@ class Reconstructor:
         self.specify_variables_to_learn(param_list)
 
         optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
+        optax_betas = self.iteration_params.get('optax_betas', (0.9, 0.999))
+        bir_betas = self.iteration_params.get('bir_betas', (0.9, 0.999))
+        optimizer.param_groups[0]['betas'] = tuple(optax_betas)
+        optimizer.param_groups[1]['betas'] = tuple(bir_betas)
         figure = setup_visualization(window_title=self.recon_directory, plot_live=plot_live)
         self._create_regularization_terms_csv()
 
@@ -804,11 +872,12 @@ class Reconstructor:
             my_3D_plot = st.empty()  # set up a place holder for the 3D plot
             progress_bar = st.progress(0)
 
+        self.prepare_volume_for_recon(self.volume_pred)
         # Iterations
         for ep in tqdm(range(1, n_epochs + 1), "Minimizing"):
-            check_for_inf_or_nan(self.volume_pred.birefringence_active)
-            check_for_inf_or_nan(self.volume_pred.optic_axis_active)
             self.one_iteration(optimizer, self.volume_pred)
+            if ep % 5 == 0 and DEBUG:
+                self.rays.print_timing_info()
 
             if ep % 20 == 0 and self.intensity_bool:
                 with torch.no_grad():
@@ -816,7 +885,6 @@ class Reconstructor:
                 self.ret_img_pred = ret_image_current.detach().cpu().numpy()
                 self.azim_img_pred = azim_image_current.detach().cpu().numpy()
     
-            # TODO: verify that this damp mask is appropriate
             azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0
             if use_streamlit:

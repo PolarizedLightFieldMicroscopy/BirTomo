@@ -11,6 +11,10 @@ from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count
+from VolumeRaytraceLFM.combine_lenslets import (
+    gather_voxels_of_rays_pytorch_batch,
+    calculate_offsets_vectorized
+)
 # from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
 
 
@@ -61,6 +65,7 @@ class BirefringentVolume(BirefringentElement):
                                                  )
         self._initialize_volume_attributes(optical_info, Delta_n, optic_axis)
         self.indices_active = None
+        self.optic_axis_planar = None
 
         # Check if a volume creation was requested
         if volume_creation_args is not None:
@@ -233,6 +238,9 @@ class BirefringentVolume(BirefringentElement):
 
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
+        if 'voxel_size_um' not in optical_info:
+            optical_info['voxel_size_um'] = [1, 1, 1]
+            print("Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned.")
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         [dz, dxy, dxy] = optical_info['voxel_size_um']
 
@@ -352,6 +360,9 @@ class BirefringentVolume(BirefringentElement):
 
         import plotly.graph_objects as go
         volume_shape = optical_info['volume_shape']
+        if 'voxel_size_um' not in optical_info:
+            optical_info['voxel_size_um'] = [1, 1, 1]
+            print("Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned.")
         volume_size_um = [optical_info['voxel_size_um'][i] * optical_info['volume_shape'][i] for i in range(3)]
         # Define grid
         coords = np.indices(np.array(voxels.shape)).astype(float)
@@ -928,7 +939,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             f"\nMLA_volume_geometry_ready={self.MLA_volume_geometry_ready}"
             f"\nvox_ctr_idx={self.vox_ctr_idx}"
             f"\nvoxel_span_per_ml={self.voxel_span_per_ml}"
-            f"\nray_valid_indices={self.ray_valid_indices}"
+            f"\nray_valid_indices[:, 0:3]={self.ray_valid_indices[:, 0:3]}"
             f"\nray_valid_indices_all={self.ray_valid_indices_all}"
             f"\nray_direction_basis[0][0]={self.ray_direction_basis[0][0]}"
             f"\nray_vol_colli_indices[0]={self.ray_vol_colli_indices[0]}"
@@ -1038,15 +1049,28 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                                                iix * n_pixels_per_ml]).unsqueeze(1)),
                         1)
         # Replicate ray info for all the microlenses
-        self.ray_vol_colli_lengths = nn.Parameter(
+        self.ray_vol_colli_lengths = torch.Tensor(
             self.ray_vol_colli_lengths.repeat(n_micro_lenses ** 2, 1)
             )
-        self.ray_direction_basis = nn.Parameter(
+        self.ray_direction_basis = torch.Tensor(
             self.ray_direction_basis.repeat(1, n_micro_lenses ** 2, 1)
             )
 
         self.MLA_volume_geometry_ready = True
         return
+
+    def prepare_for_all_rays_at_once(self):
+        if self.MLA_volume_geometry_ready:
+            print("The geometry for the MLA is already prepared.")
+        else:
+            self.use_lenslet_based_filtering = False
+            if self.vox_indices_by_mla_idx == {}:
+                self.store_shifted_vox_indices()
+            self.create_colli_indices_all()
+            self.create_ray_valid_indices_all()
+            self.replicate_ray_info_each_microlens()
+            self.MLA_volume_geometry_ready = True
+            print(f"Prepared geometry for all rays at once.")
 
     def store_shifted_vox_indices(self):
         """Store the shifted voxel indices for each microlens in a
@@ -1098,11 +1122,64 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     )
                 if mla_index not in self.vox_indices_by_mla_idx.keys():
                         self.vox_indices_by_mla_idx[mla_index] = vox_list
-        
         return self.vox_indices_by_mla_idx
 
+    def store_shifted_vox_indices_all(self):
+        """In progress: Store the shifted voxel indices for all
+        microlenses at once to be a more computationally efficient
+        version of store_shifted_vox_indices()."""
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_voxels_per_ml = self.optical_info['n_voxels_per_ml']
+        collision_indices = self.ray_vol_colli_indices
+        offsets, mla_indices = calculate_offsets_vectorized(
+            n_micro_lenses, n_voxels_per_ml, self.vox_ctr_idx)
+        vox_lists = gather_voxels_of_rays_pytorch_batch(
+            offsets, collision_indices, self.optical_info['volume_shape'], self.backend)
+        for idx, mla_index in enumerate(map(tuple, mla_indices)):
+            self.vox_indices_by_mla_idx[mla_index] = vox_lists[idx]
+        return self.vox_indices_by_mla_idx
+
+    def create_colli_indices_all(self):
+        """Gather the collision indices for all microlenses at once."""
+        vox_indices_by_mla_idx = self.vox_indices_by_mla_idx
+        giant_list = []
+        for key in vox_indices_by_mla_idx:
+            for sublist in vox_indices_by_mla_idx[key]:
+                giant_list.append(sublist)
+        self.vox_indices_ml_shifted_all = giant_list
+
+    def create_ray_valid_indices_all(self):
+        """Gather the valid ray indices for all microlenses at once."""
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        n_pixels_per_ml = self.optical_info['pixels_per_ml']
+        n_ml_half = floor(n_micro_lenses / 2.0)
+        self.ray_valid_indices_all = None
+        for ml_ii_idx in range(n_micro_lenses):
+            ml_ii = ml_ii_idx - n_ml_half
+            for ml_jj_idx in range(n_micro_lenses):
+                ml_jj = ml_jj_idx - n_ml_half
+                if self.ray_valid_indices_all is None:
+                    self.ray_valid_indices_all = self.ray_valid_indices.clone()
+                else:
+                    self.ray_valid_indices_all = torch.cat(
+                        (self.ray_valid_indices_all,
+                        self.ray_valid_indices + torch.tensor(
+                            [ml_jj_idx * n_pixels_per_ml,
+                             ml_ii_idx * n_pixels_per_ml]).unsqueeze(1)), 
+                        1)
+
+    def replicate_ray_info_each_microlens(self):
+        """Replicate ray info for all the microlenses"""
+        n_micro_lenses = self.optical_info['n_micro_lenses']
+        self.ray_vol_colli_lengths = torch.Tensor(
+            self.ray_vol_colli_lengths.repeat(n_micro_lenses ** 2, 1)
+            )
+        self.ray_direction_basis = torch.Tensor(
+            self.ray_direction_basis.repeat(1, n_micro_lenses ** 2, 1)
+            )
+
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None,
-                                 all_rays_at_once=True, intensity=False):
+                                 all_rays_at_once=False, intensity=False):
         """ This function forward projects a whole volume, by iterating through
         the volume in front of each microlens in the system. We compute an offset
         (current_offset) that shifts the volume indices reached by each ray.
@@ -1133,25 +1210,29 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self._validate_volume_size(min_required_volume_size, volume_shape)
 
         # Traverse volume for every ray, and generate intensity images or retardance and azimuth images
-
-        full_img_list = [None] * 5
-        odd_mla_shift = n_micro_lenses % 2 # shift for odd number of microlenses
-        row_iterable = self._get_row_iterable(n_ml_half, odd_mla_shift)
-        # Iterate over each row of microlenses (y direction)
-        for ml_ii_idx, ml_ii in enumerate(row_iterable):
-            # Initialize a list for storing concatenated images of the current row
-            full_img_row_list = [None] * 5
-            # Iterate over each column of microlenses in the current row (x direction)
-            for ml_jj_idx, ml_jj in enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)):
-                current_offset = self._calculate_current_offset(
-                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses)
-                img_list = self.generate_images(volume_in, current_offset,
-                                intensity, mla_index=(ml_jj_idx, ml_ii_idx))
-                # Concatenate the generated images with the images of the current row
-                full_img_row_list = self._concatenate_images(
-                    full_img_row_list, img_list, axis=0)
-            # Concatenate the row images with the full image list
-            full_img_list = self._concatenate_images(full_img_list, full_img_row_list, axis=1)
+        if all_rays_at_once:
+            if intensity:
+                raise NotImplementedError("Intensity images are not supported for all rays at once.")
+            full_img_list = self.ret_and_azim_images_mla_torch(volume_in)
+        else:
+            full_img_list = [None] * 5
+            odd_mla_shift = n_micro_lenses % 2 # shift for odd number of microlenses
+            row_iterable = self._get_row_iterable(n_ml_half, odd_mla_shift)
+            # Iterate over each row of microlenses (y direction)
+            for ml_ii_idx, ml_ii in enumerate(row_iterable):
+                # Initialize a list for storing concatenated images of the current row
+                full_img_row_list = [None] * 5
+                # Iterate over each column of microlenses in the current row (x direction)
+                for ml_jj_idx, ml_jj in enumerate(range(-n_ml_half, n_ml_half+odd_mla_shift)):
+                    current_offset = self._calculate_current_offset(
+                        ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses)
+                    img_list = self.generate_images(volume_in, current_offset,
+                                    intensity, mla_index=(ml_jj_idx, ml_ii_idx))
+                    # Concatenate the generated images with the images of the current row
+                    full_img_row_list = self._concatenate_images(
+                        full_img_row_list, img_list, axis=0)
+                # Concatenate the row images with the full image list
+                full_img_list = self._concatenate_images(full_img_list, full_img_row_list, axis=1)
         end_time_raytrace = time.perf_counter()
         self.times['ray_trace_through_volume'] += end_time_raytrace - start_time_raytrace
         return full_img_list
@@ -1416,7 +1497,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         start_time_prep = time.perf_counter()
         # Get the voxel indices for the provided microlens
         if self.use_lenslet_based_filtering:
-            # Mask out the rays that lead to nonzero pixels
+            # Mask out the rays that lead to zero pixels
             if False: # DEBUG
                 err_message = f"mla_index {mla_index} is not in nonzero_pixels_dict"
                 assert mla_index in self.nonzero_pixels_dict, err_message
@@ -1473,7 +1554,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 alt_props = False
                 if volume_in.indices_active is not None:
                     alt_props = True
-                Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(volume_in, vox, active_props_only=alt_props)
+                Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
+                    volume_in, vox, active_props_only=alt_props)
 
                 # Subset of precomputed ray directions that interact with voxels in this step
                 filtered_ray_directions = ray_dir_basis[:, rays_with_voxels, :]
@@ -1514,11 +1596,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         provided voxel indices. This function is used to retrieve the properties
         of the voxels that each ray segment interacts with."""
         if active_props_only:
-            idx_dict = volume.active_idx_to_spatial_idx
-            indices = torch.tensor([idx_dict.get(v, -1) for v in vox], dtype=torch.long)
+            idx_tensor = volume.active_idx2spatial_idx_tensor
+            vox_tensor = torch.tensor(vox, dtype=torch.long)  # Ensure vox is a tensor
+            indices = idx_tensor[vox_tensor]
             safe_indices = torch.clamp(indices, min=0)
-            Delta_n = torch.where(indices >= 0, volume.birefringence_active[safe_indices], torch.tensor(0.0, requires_grad=True))
-            opticAxis = torch.where(indices >= 0, volume.optic_axis_active[:, safe_indices], torch.tensor(0.0, requires_grad=True))
+            Delta_n = torch.where(indices >= 0, volume.birefringence_active[safe_indices], torch.tensor(0.0))
+            if volume.optic_axis_planar is not None:
+                opticAxis = torch.zeros((3, len(indices)), dtype=torch.get_default_dtype())
+                opticAxis[0, :] = torch.where(indices >= 0, volume.optic_axis_active[0, safe_indices], torch.tensor(0.0))
+                opticAxis[1:, :] = torch.where(indices >= 0, volume.optic_axis_planar[:, safe_indices], torch.tensor(0.0))
+            else:
+                opticAxis = torch.where(indices >= 0, volume.optic_axis_active[:, safe_indices], torch.tensor(0.0))
         else:
             Delta_n = volume.Delta_n[vox]
             opticAxis = volume.optic_axis[:, vox]
@@ -1585,10 +1673,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.optical_info['volume_shape']) for ix in range(len(vox))]
         for vox in collision_indices
         ]
-
         return list_of_voxel_lists
 
-    def _count_vox_raytrace_occurrences(self, zero_ret_voxels=False, nonzero_ret_voxels=False):
+    def _count_vox_raytrace_occurrences(self, zero_ret_voxels=False,
+            nonzero_ret_voxels=False, zero_ret_entire_lenslet_voxels=False):
         """Counts occurances of voxels from ray tracing.
         Iterates over micro-lenses, aggregates voxel indices,
         and counts occurrences. Optionally filters for voxels
@@ -1623,7 +1711,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     # Find the voxels that lead to a zero pixel in the retardance image
                     zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
                     vox_indices = zero_ret_vox_indices
-
+                elif zero_ret_entire_lenslet_voxels:
+                    # Get the boolean mask for the pixels that are not zero
+                    nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
+                    # Find the voxels that lead to a zero retardance lenslet image
+                    if np.all(~nonzero_mask):
+                        # Find the voxels that lead to a zero pixel in the retardance image
+                        zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
+                        vox_indices = zero_ret_vox_indices
+                    else:
+                        vox_indices = [[]]
                 elif nonzero_ret_voxels:
                     nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
                     # Find the voxels that lead to a non-zero pixel in the retardance image
@@ -1641,6 +1738,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             print("DEBUG: ", sorted([(key, count) for key, count in counts.items()]))
         vox_list = filter_keys_by_count(counts, 2)
         return vox_list
+
+    def identify_voxels_zero_ret_lenslet(self):
+        counts = self._count_vox_raytrace_occurrences(zero_ret_entire_lenslet_voxels=True)
+        if False: # DEBUG
+            print("DEBUG: ", sorted([(key, count) for key, count in counts.items()]))
+        vox_list = filter_keys_by_count(counts, 2)
+        return vox_list    
 
     def identify_voxels_at_least_one_nonzero_ret(self):
         counts = self._count_vox_raytrace_occurrences(nonzero_ret_voxels=True)
@@ -1787,7 +1891,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     image and one for the azimuth image.
         """
         # Fetch the number of pixels per microlens array from the optic configuration
-        pixels_per_ml = self.optic_config.mla_config.n_pixels_per_mla
+        pixels_per_ml = self.optical_info['pixels_per_ml']
 
         # Calculate Jones Matrices for all rays given the volume and microlens offset
         effective_jones = self.calc_cummulative_JM_of_ray(volume_in,
@@ -1968,29 +2072,57 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         else:
             if not torch.is_tensor(opticAxis):
                 opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
-            # Dot product of optical axis and 3 ray-direction vectors
-            OA_dot_rayDir = torch.linalg.vecdot(opticAxis, rayDir)
+            
+            operate_on_all = False
+            if operate_on_all:
+                # Dot product of optical axis and 3 ray-direction vectors
+                OA_dot_rayDir = torch.linalg.vecdot(opticAxis, rayDir)
+                normalize_proj = False
+                if normalize_proj:
+                    normAxis = torch.linalg.norm(opticAxis, axis=1)
+                    proj_along_ray = torch.full_like(OA_dot_rayDir[0,:], fill_value=1)
+                    proj_along_ray[normAxis != 0] = OA_dot_rayDir[0,:][normAxis != 0] / normAxis[normAxis != 0]
+                    # OA_dot_rayDir[0,:][normAxis == 0] = 1
+                    # Azimuth is the angle of the slow axis of retardance.
+                    azim_unadj = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
+                    ret = abs(Delta_n) * (1 - proj_along_ray ** 2) * torch.pi * ell / wavelength
+                else:
+                    azim_unadj = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
+                    ret = abs(Delta_n) * (1 - (OA_dot_rayDir[0,:]) ** 2) * torch.pi * ell / wavelength
 
-            normalize_proj = False
-            if normalize_proj:
-                normAxis = torch.linalg.norm(opticAxis, axis=1)
-                proj_along_ray = torch.full_like(OA_dot_rayDir[0,:], fill_value=1)
-                proj_along_ray[normAxis != 0] = OA_dot_rayDir[0,:][normAxis != 0] / normAxis[normAxis != 0]
-                # OA_dot_rayDir[0,:][normAxis == 0] = 1
-                # Azimuth is the angle of the slow axis of retardance.
-                azim_unadj = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
-                ret = abs(Delta_n) * (1 - proj_along_ray ** 2) * torch.pi * ell / wavelength
+                # TODO: check how the gradients are affected--might be a discontinuity
+                adjust_azim = True
+                if adjust_azim is True:
+                    azim = azim_unadj
+                    azim[Delta_n < 0] += torch.tensor(np.pi)
+                else:
+                    azim = azim_unadj
             else:
-                azim_unadj = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
-                ret = abs(Delta_n) * (1 - (OA_dot_rayDir[0,:]) ** 2) * torch.pi * ell / wavelength
+                pi_tensor = torch.tensor(np.pi, device=Delta_n.device, dtype=Delta_n.dtype)
+                nonzero_indices = Delta_n.nonzero()
+                full_ret = torch.zeros_like(Delta_n, device=Delta_n.device, dtype=Delta_n.dtype)
+                full_azim = torch.zeros_like(Delta_n, device=Delta_n.device, dtype=Delta_n.dtype)
+                if nonzero_indices.numel() > 0:
+                    # Filter data for non-zero Delta_n
+                    nonzero_Delta_n = Delta_n[nonzero_indices]
+                    nonzero_opticAxis = opticAxis[nonzero_indices, :]
+                    nonzero_rayDir = rayDir[:, nonzero_indices, :]
+                    nonzero_ell = ell[nonzero_indices]
 
-            # TODO: check how the gradients are affected--might be a discontinuity
-            adjust_azim = True
-            if adjust_azim is True:
-                azim = azim_unadj.clone()
-                azim[Delta_n < 0] += torch.tensor(np.pi)
-            else:
-                azim = azim_unadj
+                    OA_dot_rayDir = torch.linalg.vecdot(nonzero_opticAxis, nonzero_rayDir)
+                    azim = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
+                    scalar = pi_tensor / wavelength
+                    ret = abs(nonzero_Delta_n) * (1 - (OA_dot_rayDir[0,:]) ** 2) * nonzero_ell * scalar
+
+                    neg_delta_mask = nonzero_Delta_n < 0
+                    azim[neg_delta_mask] += pi_tensor
+
+                    full_ret[nonzero_indices] = ret
+                    full_azim[nonzero_indices] = azim
+                end_time = time.perf_counter()
+                self.times['calc_ret_azim_for_jones'] += end_time - start_time
+                return full_ret, full_azim
+
         end_time = time.perf_counter()
         self.times['calc_ret_azim_for_jones'] += end_time - start_time
         return ret, azim

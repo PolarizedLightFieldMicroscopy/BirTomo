@@ -14,7 +14,12 @@ def normalize_retardance(ret_image_polscope, ret_ceiling, wavelength=550):
         ret_image (np.array): the normalized retardance image in units of radians
     '''
     # intensity to nanometers
-    max_pixel_value = 65535  # for 16-bit images
+    if ret_image_polscope.dtype == 'uint8':
+        max_pixel_value = 255  # for 8-bit images
+    elif ret_image_polscope.dtype == 'uint16':
+        max_pixel_value = 65535  # for 16-bit images
+    else:
+        raise ValueError("Retardance data type must be uint8 or uint16")
     ret_image_nm = (ret_image_polscope / max_pixel_value) * ret_ceiling
     # nanometers to radians
     ret_image = (ret_image_nm / wavelength) * (2 * np.pi)
@@ -31,7 +36,12 @@ def normalize_azimuth(azim_image_polscope):
         azim_image (np.array): the normalized azimuth image in units of radians
     '''
     # intensity to degrees
-    max_pixel_value = 18000  # for 16-bit images
+    if azim_image_polscope.dtype == 'uint8':
+        max_pixel_value = 180  # for 8-bit images
+    elif azim_image_polscope.dtype == 'uint16':
+        max_pixel_value = 18000  # for 16-bit images
+    else:
+        raise ValueError("Azimuth image data type must be uint8 or uint16")
     azim_image_degrees = azim_image_polscope / (max_pixel_value / 180)
     # degrees to radians
     azim_image = azim_image_degrees * np.pi / 180

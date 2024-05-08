@@ -129,7 +129,7 @@ def recon():
 
 def recon_sphere():
     optical_info = setup_optical_parameters(
-        "config_settings/optical_config_sphere.json")
+        "config_settings/basic_adjusted/optical_config_sphere3.json")
     postfix = get_forward_img_str_postfix(optical_info)
     forward_img_str = 'sphere3' + postfix + '.npy'
     simulate = False
@@ -137,7 +137,6 @@ def recon_sphere():
         optical_system = {'optical_info': optical_info}
         # Initialize the forward model. Raytracing is performed as part of the initialization.
         simulator = ForwardModel(optical_system, backend=BACKEND)
-        # Volume creation
         volume_GT = BirefringentVolume(
             backend=BACKEND,
             optical_info=optical_info,
@@ -166,17 +165,20 @@ def recon_sphere():
     # recon_optical_info["volume_shape"] = [33, 75, 75]
     iteration_params = setup_iteration_parameters(
         "config_settings/iter_config_sphere.json")
-    initial_volume = BirefringentVolume(
-        backend=BackEnds.PYTORCH,
-        optical_info=recon_optical_info,
-        volume_creation_args=volume_args.random_args
-    )
-    # init_volume_path = "reconstructions/saved/2024-03-18_22-55-06_sphere3_abscos/config_parameters/initial_volume.h5"
-    # initial_volume = BirefringentVolume.init_from_file(
-    #     init_volume_path, BackEnds.PYTORCH, recon_optical_info)
-    recon_directory = create_unique_directory("reconstructions", postfix='sphere3')
+    # initial_volume = BirefringentVolume(
+    #     backend=BackEnds.PYTORCH,
+    #     optical_info=recon_optical_info,
+    #     volume_creation_args=volume_args.random_args
+    # )
+    # optical_info['voxel_size_um'] = initial_volume.optical_info['voxel_size_um']
+    # visualize_volume(initial_volume, optical_info)
+    init_volume_path = "objects/sphere3/random_11_30_30.h5"
+    initial_volume = BirefringentVolume.init_from_file(
+        init_volume_path, BackEnds.PYTORCH, recon_optical_info)
+    iteration_params["initial volume path"] = init_volume_path
+    parent_dir = os.path.join("reconstructions", "sphere3", "debug")
+    recon_directory = create_unique_directory(parent_dir, postfix='planar')
     if not simulate:
-        # volume_GT = initial_volume
         volume_GT = BirefringentVolume(
             backend=BACKEND,
             optical_info=optical_info,
@@ -458,7 +460,7 @@ def recon_voxel():
             optical_info=recon_optical_info,
             volume_creation_args=volume_args.random_args
         )
-    recon_directory = create_unique_directory("reconstructions", postfix='vox')
+    recon_directory = create_unique_directory("reconstructions/voxel", postfix='vox')
     if not simulate:
         volume_GT = initial_volume
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
@@ -478,7 +480,9 @@ def recon_voxel():
     # with profiler.profile(profile_memory=True, use_cuda=True) as prof:
     #     reconstructor = Reconstructor(recon_config, output_dir=recon_directory, apply_volume_mask=True)
     # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
-    reconstructor.reconstruct(all_prop_elements=False, plot_live=False)
+    reconstructor.reconstruct(all_prop_elements=False, plot_live=True)
+    print(f"Raytracing time: {reconstructor.rays.times['ray_trace_through_volume'] * 1000:.2f}")
+    reconstructor.rays.print_timing_info()
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
