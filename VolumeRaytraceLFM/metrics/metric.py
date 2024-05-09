@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from VolumeRaytraceLFM.metrics.data_fidelity import (
     poisson_loss,
     gaussian_noise_loss,
+    complex_mse_loss
 )
 from VolumeRaytraceLFM.metrics.regularization import (
     l2_bir,
@@ -83,6 +84,19 @@ class PolarimetricLossFunction:
         sine_term = ret * torch.sin(2 * azim)
         return cosine_term, sine_term
 
+    def transform_ret_azim_to_euler_form(self, ret, azim):
+        """Transform the retardance (ret) and azimuth (azim) into Euler form.
+        Args:
+        - ret (torch.Tensor): A tensor containing the retardance image.
+        - azim (torch.Tensor): A tensor containing the azimuth image.
+        Returns:
+        - (torch.Tensor): A tensors representing Euler's formula
+        """
+        ret = ret.to(torch.cfloat)
+        azim = azim.to(torch.cfloat)
+        euler = ret * torch.exp(2 * 1j * azim)
+        return euler
+
     def vector_loss(self, ret_pred, azim_pred):
         """Compute the vector loss"""
         ret_gt = self.target_retardance
@@ -92,6 +106,15 @@ class PolarimetricLossFunction:
         loss_cos = F.mse_loss(cos_pred, cos_gt)
         loss_sin = F.mse_loss(sin_pred, sin_gt)
         loss = loss_cos + loss_sin
+        return loss
+
+    def euler_loss(self, ret_pred, azim_pred):
+        """Compute the vector loss"""
+        ret_gt = self.target_retardance
+        azim_gt = self.target_orientation
+        euler_gt = self.transform_ret_azim_to_euler_form(ret_gt, azim_gt)
+        euler_pred = self.transform_ret_azim_to_euler_form(ret_pred, azim_pred)
+        loss = complex_mse_loss(euler_gt, euler_pred)
         return loss
 
     def intensity_loss(self, intensity_list_pred):
@@ -115,6 +138,9 @@ class PolarimetricLossFunction:
         if first_word == 'vector':
             ret_pred, azim_pred = args[0]
             data_loss = self.vector_loss(ret_pred, azim_pred)
+        elif first_word == 'euler':
+            ret_pred, azim_pred = args[0]
+            data_loss = self.euler_loss(ret_pred, azim_pred)
         elif first_word == 'intensity':
             intensity_list_gt = self.target_intensity_list
             intensity_list_pred = args[0]

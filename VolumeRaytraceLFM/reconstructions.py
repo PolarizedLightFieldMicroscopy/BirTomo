@@ -38,6 +38,10 @@ from VolumeRaytraceLFM.utils.error_handling import (
 from VolumeRaytraceLFM.utils.json_utils import ComplexArrayEncoder
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
 from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr, print_moments
+from VolumeRaytraceLFM.volumes.optic_axis import (
+    fill_vector_based_on_nonaxial,
+    stay_on_sphere
+)
 
 
 DEBUG = False
@@ -551,19 +555,13 @@ class Reconstructor:
 
         return loss, data_term, regularization_term
 
-    def stay_on_sphere(self, volume):
-        """
-        Method to keep the optic axis on the unit sphere.
-        """
+    def keep_optic_axis_on_sphere(self, volume):
+        """Method to keep the optic axis on the unit sphere."""
         if volume.indices_active is not None:
             optic_axis = volume.optic_axis_active
         else:
             optic_axis = volume.optic_axis
-        with torch.no_grad():
-            norms = torch.norm(optic_axis, dim=0)
-            zero_norm_mask = norms == 0
-            norms[zero_norm_mask] = 1
-            optic_axis /= norms
+        optic_axis = stay_on_sphere(optic_axis)
         return
 
     def fill_optaxis_component(self, volume):
@@ -572,12 +570,7 @@ class Reconstructor:
         
         Also, here the updated optic axis is stored in the volume object.
         """
-        with torch.no_grad():
-            optic_axis = volume.optic_axis_active
-            optic_axis[1:, :] = volume.optic_axis_planar
-            square_sum = torch.sum(optic_axis[1:, :]**2, dim=0)
-            optic_axis[0, :] = torch.sqrt(1 - square_sum)
-            optic_axis[0, torch.isnan(optic_axis[0, :])] = 0
+        fill_vector_based_on_nonaxial(volume.optic_axis_active, volume.optic_axis_planar)
         return
 
     # @profile # to see the memory breakdown of the function
@@ -620,12 +613,13 @@ class Reconstructor:
         optimizer.step()
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
         adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
-        print_moments(optimizer)
+        if DEBUG:
+            print_moments(optimizer)
 
         # Keep the optic axis on the unit sphere
         if self.two_optic_axis_components:
             self.fill_optaxis_component(volume_estimation)
-        self.stay_on_sphere(volume_estimation)
+        self.keep_optic_axis_on_sphere(volume_estimation)
 
         # TODO: fix so that measured images do not need to be placeholder for the predicted images
         if self.intensity_bool:
@@ -822,7 +816,7 @@ class Reconstructor:
     def prepare_volume_for_recon(self, volume):
         if self.two_optic_axis_components:
             self.fill_optaxis_component(volume)
-        self.stay_on_sphere(volume)
+        self.keep_optic_axis_on_sphere(volume)
         check_for_inf_or_nan(volume.birefringence_active)
         check_for_inf_or_nan(volume.optic_axis_active)
 

@@ -49,3 +49,12 @@ def cosine_similarity_loss(vector_pred, vector_gt):
     cos_sim = F.cosine_similarity(vector_pred, vector_gt, dim=-1)
     loss = 1 - cos_sim
     return loss.mean()
+
+
+def complex_mse_loss(output, target):
+    # Compute the element-wise difference and
+    #   then the squared magnitude of the difference
+    diff = output - target
+    squared_magnitude = torch.abs(diff)**2
+    mse_loss = torch.mean(squared_magnitude)
+    return mse_loss

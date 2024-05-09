@@ -189,7 +189,8 @@ class ForwardModel:
         if not os.path.exists(self.savedir):
             os.makedirs(self.savedir)
 
-    def forward_model(self, volume: BirefringentVolume, intensity=False):
+    def forward_model(self, volume: BirefringentVolume,
+                      intensity=False, all_lenslets=False):
         """
         Compute the forward model for a given volume using the simulator's
         attributes. This function updates the instance parameters with the
@@ -210,8 +211,9 @@ class ForwardModel:
             self.img_list (list of np.arrays):
                 List of intensity images, created only if 'intensity' is True.
         """
-        ret_image, azim_image = self.rays.ray_trace_through_volume(volume)
-        print("Retardance and azimuth images computed with LC-PolScope setup")
+        ret_image, azim_image = self.rays.ray_trace_through_volume(
+                                    volume, all_rays_at_once=all_lenslets)
+        # print("Retardance and azimuth images computed with LC-PolScope setup")
         self.ret_img = ret_image
         self.azim_img = azim_image
 
