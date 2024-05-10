@@ -1,5 +1,6 @@
 import torch
 import copy
+from math import floor
 
 def get_region_of_ones_shape(mask):
     """
@@ -143,3 +144,28 @@ def upscale_voxel_resolution(volume, upscale_factor):
     vol_shape_final = list(vol.optical_info['volume_shape'])
     print(f"Volume shape upscaled from {vol_shape_og} to {vol_shape_final}.")
     return vol
+
+
+def light_field_to_1D(light_field, n_micro_lenses, pixels_per_ml):
+    """
+    Converts a 4D light field tensor to a 1D tensor.
+    Args:
+        light_field (torch.Tensor): 4D light field tensor.
+    Returns:
+        torch.Tensor: 1D tensor.
+    """
+    n_ml_half = floor(n_micro_lenses / 2.0)
+    lenslet_list = []
+    for ml_ii_idx in range(n_micro_lenses):
+        ml_ii = ml_ii_idx - n_ml_half
+        for ml_jj_idx in range(n_micro_lenses):
+            ml_jj = ml_jj_idx - n_ml_half
+            lenslet = light_field[
+                ml_ii_idx * pixels_per_ml:(ml_ii_idx + 1) * pixels_per_ml,
+                ml_jj_idx * pixels_per_ml:(ml_jj_idx + 1) * pixels_per_ml
+            ]
+            lenslet_list.append(lenslet.flatten())
+
+    # Concatenate all the lenslets to form a single 1D array
+    light_field_1D = torch.cat(lenslet_list)
+    return light_field_1D
