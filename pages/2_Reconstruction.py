@@ -339,7 +339,7 @@ if st.button("**Reconstruct birefringent volume!**"):
     # Move variables to the gpu if available
     volume_estimation = volume_estimation.to(device)
     my_volume = my_volume.to(device)
-    rays_est = rays_est.to(device)
+    rays_est = rays_est.to_device(device)
 
     # Indicate to this object that we are going to optimize Delta_n and optic_axis
     volume_estimation.members_to_learn.append('Delta_n')

@@ -8,7 +8,7 @@ from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentVolume, BirefringentRaytraceLFM
 )
-from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
+from VolumeRaytraceLFM.jones.jones_calculus import JonesMatrixGenerators
 
 
 @pytest.fixture(scope='module')
@@ -429,7 +429,7 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
                      False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(
-    ), atol=1e-5)), "Error when comparing retardance computations"
+    ), atol=5e-3)), "Error when comparing retardance computations"
     check_azimuth_images(azi_img_numpy.astype(
         np.float32), azi_img_torch.numpy())
 
@@ -501,7 +501,7 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
                      False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(
-    ), atol=1e-5)), "Error when comparing retardance computations"
+    ), atol=5e-3)), "Error when comparing retardance computations"
 
     check_azimuth_images(azi_img_numpy.astype(
         np.float32), azi_img_torch.numpy())

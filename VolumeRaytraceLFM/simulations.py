@@ -12,7 +12,7 @@ from VolumeRaytraceLFM.visualization.plotting_ret_azim import (
 from VolumeRaytraceLFM.visualization.plotting_intensity import (
     plot_intensity_images
 )
-from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
+from VolumeRaytraceLFM.jones.jones_calculus import JonesMatrixGenerators
 
 
 class ForwardModel:

@@ -46,7 +46,7 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
 
 DEBUG = False
 PRINT_GRADIENTS = False
-PRINT_TIMING_INFO = False
+PRINT_TIMING_INFO = True
 
 if DEBUG:
     print("Debug mode is on.")

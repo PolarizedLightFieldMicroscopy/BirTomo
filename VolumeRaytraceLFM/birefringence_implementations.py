@@ -9,7 +9,14 @@ from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
-from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
+from VolumeRaytraceLFM.jones.jones_calculus import JonesMatrixGenerators, JonesVectorGenerators
+from VolumeRaytraceLFM.jones.eigenanalysis import (
+    retardance_from_su2,
+    retardance_from_su2_single,
+    retardance_from_su2_numpy,
+    azimuth_from_jones_torch,
+    azimuth_from_jones_numpy
+)
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors
 from VolumeRaytraceLFM.combine_lenslets import (
     gather_voxels_of_rays_pytorch_batch,
@@ -1356,17 +1363,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         '''Phase delay introduced between the fast and slow axis in a Jones matrix'''
         start_time = time.perf_counter()
         if self.backend == BackEnds.NUMPY:
-            e1, e2 = np.linalg.eigvals(jones)
-            phase_diff = np.angle(e1) - np.angle(e2)
-            retardance = np.abs(phase_diff)
+            retardance = retardance_from_su2_numpy(jones)
         elif self.backend == BackEnds.PYTORCH:
-            x = torch.linalg.eigvals(jones)
-            if jones.ndim == 2:
-                # jones is a single 2x2 matrix
-                retardance = (torch.angle(x[1]) - torch.angle(x[0])).abs()
-            elif jones.ndim == 3:
+            if jones.ndim == 3:
                 # jones is a batch of 2x2 matrices
-                retardance = (torch.angle(x[:, 1]) - torch.angle(x[:, 0])).abs()
+                retardance = retardance_from_su2(jones)
+            elif jones.ndim == 2:
+                # jones is a single 2x2 matrix
+                retardance = retardance_from_su2_single(jones)
             else:
                 raise ValueError("Jones matrix must be either a 2x2 matrix or a batch of 2x2 matrices.")
             if DEBUG:
@@ -1381,60 +1385,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         '''Rotation angle of the fast axis (neg phase)'''
         start_time = time.perf_counter()
         if self.backend == BackEnds.NUMPY:
-            diag_sum = jones[0, 0] + jones[1, 1]
-            diag_diff = jones[1, 1] - jones[0, 0]
-            off_diag_sum = jones[0, 1] + jones[1, 0]
-            a = np.imag(diag_diff / diag_sum)
-            b = np.imag(off_diag_sum / diag_sum)
-            if np.isclose(np.abs(a), 0.0) and np.isclose(np.abs(b), 0.0):
-                azimuth = np.pi / 2
-            else:
-                azimuth = np.arctan2(a, b) / 2 + np.pi / 2
-            # if np.isclose(azimuth,np.pi):
-            #     azimuth = 0.0
+            azimuth = azimuth_from_jones_numpy(jones)
         elif self.backend == BackEnds.PYTORCH:
-            if jones.ndim == 2:
-                # jones is a single 2x2 matrix
-                diag_sum = jones[0, 0] + jones[1, 1]
-                diag_diff = jones[1, 1] - jones[0, 0]
-                off_diag_sum = jones[0, 1] + jones[1, 0]     
-            elif jones.ndim == 3:
-                # jones is a batch of 2x2 matrices           
-                diag_sum = (jones[:, 0, 0] + jones[:, 1, 1])
-                diag_diff = (jones[:, 1, 1] - jones[: ,0, 0])
-                off_diag_sum = jones[:, 0, 1] + jones[:, 1, 0]
-
-            a = (diag_diff / diag_sum).imag
-            b = (off_diag_sum / diag_sum).imag
-
-            # atan2 with zero entries causes nan in backward, so let's filter them out
-
-            # Intermediate variables for zero tensor
-            zero_a = torch.tensor(0.0, dtype=a.dtype, device=a.device)
-            zero_b = torch.tensor(0.0, dtype=b.dtype, device=b.device)
-            zero_for_a = torch.zeros([1], dtype=a.dtype, device=a.device)
-            zero_for_b = torch.zeros([1], dtype=b.dtype, device=b.device)
-
-            # Check if a and b are scalar values (zero-dimensional)
-            if a.ndim == 0 and b.ndim == 0:
-                # Handle the scalar case
-                azimuth = torch.pi / 2.0
-                if not torch.isclose(a, zero_a) or not torch.isclose(b, zero_b):
-                    azimuth = torch.arctan2(a, b) / 2.0 + torch.pi / 2.0
-            else:
-                # Handle the non-scalar case
-                azimuth = torch.zeros_like(a)
-                close_to_zero_a = torch.isclose(a, zero_for_a)
-                close_to_zero_b = torch.isclose(b, zero_for_b)
-                zero_a_b = close_to_zero_a.bitwise_and(close_to_zero_b)
-                azimuth[~zero_a_b] = torch.arctan2(a[~zero_a_b], b[~zero_a_b]) / 2.0 + torch.pi / 2.0
-                azimuth[zero_a_b] = torch.pi / 2.0
-
-            # TODO: if output azimuth is pi, make it 0 and vice-versa (arctan2 bug)
-            # zero_index = torch.isclose(azimuth, torch.zeros([1]), atol=1e-5)
-            # pi_index = torch.isclose(azimuth, torch.tensor(torch.pi), atol=1e-5)
-            # azimuth[zero_index] = torch.pi
-            # azimuth[pi_index] = 0
+            azimuth = azimuth_from_jones_torch(jones)
         end_time = time.perf_counter()
         self.times['azimuth_from_jones'] += end_time - start_time
         return azimuth
@@ -2201,42 +2154,47 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         '''Calculate the Jones matrix from a given retardance and
         azimuth angle.'''
         start_time = time.perf_counter()
-        shortcut_identiy_matrix_calcs = False
         if DEBUG:
             check_for_inf_or_nan(ret)
             check_for_inf_or_nan(azim)
         if self.backend == BackEnds.NUMPY:
             jones = JonesMatrixGenerators.linear_retarder(ret, azim)
-        elif shortcut_identiy_matrix_calcs:
-            nonzero_indices = ret != 0
-            cos_ret = torch.cos(ret[nonzero_indices])
-            sin_ret = torch.sin(ret[nonzero_indices])
-            cos_azim = torch.cos(azim[nonzero_indices])
-            sin_azim = torch.sin(azim[nonzero_indices])
-            offdiag = 1j * sin_azim * sin_ret
-            diag1 = cos_ret + 1j * cos_azim * sin_ret
-            diag2 = torch.conj(diag1)
-            # Initialize the Jones matrix array with identity matrices
-            jones = torch.eye(2, dtype=torch.complex64, device=ret.device).repeat(len(ret), 1, 1)
-            # Fill the non-identity elements
-            jones[nonzero_indices, 0, 0] = diag1
-            jones[nonzero_indices, 0, 1] = offdiag
-            jones[nonzero_indices, 1, 0] = offdiag
-            jones[nonzero_indices, 1, 1] = diag2
-        else:
-            cos_ret = torch.cos(ret)
-            sin_ret = torch.sin(ret)
-            cos_azim = torch.cos(azim)
-            sin_azim = torch.sin(azim)
-            offdiag = 1j * sin_azim * sin_ret
-            diag1 = cos_ret + 1j * cos_azim * sin_ret
-            diag2 = torch.conj(diag1)                
-            jones = torch.empty([len(ret), 2, 2], dtype=torch.complex64, device=ret.device)
-            jones[:,0,0] = diag1
-            jones[:,0,1] = offdiag
-            jones[:,1,0] = offdiag
-            jones[:,1,1] = diag2
-            assert not torch.isnan(jones).any(), "A Jones matrix contains NaN values."
+        elif self.backend == BackEnds.PYTORCH:
+            shortcut_identiy_matrix_calcs = False
+            if shortcut_identiy_matrix_calcs:
+                # Faster when the number of non-zero elements is large
+                nonzero_indices = ret != 0
+                cos_ret = torch.cos(ret[nonzero_indices].to(dtype=torch.float32))
+                sin_ret = torch.sin(ret[nonzero_indices].to(dtype=torch.float32))
+                cos_azim = torch.cos(azim[nonzero_indices].to(dtype=torch.float32))
+                sin_azim = torch.sin(azim[nonzero_indices].to(dtype=torch.float32))
+                offdiag = 1j * sin_azim * sin_ret
+                diag1 = cos_ret + 1j * cos_azim * sin_ret
+                diag2 = torch.conj(diag1)
+                # Initialize the Jones matrix array with identity matrices
+                value_dtype = diag1.dtype
+                jones = torch.eye(2, dtype=value_dtype, device=ret.device).repeat(len(ret), 1, 1)
+                # Fill the non-identity elements
+                jones[nonzero_indices, 0, 0] = diag1
+                jones[nonzero_indices, 0, 1] = offdiag
+                jones[nonzero_indices, 1, 0] = offdiag
+                jones[nonzero_indices, 1, 1] = diag2
+            else:
+                # Faster when the number of non-zero elements is small
+                cos_ret = torch.cos(ret)
+                sin_ret = torch.sin(ret)
+                cos_azim = torch.cos(azim)
+                sin_azim = torch.sin(azim)
+                offdiag = 1j * sin_azim * sin_ret
+                diag1 = cos_ret + 1j * cos_azim * sin_ret
+                diag2 = torch.conj(diag1)                
+                jones = torch.empty([len(ret), 2, 2], dtype=torch.complex64, device=ret.device)
+                jones[:,0,0] = diag1
+                jones[:,0,1] = offdiag
+                jones[:,1,0] = offdiag
+                jones[:,1,1] = diag2
+            if DEBUG:
+                assert not torch.isnan(jones).any(), "A Jones matrix contains NaN values."
         end_time = time.perf_counter()
         self.times['calc_jones'] += end_time - start_time
         return jones
@@ -2282,32 +2240,3 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             analyzer = self.optical_info['analyzer']
         effective_jones = analyzer @ material_jones @ polarizer
         return effective_jones
-
-    @staticmethod
-    def ret_and_azim_from_intensity(image_list, swing):
-        '''Note: this function is still in development.'''
-        if len(image_list) != 5:
-            raise ValueError(f"Expected 5 images, got {len(imgs)}.")
-        # The order of the images matters!
-        imgs = [image_list[0], image_list[2], image_list[3], image_list[1], image_list[4]]
-        # using arctan vs arctan2 does not seem to make a difference
-        epsilon = np.finfo(float).eps
-        # A = (imgs[1] - imgs[2]) / (imgs[1] + imgs[2] - 2 * imgs[0] + epsilon) * np.arctan(swing / 2)
-        # B = (imgs[4] - imgs[3]) / (imgs[4] + imgs[3] - 2 * imgs[0] + epsilon) * np.arctan(swing / 2)
-        # Ensure that the denominator is not zero by adding epsilon
-        denominator_A = (imgs[1] + imgs[2] - 2 * imgs[0] + epsilon)
-        denominator_B = (imgs[4] + imgs[3] - 2 * imgs[0] + epsilon)
-        # Check where the denominator is zero and set those values to epsilon
-        denominator_A[denominator_A == 0] = epsilon
-        denominator_B[denominator_B == 0] = epsilon
-        # Calculate A and B with the safe denominator
-        A = (imgs[1] - imgs[2]) / denominator_A * np.arctan(swing / 2)
-        B = (imgs[4] - imgs[3]) / denominator_B * np.arctan(swing / 2)
-        # ret = np.arctan(np.sqrt(A ** 2, B ** 2))
-        ret = np.arctan(np.sqrt(A ** 2 + B ** 2))
-        test_value = imgs[1] + imgs[2] - 2 * imgs[0]
-        indices = np.where(test_value < 0)
-        ret[indices] = 2 * np.pi - ret[indices]
-        # azim = 0.5 * np.arctan2(A, B) + np.pi / 2
-        azim = 0.5 * np.arctan2(B, A) + np.pi / 2
-        return [ret, azim]
