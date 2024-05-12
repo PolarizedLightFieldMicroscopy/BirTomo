@@ -15,7 +15,7 @@ def setup_raytracer(optical_info, backend=BackEnds.PYTORCH):
     """Initialize Birefringent Raytracer."""
     print(f'For raytracing, using computing device: cpu')
     rays = BirefringentRaytraceLFM(
-        backend=backend, optical_info=optical_info).to('cpu')
+        backend=backend, optical_info=optical_info).to_device('cpu')
     start_time = time.time()
     rays.compute_rays_geometry()
     print(f'Ray-tracing time in seconds: {time.time() - start_time}')

@@ -45,6 +45,8 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
 
 
 DEBUG = False
+PRINT_GRADIENTS = False
+PRINT_TIMING_INFO = False
 
 if DEBUG:
     print("Debug mode is on.")
@@ -104,7 +106,7 @@ class ReconstructionConfig:
         self.azim_img_pred = None
         self.recon_directory = None
         end_time = time.perf_counter()
-        print(f"ReconstructionConfig initialized in {end_time - start_time:.3f} seconds")
+        print(f"ReconstructionConfig initialized in {end_time - start_time:.2f} seconds")
 
     def _to_numpy(self, image):
         """Convert image to a numpy array, if it's not already."""
@@ -167,7 +169,7 @@ class ReconstructionConfig:
                 description=my_description
             )
         end_time = time.perf_counter()
-        print(f"ReconstructionConfig saved in {end_time - start_time:.3f} seconds")
+        print(f"ReconstructionConfig saved in {end_time - start_time:.2f} seconds")
 
     @classmethod
     def load(cls, parent_directory):
@@ -249,7 +251,9 @@ class Reconstructor:
         if omit_rays_based_on_pixels:
             image_for_rays = self.ret_img_meas
             print("Omitting rays based on pixels with zero retardance.")
-        self.rays = self.setup_raytracer(image=image_for_rays, device=device)
+        saved_ray_path = self.iteration_params.get('saved_ray_path', None)
+        self.rays = self.setup_raytracer(
+            image=image_for_rays, filepath=saved_ray_path, device=device)
 
         self.apply_volume_mask = apply_volume_mask
         self.mask = torch.ones(self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool)
@@ -265,13 +269,28 @@ class Reconstructor:
         self.two_optic_axis_components = self.iteration_params.get(
             'two_optic_axis_components', False)
 
-        # Basic mask setup
-        self.voxel_mask_setup()
+        # if self.rays.MLA_volume_geometry_ready:
+        # TODO: see why the mask is not in the saved file
+        try:
+            self.mask = self.rays.mask
+        except AttributeError:
+            # Basic mask setup
+            self.voxel_mask_setup()
+        
+        save_rays = self.iteration_params.get('save_rays', False)
+        # Ray saving should be done before self.rays.prepare_for_all_rays_at_once()
+        if save_rays:
+            time0 = time.time()
+            rays_save_path = os.path.join(self.recon_directory, 'config_parameters', 'rays.pkl')
+            with open(rays_save_path, 'wb') as file:
+                pickle.dump(self.rays, file)
+            print(f"Rays saved in {time.time() - time0:.0f} seconds to {rays_save_path}")
+
         # Mask initial guess of volume
         self.apply_mask_to_volume(self.volume_pred)
 
         self.mla_rays_at_once = self.iteration_params.get('mla_rays_at_once', False)
-        if self.mla_rays_at_once:
+        if self.mla_rays_at_once and not self.rays.MLA_volume_geometry_ready:
             self.rays.prepare_for_all_rays_at_once()
 
         if self.remove_large_arrs:
@@ -293,7 +312,7 @@ class Reconstructor:
         self.loss_reg_term_list = []
         self.adjusted_lrs_list = []
         end_time = time.perf_counter()
-        print(f"Reconstructor initialized in {end_time - start_time:.3f} seconds\n")
+        print(f"Reconstructor initialized in {end_time - start_time:.2f} seconds\n")
 
     def _initialize_volume(self):
         """
@@ -322,8 +341,9 @@ class Reconstructor:
         # self.volume_initial_guess = self.volume_initial_guess.to(device)
         if self.volume_ground_truth is not None:
             self.volume_ground_truth = self.volume_ground_truth.to(device)
-        self.rays.to(device)
+        self.rays.to_device(device)
         self.volume_pred = self.volume_pred.to(device)
+        self.mask.to(device)
 
     def save_parameters(self, output_dir, volume_type):
         """In progress.
@@ -347,18 +367,25 @@ class Reconstructor:
                 if ep == 0:
                     print(f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors.")
 
-    def setup_raytracer(self, image=None, device='cpu'):
+    def setup_raytracer(self, image=None, filepath=None, device='cpu'):
         """Initialize Birefringent Raytracer."""
-        print(f'For raytracing, using computing device {device}')
-        rays = BirefringentRaytraceLFM(
-            backend=Reconstructor.backend, optical_info=self.optical_info
-        )
-        rays.to(device)  # Move the rays to the specified device
-        start_time = time.time()
-        rays.compute_rays_geometry(filename=None, image=image)
-        print(f'Raytracing time in seconds: {time.time() - start_time:.4f}')
+        if filepath:
+            print(f"Loading rays from {filepath}")
+            time0 = time.time()
+            with open(filepath, 'rb') as file:
+                rays = pickle.load(file)
+            # rays.MLA_volume_geometry_ready = True
+            print(f'Loaded rays in {time.time() - time0:.0f} seconds')
+        else:
+            print(f'For raytracing, using computing device {device}')
+            rays = BirefringentRaytraceLFM(
+                backend=Reconstructor.backend, optical_info=self.optical_info
+            )
+            rays.to_device(device)  # Move the rays to the specified device
+            start_time = time.time()
+            rays.compute_rays_geometry(filename=None, image=image)
+            print(f'Raytracing time in seconds: {time.time() - start_time:.2f}')
         return rays
-
 
     def mask_outside_rays(self):
         """Mask out volume that is outside FOV of the microscope.
@@ -456,13 +483,16 @@ class Reconstructor:
         """Extract volume voxel related information."""
         try:
             vox_indices_path = self.iteration_params['vox_indices_by_mla_idx_path']
+            if not vox_indices_path:
+                raise ValueError("Vox indices path is empty.")
             start_time = time.perf_counter()
             with open(vox_indices_path, 'rb') as f:
                 vox_indices_by_mla_idx = pickle.load(f)
             end_time = time.perf_counter()
-            print(f"Voxel indices by MLA index loaded in {end_time - start_time:.3f} seconds from {vox_indices_path}")
+            print(f"Voxel indices by MLA index loaded in {end_time - start_time:.0f} seconds from {vox_indices_path}")
             self.rays.vox_indices_by_mla_idx = vox_indices_by_mla_idx
-        except:
+        except (KeyError, FileNotFoundError, ValueError) as e:
+            print(f"KeyError, FileNotFoundError, or ValueError occured: {e}")
             self.rays.store_shifted_vox_indices()
             vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
             dict_save_dir = os.path.join(self.recon_directory, 'config_parameters')
@@ -497,12 +527,13 @@ class Reconstructor:
         # Use tensor indexing to set True for indices in my_set
         mask[vox_set_tensor] = True
         self.mask = mask
+        self.rays.mask = mask # Created as a rays arribute for saving purposes
         end_time = time.perf_counter()
-        print(f"Voxel mask created in {end_time - start_time:.3f} seconds")
+        print(f"Voxel mask created in {end_time - start_time:.2f} seconds")
         return
     
     def apply_mask_to_volume(self, volume : BirefringentVolume):
-        volume.Delta_n = torch.nn.Parameter(volume.Delta_n * self.mask)
+        volume.Delta_n = torch.nn.Parameter(volume.Delta_n * self.mask.to(volume.Delta_n.device))
         return
 
     def _compute_loss(self, images_predicted: list):
@@ -570,7 +601,8 @@ class Reconstructor:
         
         Also, here the updated optic axis is stored in the volume object.
         """
-        fill_vector_based_on_nonaxial(volume.optic_axis_active, volume.optic_axis_planar)
+        fill_vector_based_on_nonaxial(
+            volume.optic_axis_active, volume.optic_axis_planar)
         return
 
     # @profile # to see the memory breakdown of the function
@@ -595,13 +627,13 @@ class Reconstructor:
             tqdm.write(f"Computed the loss: {loss.item():.5}")
 
         # Verify the gradients before and after the backward pass
-        if DEBUG:
+        if PRINT_GRADIENTS:
             print("\nBefore backward pass:")
             self.print_grad_info(volume_estimation)
 
         loss.backward()
 
-        if DEBUG:
+        if PRINT_GRADIENTS:
             print("\nAfter backward pass:")
             self.print_grad_info(volume_estimation)
 
@@ -613,7 +645,7 @@ class Reconstructor:
         optimizer.step()
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
         adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
-        if DEBUG:
+        if PRINT_GRADIENTS:
             print_moments(optimizer)
 
         # Keep the optic axis on the unit sphere
@@ -681,7 +713,8 @@ class Reconstructor:
         if self.remove_large_arrs:
             vol_shape = self.optical_info['volume_shape']
             temp_bir = torch.zeros(vol_shape).flatten()
-            volume_estimation.Delta_n = torch.nn.Parameter(temp_bir, requires_grad=False)
+            device = volume_estimation.birefringence_active.device
+            volume_estimation.Delta_n = torch.nn.Parameter(temp_bir, requires_grad=False).to(device)
         if self.volume_pred.indices_active is not None:
             with torch.no_grad():
                 volume_estimation.Delta_n[volume_estimation.indices_active] = volume_estimation.birefringence_active
@@ -717,7 +750,8 @@ class Reconstructor:
         if ep % save_freq == 0:
             if self.remove_large_arrs:
                 vol_size_flat = volume_estimation.Delta_n.size(0)
-                volume_estimation.optic_axis = torch.nn.Parameter(torch.zeros(3, vol_size_flat), requires_grad=False)
+                device = volume_estimation.optic_axis_active.device
+                volume_estimation.optic_axis = torch.nn.Parameter(torch.zeros(3, vol_size_flat), requires_grad=False).to(device)
             if self.volume_pred.indices_active is not None:
                 with torch.no_grad():
                     volume_estimation.optic_axis[:, volume_estimation.indices_active] = volume_estimation.optic_axis_active
@@ -799,7 +833,7 @@ class Reconstructor:
         """Create volume attributes from the volume prperties and
         the mask. These attributes are intended for optimization."""
         active_indices = torch.where(mask)[0]
-        volume.indices_active = active_indices
+        volume.indices_active = active_indices.to(volume.Delta_n.device)
         max_index = mask.size()[0]
         idx_tensor = torch.full((max_index + 1,), -1, dtype=torch.long)
         positions = torch.arange(len(active_indices), dtype=torch.long)
@@ -870,7 +904,7 @@ class Reconstructor:
         # Iterations
         for ep in tqdm(range(1, n_epochs + 1), "Minimizing"):
             self.one_iteration(optimizer, self.volume_pred)
-            if ep % 5 == 0 and DEBUG:
+            if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()
 
             if ep % 20 == 0 and self.intensity_bool:
@@ -891,10 +925,11 @@ class Reconstructor:
         if self.remove_large_arrs:
             vol_shape = self.optical_info['volume_shape']
             temp_bir = torch.zeros(vol_shape).flatten()
-            self.volume_pred.Delta_n = torch.nn.Parameter(temp_bir, requires_grad=False)
+            device = self.volume_pred.birefringence_active.device
+            self.volume_pred.Delta_n = torch.nn.Parameter(temp_bir, requires_grad=False).to(device)
             self.volume_pred.Delta_n[self.volume_pred.indices_active] = self.volume_pred.birefringence_active
             vol_size_flat = self.volume_pred.Delta_n.size(0)
-            self.volume_pred.optic_axis = torch.nn.Parameter(torch.zeros(3, vol_size_flat), requires_grad=False)
+            self.volume_pred.optic_axis = torch.nn.Parameter(torch.zeros(3, vol_size_flat), requires_grad=False).to(device)
             self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = self.volume_pred.optic_axis_active
             
         my_description = "Volume estimation after " + \

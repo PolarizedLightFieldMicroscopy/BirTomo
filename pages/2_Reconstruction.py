@@ -191,7 +191,7 @@ if st.button('**Calculate retardance and orientation images from classes!**', ke
     with torch.no_grad():
         simulator = ForwardModel(optical_system, backend=backend)
         execution_time = simulator.ray_geometry_computation_time
-        st.success(f"Geometric ray tracing was successful in {execution_time:.3f} secs!", icon="✅")
+        st.success(f"Geometric ray tracing was successful in {execution_time:.2f} secs!", icon="✅")
         simulator.forward_model(st.session_state.GT)
         st.session_state['ret_image'] = simulator.ret_img.detach().numpy()
         st.session_state['azim_image'] = simulator.azim_img.detach().numpy()

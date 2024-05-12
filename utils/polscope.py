@@ -69,5 +69,5 @@ def prepare_ret_azim_images(retardance_path, azimuth_path, ret_ceiling, waveleng
     ret_image_meas = normalize_retardance(ret_polscope, ret_ceiling, wavelength=wavelength_nm)
     azim_image_meas = normalize_azimuth(azim_polscope)
     end_time = time.perf_counter()
-    print(f"Prepared measured images in {end_time - start_time:.3f} seconds")
+    print(f"Prepared measured images in {end_time - start_time:.2f} seconds")
     return ret_image_meas, azim_image_meas

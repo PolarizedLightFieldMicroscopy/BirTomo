@@ -79,7 +79,7 @@ class ForwardModel:
                 self.azim_img = self.azim_img.to(device)
             if self.volume_GT is not None:
                 self.volume_GT = self.volume_GT.to(device)
-            self.rays.to(device)
+            self.rays.to_device(device)
         return self
 
     def is_pytorch_backend(self):
@@ -121,11 +121,11 @@ class ForwardModel:
             backend=self.backend, optical_info=self.optical_info
         )
         if self.is_pytorch_backend():
-            rays.to(device)  # Move the rays to the specified device
+            rays.to_device(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry()
         self.ray_geometry_computation_time = time.time() - start_time
-        print(f'Raytracing time in seconds: {self.ray_geometry_computation_time:.3f}')
+        print(f'Raytracing time in seconds: {self.ray_geometry_computation_time:.2f}')
         return rays
 
     def view_images(self, azimuth_plot_type='hsv'):
