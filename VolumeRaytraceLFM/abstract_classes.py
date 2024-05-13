@@ -198,6 +198,12 @@ class RayTraceLFM(OpticalElement):
         return np.dot(c,x)
 
     @staticmethod
+    def safe_ravel_index(vox, microlens_offset, volume_shape):
+        x, y, z = vox[0], vox[1] + microlens_offset[0], vox[2] + microlens_offset[1]
+        assert x >= 0 and y >= 0 and z >= 0, "Negative index detected"
+        return RayTraceLFM.ravel_index((x, y, z), volume_shape)
+
+    @staticmethod
     def rotation_matrix(axis, angle):
         '''Generates the rotation matrix that will rotate a 3D vector
         around "axis" by "angle" counterclockwise.'''

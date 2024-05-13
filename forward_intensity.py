@@ -7,7 +7,7 @@ This script using numpy or pytorch back-end to:
 """
 import time         # to measure ray tracing time
 import matplotlib.pyplot as plt
-from VolumeRaytraceLFM.jones_calculus import JonesMatrixGenerators
+from VolumeRaytraceLFM.jones.jones_calculus import JonesMatrixGenerators
 from VolumeRaytraceLFM.visualization.plotting_intensity import plot_intensity_images
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (

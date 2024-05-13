@@ -294,7 +294,7 @@ if st.button("Reconstruct!"):
         # Force cpu, as for now cpu is faster
         device = "cpu"
         print(f'Using computing device: {device}')
-        rays = rays.to(device)
+        rays = rays.to_device(device)
 
     # Generate images using the forward model
     with torch.no_grad():

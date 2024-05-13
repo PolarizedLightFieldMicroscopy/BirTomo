@@ -11,8 +11,9 @@ def check_for_inf_or_nan(arr):
         if torch.isinf(arr).any() or torch.isnan(arr).any():
             raise ValueError("Array contains an inf of nan.")
         pass
-    elif np.is_array(arr):
-        pass
+    elif isinstance(arr, np.ndarray):
+        if np.isinf(arr).any() or np.isnan(arr).any():
+            raise ValueError("Array contains an inf or nan.")
     else:
         raise TypeError("Array is not a torch tensor or numpy array")
 

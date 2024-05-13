@@ -1,6 +1,6 @@
 '''Test that Jones matrix conventions are consistent.'''
 import numpy as np
-from VolumeRaytraceLFM.jones_calculus import (
+from VolumeRaytraceLFM.jones.jones_calculus import (
     JonesMatrixGenerators,
     JonesVectorGenerators
 )

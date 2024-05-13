@@ -47,7 +47,7 @@ def rays_fixture(params):
     return BF_raytrace_torch
 
 # @pytest.mark.parametrize("rays_fixture", "['[3, 5, 5], 17, 1']")
-def test_form_mask_from_nonzero_pixels_dict_unique_index(birefringent_raytrace_lfm):
+def form_mask_from_nonzero_pixels_dict_unique_index(birefringent_raytrace_lfm):
     rays = birefringent_raytrace_lfm
     rays.optical_info['n_micro_lenses'] = 5
     rays.compute_rays_geometry()

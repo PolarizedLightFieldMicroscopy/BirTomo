@@ -4,7 +4,7 @@
     "lr_birefringence": 1e-4,
     "lr_optic_axis": 1e-2,
     "optimizer": "Nadam",
-    "datafidelity": "vector",
+    "datafidelity": "euler",
     "regularization_fcns": [
         ["birefringence active L2", 1000],
         ["birefringence active negative penalty", 1000]
