@@ -64,7 +64,7 @@ class JonesMatrixGenerators(BirefringentElement):
                 torch.stack([exp_ret, zero], dim=-1),
                 torch.stack([zero, torch.conj(exp_ret)], dim=-1)
             ], dim=-2)
-            return jones_matrix #.permute(2, 0, 1)  # Reordering dimensions to get [N, 2, 2]
+            return jones_matrix
 
 
     @staticmethod

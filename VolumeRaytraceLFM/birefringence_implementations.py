@@ -17,6 +17,7 @@ from VolumeRaytraceLFM.jones.eigenanalysis import (
     azimuth_from_jones_torch,
     azimuth_from_jones_numpy
 )
+from VolumeRaytraceLFM.jones import jones_matrix
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors
 from VolumeRaytraceLFM.combine_lenslets import (
     gather_voxels_of_rays_pytorch_batch,
@@ -922,6 +923,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.ray_valid_indices_all = None
         self.MLA_volume_geometry_ready = False
         self.verbose = True
+        self.only_nonzero_for_jones = False
         self.mla_execution_times = {}
         self.vox_indices_ml_shifted = {}
         self.vox_indices_by_mla_idx = {}
@@ -969,7 +971,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         fmt_str = f"{{:,.{precision}f}}"
         print("Time spent in each part of the forward model:")
         print("Raytrace through volume:", fmt_str.format(rays_times['ray_trace_through_volume'] * multiplier), unit_str)
-        print("Generating MLA images:", fmt_str.format(sum(self.mla_execution_times.values()) * multiplier), unit_str)
+        print("Generating MLA images (sum of indiv lenslets times):", fmt_str.format(sum(self.mla_execution_times.values()) * multiplier), unit_str)
         print("\tCummulative Jones matrix:", fmt_str.format(rays_times['cummulative_jones'] * multiplier), unit_str)
         print("\t\tPrepping section of cumulative Jones matrix:", fmt_str.format(rays_times['prep_for_cummulative_jones'] * multiplier), unit_str)
         print("\t\tMasking voxels of segments:", fmt_str.format(rays_times['mask_voxels_of_segs'] * multiplier), unit_str)
@@ -1234,6 +1236,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         Returns:
             list[ImageType]: A list of images resulting from the ray tracing process.
         """
+        if all_rays_at_once != self.MLA_volume_geometry_ready:
+            raise ValueError("The geometry for the MLA is not prepared appropriately "
+                             + "for the all_rays_at_once flag. If the flag is True, "
+                             + "call prepare_for_all_rays_at_once() first.")
         start_time_raytrace = time.perf_counter()
         # volume_shape defines the size of the workspace
         # the number of microlenses defines the valid volume inside the workspace
@@ -2074,77 +2080,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         '''Calculate the effective retardance and azimuth of a ray
         passing through a voxel.
         Azimuth is the angle of the slow axis of retardance.
+        Note: The numpy and pytorch method differ by a factor of 2 in the
+        retardance calculation, because the Jones matrix expressions 
+        diff by a factor of 2.
         '''
         start_time = time.perf_counter()
         if self.backend == BackEnds.NUMPY:
-            # Azimuth is the angle of the slow axis of retardance.
-            # TODO: verify the order of these two components
-            azim = np.arctan2(np.dot(opticAxis, rayDir[1]), np.dot(opticAxis, rayDir[2]))
-            if Delta_n == 0:
-                azim = 0
-            elif Delta_n < 0:
-                azim = azim + np.pi / 2
-            # print(f"Azimuth angle of index ellipsoid is
-            #   {np.around(np.rad2deg(azim), decimals=0)} degrees.")
-            # normAxis = np.linalg.norm(opticAxis)
-            # proj_along_ray = np.dot(opticAxis, rayDir[0])
-            ret = abs(Delta_n) * (1 - np.dot(opticAxis, rayDir[0]) ** 2) * 2 * np.pi * ell / wavelength
-            # print(f"Accumulated retardance from index ellipsoid is
-            #   {np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
+            ret, azim = jones_matrix.vox_ray_ret_azim_numpy(Delta_n, opticAxis, rayDir, ell, wavelength)
         else:
-            if not torch.is_tensor(opticAxis):
-                opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
-            
-            operate_on_all = False
-            if operate_on_all:
-                # Dot product of optical axis and 3 ray-direction vectors
-                OA_dot_rayDir = torch.linalg.vecdot(opticAxis, rayDir)
-                normalize_proj = False
-                if normalize_proj:
-                    normAxis = torch.linalg.norm(opticAxis, axis=1)
-                    proj_along_ray = torch.full_like(OA_dot_rayDir[0,:], fill_value=1)
-                    proj_along_ray[normAxis != 0] = OA_dot_rayDir[0,:][normAxis != 0] / normAxis[normAxis != 0]
-                    # OA_dot_rayDir[0,:][normAxis == 0] = 1
-                    # Azimuth is the angle of the slow axis of retardance.
-                    azim_unadj = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
-                    ret = abs(Delta_n) * (1 - proj_along_ray ** 2) * torch.pi * ell / wavelength
-                else:
-                    azim_unadj = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
-                    ret = abs(Delta_n) * (1 - (OA_dot_rayDir[0,:]) ** 2) * torch.pi * ell / wavelength
-
-                # TODO: check how the gradients are affected--might be a discontinuity
-                adjust_azim = True
-                if adjust_azim is True:
-                    azim = azim_unadj
-                    azim[Delta_n < 0] += torch.tensor(np.pi)
-                else:
-                    azim = azim_unadj
-            else:
-                pi_tensor = torch.tensor(np.pi, device=Delta_n.device, dtype=Delta_n.dtype)
-                nonzero_indices = Delta_n.nonzero()
-                full_ret = torch.zeros_like(Delta_n, device=Delta_n.device, dtype=Delta_n.dtype)
-                full_azim = torch.zeros_like(Delta_n, device=Delta_n.device, dtype=Delta_n.dtype)
-                if nonzero_indices.numel() > 0:
-                    # Filter data for non-zero Delta_n
-                    nonzero_Delta_n = Delta_n[nonzero_indices]
-                    nonzero_opticAxis = opticAxis[nonzero_indices, :]
-                    nonzero_rayDir = rayDir[:, nonzero_indices, :]
-                    nonzero_ell = ell[nonzero_indices]
-
-                    OA_dot_rayDir = torch.linalg.vecdot(nonzero_opticAxis, nonzero_rayDir)
-                    # TODO: verify x2 should be mult by the azimuth angle
-                    azim = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
-                    scalar = pi_tensor / wavelength
-                    ret = abs(nonzero_Delta_n) * (1 - (OA_dot_rayDir[0,:]) ** 2) * nonzero_ell * scalar
-
-                    neg_delta_mask = nonzero_Delta_n < 0
-                    azim[neg_delta_mask] += pi_tensor
-
-                    full_ret[nonzero_indices] = ret
-                    full_azim[nonzero_indices] = azim
-                end_time = time.perf_counter()
-                self.times['calc_ret_azim_for_jones'] += end_time - start_time
-                return full_ret, full_azim
+            if DEBUG:
+                if not torch.is_tensor(opticAxis):
+                    opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
+            ret, azim = jones_matrix.calculate_vox_ray_ret_azim_torch(
+                        Delta_n, opticAxis, rayDir, ell, wavelength,
+                        nonzeros_only=self.only_nonzero_for_jones)
 
         end_time = time.perf_counter()
         self.times['calc_ret_azim_for_jones'] += end_time - start_time
@@ -2160,41 +2109,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             jones = JonesMatrixGenerators.linear_retarder(ret, azim)
         elif self.backend == BackEnds.PYTORCH:
-            shortcut_identiy_matrix_calcs = False
-            if shortcut_identiy_matrix_calcs:
-                # Faster when the number of non-zero elements is large
-                nonzero_indices = ret != 0
-                cos_ret = torch.cos(ret[nonzero_indices].to(dtype=torch.float32))
-                sin_ret = torch.sin(ret[nonzero_indices].to(dtype=torch.float32))
-                cos_azim = torch.cos(azim[nonzero_indices].to(dtype=torch.float32))
-                sin_azim = torch.sin(azim[nonzero_indices].to(dtype=torch.float32))
-                offdiag = 1j * sin_azim * sin_ret
-                diag1 = cos_ret + 1j * cos_azim * sin_ret
-                diag2 = torch.conj(diag1)
-                # Initialize the Jones matrix array with identity matrices
-                value_dtype = diag1.dtype
-                jones = torch.eye(2, dtype=value_dtype, device=ret.device).repeat(len(ret), 1, 1)
-                # Fill the non-identity elements
-                jones[nonzero_indices, 0, 0] = diag1
-                jones[nonzero_indices, 0, 1] = offdiag
-                jones[nonzero_indices, 1, 0] = offdiag
-                jones[nonzero_indices, 1, 1] = diag2
-            else:
-                # Faster when the number of non-zero elements is small
-                cos_ret = torch.cos(ret)
-                sin_ret = torch.sin(ret)
-                cos_azim = torch.cos(azim)
-                sin_azim = torch.sin(azim)
-                offdiag = 1j * sin_azim * sin_ret
-                diag1 = cos_ret + 1j * cos_azim * sin_ret
-                diag2 = torch.conj(diag1)                
-                jones = torch.empty([len(ret), 2, 2], dtype=torch.complex64, device=ret.device)
-                jones[:,0,0] = diag1
-                jones[:,0,1] = offdiag
-                jones[:,1,0] = offdiag
-                jones[:,1,1] = diag2
-            if DEBUG:
-                assert not torch.isnan(jones).any(), "A Jones matrix contains NaN values."
+            jones = jones_matrix.calculate_jones_torch(
+                ret, azim, nonzeros_only=self.only_nonzero_for_jones)
+        if DEBUG:
+            assert not torch.isnan(jones).any(), "A Jones matrix contains NaN values."
         end_time = time.perf_counter()
         self.times['calc_jones'] += end_time - start_time
         return jones
