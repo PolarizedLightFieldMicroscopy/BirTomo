@@ -45,6 +45,10 @@ class JonesMatrixGenerators(BirefringentElement):
             ret, backend=backend)
         R = JonesMatrixGenerators.rotator(azim, backend=backend)
         Rinv = JonesMatrixGenerators.rotator(-azim, backend=backend)
+        if backend == BackEnds.PYTORCH:
+            dtype = retarder_azim0.dtype
+            R = R.to(dtype)
+            Rinv = Rinv.to(dtype)
         return R @ retarder_azim0 @ Rinv
 
     @staticmethod
@@ -53,11 +57,15 @@ class JonesMatrixGenerators(BirefringentElement):
         if backend == BackEnds.NUMPY:
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
-            return torch.cat(
-                (torch.cat((torch.exp(1j * ret / 2).unsqueeze(1), torch.zeros(len(ret), 1)), 1).unsqueeze(2),
-                 torch.cat((torch.zeros(len(ret), 1), torch.exp(-1j * ret / 2).unsqueeze(1)), 1).unsqueeze(2)),
-                2
-            )
+            # Handling both single and multiple retardance values
+            exp_ret = torch.exp(1j * ret / 2)
+            zero = torch.zeros_like(exp_ret)
+            jones_matrix = torch.stack([
+                torch.stack([exp_ret, zero], dim=-1),
+                torch.stack([zero, torch.conj(exp_ret)], dim=-1)
+            ], dim=-2)
+            return jones_matrix #.permute(2, 0, 1)  # Reordering dimensions to get [N, 2, 2]
+
 
     @staticmethod
     def linear_retarter_azim90(ret, backend=BackEnds.NUMPY):
