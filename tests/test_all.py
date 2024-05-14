@@ -429,7 +429,7 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
                      False), "Error in torch azimuth computations nan found"
 
     assert np.all(np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(
-    ), atol=5e-3)), "Error when comparing retardance computations"
+    ), atol=1e-4)), "Error when comparing retardance computations"
     check_azimuth_images(azi_img_numpy.astype(
         np.float32), azi_img_torch.numpy())
 

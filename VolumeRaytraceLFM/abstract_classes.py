@@ -630,7 +630,7 @@ class RayTraceLFM(OpticalElement):
                 # Set True in the mask only for indices in reshaped_indices
                 # and where lenslet_image is not zero.
                 for idx in reshaped_indices:
-                    if lenslet_image[idx[0], idx[1]] != 0:
+                    if lenslet_image[idx[0], idx[1]] > 3e-8:
                         mask[idx[0], idx[1]] = True
                 nonzero_pixels_dict[(i, j)] = mask
 

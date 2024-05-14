@@ -120,6 +120,5 @@ def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
     assert len(counts) == 205, "Expected 205 voxels raytraced with volume"
     err_msg = ("Expected 198 voxels raytraced excluding repeated " +
                f"zero retardance voxels. Got: {vox_list}")
-    assert len(vox_list) == 0 or len(vox_list) == 198 or len(vox_list) == 199, err_msg
-    # assert len(vox_list) == 198, "Expected 198 raytraced excluding repeated zero retardance voxels"
+    assert len(vox_list) in {198, 199}, err_msg
     

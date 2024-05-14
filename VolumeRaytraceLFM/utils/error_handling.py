@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import math
 
 
 def check_valid_JM(arr):
@@ -14,8 +15,11 @@ def check_for_inf_or_nan(arr):
     elif isinstance(arr, np.ndarray):
         if np.isinf(arr).any() or np.isnan(arr).any():
             raise ValueError("Array contains an inf or nan.")
+    elif isinstance(arr, (float, int)):
+        if math.isinf(arr) or math.isnan(arr):
+            raise ValueError("Input is an inf or nan.")
     else:
-        raise TypeError("Array is not a torch tensor or numpy array")
+        raise TypeError("Input is not a torch tensor, numpy array, float, or int.")
 
 
 def check_for_nans(tensor):

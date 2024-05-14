@@ -120,8 +120,6 @@ class ForwardModel:
         rays = BirefringentRaytraceLFM(
             backend=self.backend, optical_info=self.optical_info
         )
-        if self.is_pytorch_backend():
-            rays.to_device(device)  # Move the rays to the specified device
         start_time = time.time()
         rays.compute_rays_geometry()
         self.ray_geometry_computation_time = time.time() - start_time

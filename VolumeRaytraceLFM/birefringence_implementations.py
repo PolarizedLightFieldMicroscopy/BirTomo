@@ -995,6 +995,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # self.ray_valid_indices = self.ray_valid_indices.to(device)
         ## The following is needed for retrieving the voxel parameters
         # self.volume.active_idx2spatial_idx_tensor.to(device)
+        self.ray_valid_indices = self.ray_valid_indices.to(device)
+        self.ray_direction_basis = self.ray_direction_basis.to(device)
+        self.ray_vol_colli_lengths = self.ray_vol_colli_lengths.to(device)
         err_msg = "Moving a BirefringentRaytraceLFM instance to a device has not been implemented yet."
         raise_error = False
         if raise_error:
@@ -1189,6 +1192,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_pixels_per_ml = self.optical_info['pixels_per_ml']
         n_ml_half = floor(n_micro_lenses / 2.0)
         self.ray_valid_indices_all = None
+        device = self.ray_valid_indices.device
         for ml_ii_idx in range(n_micro_lenses):
             ml_ii = ml_ii_idx - n_ml_half
             for ml_jj_idx in range(n_micro_lenses):
@@ -1196,12 +1200,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 if self.ray_valid_indices_all is None:
                     self.ray_valid_indices_all = self.ray_valid_indices.clone()
                 else:
-                    self.ray_valid_indices_all = torch.cat(
-                        (self.ray_valid_indices_all,
-                        self.ray_valid_indices + torch.tensor(
-                            [ml_jj_idx * n_pixels_per_ml,
-                             ml_ii_idx * n_pixels_per_ml]).unsqueeze(1)), 
-                        1)
+                    offset = torch.tensor([ml_jj_idx * n_pixels_per_ml, ml_ii_idx * n_pixels_per_ml], device=device).unsqueeze(1)
+                    updated_ray_valid_indices = self.ray_valid_indices + offset
+                    self.ray_valid_indices_all = torch.cat((self.ray_valid_indices_all, updated_ray_valid_indices), dim=1)
         # TODO: Filter out invalid rays based on radiometry image, which
         # gives a mask of valid rays. The effective mask is slightly
         # different for each microlens, so we need to filter out the
@@ -1602,6 +1603,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 raise IndexError(err_msg)
             except AssertionError as e:
                 raise AssertionError(f"Assertion error in the computation of the cumulative Jones Matrix: {e}")
+            except RuntimeError as e:
+                raise RuntimeError(f"Runtime error in the computation of the cumulative Jones Matrix: {e}")
             except:
                 raise Exception("Cumulative Jones Matrix computation failed.")
         end_time_mloop = time.perf_counter()
@@ -1871,14 +1874,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             volume_in, all_rays_at_once=True
             )
         # Calculate retardance and azimuth
-        retardance = self.retardance(effective_jones)
-        azimuth = self.azimuth(effective_jones)
+        retardance = self.retardance(effective_jones).to(torch.float32)
+        azimuth = self.azimuth(effective_jones).to(torch.float32)
 
         # Create output images
         ret_image = torch.zeros((pixels_per_mla, pixels_per_mla), dtype=torch.float32,
-                                requires_grad=True, device=self.get_device())
+                                requires_grad=True, device=retardance.device)
         azim_image = torch.zeros((pixels_per_mla, pixels_per_mla), dtype=torch.float32,
-                                 requires_grad=True, device=self.get_device())
+                                 requires_grad=True, device=azimuth.device)
         ret_image.requires_grad = False
         azim_image.requires_grad = False
 
@@ -1925,17 +1928,17 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                                         microlens_offset, mla_index=mla_index)
 
         # Calculate retardance and azimuth from the effective Jones Matrices
-        retardance = self.retardance(effective_jones)
-        azimuth = self.azimuth(effective_jones)
+        retardance = self.retardance(effective_jones).to(torch.float32)
+        azimuth = self.azimuth(effective_jones).to(torch.float32)
 
         # Initialize output images for retardance and azimuth on the appropriate device
         ret_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml), dtype=torch.float32,
-             requires_grad=True, device=self.get_device()
+             requires_grad=True, device=retardance.device
              )
         azim_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml), dtype=torch.float32,
-             requires_grad=True, device=self.get_device()
+             requires_grad=True, device=azimuth.device
              )
         ret_image.requires_grad = False
         azim_image.requires_grad = False
@@ -2033,7 +2036,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 intensity_image_list[setting] = intensity
             else:
                 intensity_image_list[setting] = torch.zeros(
-                    (pixels_per_ml, pixels_per_ml), dtype=torch.float32, device=self.get_device()
+                    (pixels_per_ml, pixels_per_ml), dtype=torch.float32, device=lenslet_jones.device
                     )
                 pol_torch = torch.from_numpy(pol_hor).type(torch.complex64)
                 ana_torch =  torch.from_numpy(analyzer).type(torch.complex64)
@@ -2111,8 +2114,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         elif self.backend == BackEnds.PYTORCH:
             jones = jones_matrix.calculate_jones_torch(
                 ret, azim, nonzeros_only=self.only_nonzero_for_jones)
-        if DEBUG:
-            assert not torch.isnan(jones).any(), "A Jones matrix contains NaN values."
+            if DEBUG:
+                assert not torch.isnan(jones).any(), "A Jones matrix contains NaN values."
         end_time = time.perf_counter()
         self.times['calc_jones'] += end_time - start_time
         return jones

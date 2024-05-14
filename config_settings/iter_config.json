@@ -9,6 +9,7 @@
         ["birefringence active L2", 1000],
         ["birefringence active negative penalty", 1000]
     ],
+    "from_simulation": true,
     "mla_rays_at_once": true,
     "two_optic_axis_components": true,
     "free_memory_by_del_large_arrays": true,

@@ -4,22 +4,22 @@ import numpy as np
 
 def calc_theta(jones):
     # jones is a batch of 2x2 matrices
+    jones = jones.to(torch.complex128)
     a = jones[:, 0, 0]
+    device = jones.device
     # Clamp the real part to the valid range of acos to prevent NaNs
     # Note: bounds of -1 and 1 cause NaNs in backward pass
-    upper_limit = torch.nextafter(torch.tensor(1.0), torch.tensor(-np.inf))
-    lower_limit = torch.nextafter(torch.tensor(-1.0), torch.tensor(np.inf))
-    # theta = torch.acos(torch.clamp(a.real, -0.999999, 0.999999))
+    upper_limit = torch.nextafter(torch.tensor(1.0, dtype=torch.float64), torch.tensor(-np.inf, dtype=torch.float64)).to(device)
+    lower_limit = torch.nextafter(torch.tensor(-1.0, dtype=torch.float64), torch.tensor(np.inf, dtype=torch.float64)).to(device)
     theta = torch.acos(torch.clamp(a.real, lower_limit, upper_limit))
     return theta
 
 
 def calc_theta_single(jones):
     # jones is a single 2x2 matrix
-    a = jones[0, 0]
-    upper_limit = torch.nextafter(torch.tensor(1.0), torch.tensor(-np.inf))
-    lower_limit = torch.nextafter(torch.tensor(-1.0), torch.tensor(np.inf))
-    # theta = torch.acos(torch.clamp(a.real, -0.999999, 0.999999))
+    a = jones[0, 0].to(torch.complex128)
+    upper_limit = torch.nextafter(torch.tensor(1.0, dtype=torch.float64), torch.tensor(-np.inf, dtype=torch.float64))
+    lower_limit = torch.nextafter(torch.tensor(-1.0, dtype=torch.float64), torch.tensor(np.inf, dtype=torch.float64))
     theta = torch.acos(torch.clamp(a.real, lower_limit, upper_limit))
     return theta
 
@@ -40,7 +40,7 @@ def retardance_from_jones(jones, su2_method=False):
         x = eigenvalues_su2(jones)
     else:
         x = eigenvalues(jones)
-    retardance = (torch.angle(x[:, 1]) - torch.angle(x[:, 0])).abs()
+    retardance = (torch.angle(x[:, 1]) - torch.angle(x[:, 0])).abs().to(torch.float64)
     return retardance
 
 
@@ -71,10 +71,9 @@ def retardance_from_jones_numpy(jones, su2_method=False):
 
 def retardance_from_su2_numpy(jones):
     a = jones[0, 0]
-    upper_limit = np.nextafter(1, -np.inf)
-    lower_limit = np.nextafter(-1, np.inf)
+    upper_limit = np.nextafter(np.float64(1.0), np.float64(-np.inf))
+    lower_limit = np.nextafter(np.float64(-1.0), np.float64(np.inf))
     theta = np.arccos(np.clip(np.real(a), lower_limit, upper_limit))
-    # theta = np.arccos(np.clip(np.real(a), -0.999999, 0.999999))
     retardance = 2 * np.abs(theta)
     return retardance
 

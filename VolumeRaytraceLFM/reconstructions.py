@@ -255,6 +255,7 @@ class Reconstructor:
         self.rays = self.setup_raytracer(
             image=image_for_rays, filepath=saved_ray_path, device=device)
 
+        self.from_simulation = self.iteration_params.get('from_simulation', False)
         self.apply_volume_mask = apply_volume_mask
         self.mask = torch.ones(self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool)
 
@@ -342,7 +343,6 @@ class Reconstructor:
         if self.volume_ground_truth is not None:
             self.volume_ground_truth = self.volume_ground_truth.to(device)
         self.rays.to_device(device)
-        self.volume_pred = self.volume_pred.to(device)
         self.mask.to(device)
 
     def save_parameters(self, output_dir, volume_type):
@@ -381,7 +381,6 @@ class Reconstructor:
             rays = BirefringentRaytraceLFM(
                 backend=Reconstructor.backend, optical_info=self.optical_info
             )
-            rays.to_device(device)  # Move the rays to the specified device
             start_time = time.time()
             rays.compute_rays_geometry(filename=None, image=image)
             print(f'Raytracing time in seconds: {time.time() - start_time:.2f}')
@@ -513,7 +512,10 @@ class Reconstructor:
         # vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
         vox_set = set(self.rays.identify_voxels_at_least_one_nonzero_ret())
         # Excluding voxels that are a part of multiple zero-retardance rays
-        vox_list_excluding = self.rays.identify_voxels_zero_ret_lenslet()
+        if self.from_simulation:
+            vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+        else:
+            vox_list_excluding = self.rays.identify_voxels_zero_ret_lenslet()
         if DEBUG:
             check_for_negative_values(vox_list_excluding)
         filtered_vox_list = list(vox_set - set(vox_list_excluding))
@@ -833,10 +835,11 @@ class Reconstructor:
         """Create volume attributes from the volume prperties and
         the mask. These attributes are intended for optimization."""
         active_indices = torch.where(mask)[0]
-        volume.indices_active = active_indices.to(volume.Delta_n.device)
+        device = volume.Delta_n.device
+        volume.indices_active = active_indices.to(device)
         max_index = mask.size()[0]
-        idx_tensor = torch.full((max_index + 1,), -1, dtype=torch.long)
-        positions = torch.arange(len(active_indices), dtype=torch.long)
+        idx_tensor = torch.full((max_index + 1,), -1, dtype=torch.long).to(device)
+        positions = torch.arange(len(active_indices), dtype=torch.long).to(device)
         idx_tensor[active_indices] = positions
         volume.active_idx2spatial_idx_tensor = idx_tensor
         if self.two_optic_axis_components:
