@@ -19,10 +19,12 @@ from VolumeRaytraceLFM.jones.eigenanalysis import (
 )
 from VolumeRaytraceLFM.jones import jones_matrix
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors
+from VolumeRaytraceLFM.utils.error_handling import check_for_negative_values_dict
 from VolumeRaytraceLFM.combine_lenslets import (
     gather_voxels_of_rays_pytorch_batch,
     calculate_offsets_vectorized
 )
+from VolumeRaytraceLFM.utils.mask_utils import get_bool_mask_for_ray_indices
 
 
 DEBUG = False
@@ -964,6 +966,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         )
         return info
 
+    def save(self, filepath):
+        '''Save the BirefringentRaytraceLFM instance to a file'''
+        time0 = time.time()
+        with open(filepath, 'wb') as file:
+            pickle.dump(self, file)
+        print(f"Rays saved in {time.time() - time0:.0f} seconds to {filepath}")
+
     def print_timing_info(self, precision=2, unit='ms'):
         rays_times = self.times
         multiplier = 1000 if unit == 'ms' else 1
@@ -1100,21 +1109,29 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             self.use_lenslet_based_filtering = False
             if self.vox_indices_by_mla_idx == {}:
                 self.store_shifted_vox_indices()
+                # self.store_shifted_vox_indices_all() # in progress
             self.store_vox_indices_by_mla_idx()
             self.create_colli_indices_all()
             self.create_ray_valid_indices_all()
             self.replicate_ray_info_each_microlens()
             self.MLA_volume_geometry_ready = True
             print(f"Prepared geometry for all rays at once.")
+        self.del_arr_unnecessary_for_all_rays_at_once()
+
+    def del_arr_unnecessary_for_all_rays_at_once(self):
+        """Delete unnecessary attributes if they exist."""
+        if hasattr(self, 'vox_indices_by_mla_idx'):
+            self.vox_indices_by_mla_idx = None
+        if hasattr(self, 'vox_indices_ml_shifted'):
+            self.vox_indices_ml_shifted = None
+        if hasattr(self, 'ray_vol_colli_indices'):
+            self.ray_vol_colli_indices = None
 
     def store_shifted_vox_indices(self):
         """Store the shifted voxel indices for each microlens in a
         dictionary. The shape of the volume is taken from the
         optical_info, which should be the same as the volume used in the
         ray tracing process.
-
-        Args:
-            None
 
         Returns:
             dict: contains the shifted voxel indices for each microlens
@@ -1157,6 +1174,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     )
                 if mla_index not in self.vox_indices_by_mla_idx.keys():
                         self.vox_indices_by_mla_idx[mla_index] = vox_list
+        check_for_negative_values_dict(self.vox_indices_by_mla_idx)
         return self.vox_indices_by_mla_idx
 
     def store_shifted_vox_indices_all(self):
@@ -1172,6 +1190,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             offsets, collision_indices, self.optical_info['volume_shape'], self.backend)
         for idx, mla_index in enumerate(map(tuple, mla_indices)):
             self.vox_indices_by_mla_idx[mla_index] = vox_lists[idx]
+        check_for_negative_values_dict(self.vox_indices_by_mla_idx)
         return self.vox_indices_by_mla_idx
 
     def create_colli_indices_all(self):
@@ -1194,19 +1213,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.ray_valid_indices_all = None
         device = self.ray_valid_indices.device
         for ml_ii_idx in range(n_micro_lenses):
-            ml_ii = ml_ii_idx - n_ml_half
             for ml_jj_idx in range(n_micro_lenses):
-                ml_jj = ml_jj_idx - n_ml_half
                 if self.ray_valid_indices_all is None:
                     self.ray_valid_indices_all = self.ray_valid_indices.clone()
                 else:
                     offset = torch.tensor([ml_jj_idx * n_pixels_per_ml, ml_ii_idx * n_pixels_per_ml], device=device).unsqueeze(1)
                     updated_ray_valid_indices = self.ray_valid_indices + offset
                     self.ray_valid_indices_all = torch.cat((self.ray_valid_indices_all, updated_ray_valid_indices), dim=1)
-        # TODO: Filter out invalid rays based on radiometry image, which
-        # gives a mask of valid rays. The effective mask is slightly
-        # different for each microlens, so we need to filter out the
-        # invalid rays for each microlens.
 
     def replicate_ray_info_each_microlens(self):
         """Replicate ray info for all the microlenses"""
@@ -1220,6 +1233,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def store_vox_indices_by_mla_idx(self):
         self.vox_indices_by_mla_idx_tensors = convert_to_tensors(self.vox_indices_by_mla_idx)
+
+    def filter_from_radiometry(self, radiometry):
+        """Filter out invalid rays based on radiometry image."""
+        err_msg = "The geometry for the entire MLA must be prepared first."
+        assert self.MLA_volume_geometry_ready, err_msg
+        ray_indices = self.ray_valid_indices_all
+        voxel_indices = self.vox_indices_ml_shifted_all
+        collision_lengths = self.ray_vol_colli_lengths
+        ray_dir_basis = self.ray_direction_basis
+        radiomask = get_bool_mask_for_ray_indices(ray_indices, radiometry)
+        self.ray_valid_indices_all = ray_indices[:, radiomask]
+        self.vox_indices_ml_shifted_all = voxel_indices[radiomask, :]
+        self.ray_vol_colli_lengths = collision_lengths[radiomask, :]
+        self.ray_direction_basis = ray_dir_basis[:, radiomask, :]
 
     def ray_trace_through_volume(self, volume_in : BirefringentVolume = None,
                                  all_rays_at_once=False, intensity=False):
@@ -1738,8 +1765,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 if zero_ret_voxels:
                     # Get the boolean mask for the pixels that are not zero
                     nonzero_mask = self._form_mask_from_nonzero_pixels_dict(mla_index)
-                    # Find the voxels that lead to a zero pixel in the retardance image
-                    zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
+                    tensor_method = False
+                    if tensor_method:
+                        # In progress method to use tensors for faster computation
+                        vox_indices_tensor = self.vox_indices_by_mla_idx_tensors[mla_index]
+                        vox_indices = np.array(vox_indices_tensor)
+                        zero_ret_vox_indices = vox_indices[~nonzero_mask].tolist()
+                    else:
+                        # Find the voxels that lead to a zero pixel in the retardance image
+                        zero_ret_vox_indices = [vox_indices[i] for i, nonzero_bool in enumerate(nonzero_mask) if not nonzero_bool]
                     vox_indices = zero_ret_vox_indices
                 elif zero_ret_entire_lenslet_voxels:
                     # Get the boolean mask for the pixels that are not zero

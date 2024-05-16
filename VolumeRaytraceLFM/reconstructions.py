@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 import csv
 import pickle
+import tifffile
 import matplotlib.pyplot as plt
 ## For analyzing the memory usage of a function
 # from memory_profiler import profile
@@ -42,11 +43,13 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
     fill_vector_based_on_nonaxial,
     stay_on_sphere
 )
+from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 
 
 DEBUG = False
 PRINT_GRADIENTS = False
 PRINT_TIMING_INFO = True
+CLIP_GRADIENT_NORM = False
 
 if DEBUG:
     print("Debug mode is on.")
@@ -94,6 +97,11 @@ class ReconstructionConfig:
         self.optical_info = optical_info
         self.retardance_image = self._to_numpy(ret_image)
         self.azimuth_image = self._to_numpy(azim_image)
+        radiometry_path = iteration_params.get('radiometry_path', None)
+        if radiometry_path:
+            self.radiometry = tifffile.imread(radiometry_path)
+        else:
+            self.radiometry = None
         self.initial_volume = initial_vol
         self.interation_parameters = iteration_params
         self.loss_function = loss_fcn
@@ -145,6 +153,8 @@ class ReconstructionConfig:
         # Save the retardance and azimuth images
         np.save(os.path.join(directory, 'ret_image.npy'), self.retardance_image)
         np.save(os.path.join(directory, 'azim_image.npy'), self.azimuth_image)
+        if self.radiometry is not None:
+            np.save(os.path.join(directory, 'radiometry'), self.radiometry)
         plt.ioff()
         my_fig = plot_retardance_orientation(
             self.retardance_image, self.azimuth_image, 'hsv', include_labels=True)
@@ -270,29 +280,33 @@ class Reconstructor:
         self.two_optic_axis_components = self.iteration_params.get(
             'two_optic_axis_components', False)
 
-        # if self.rays.MLA_volume_geometry_ready:
-        # TODO: see why the mask is not in the saved file
-        try:
-            self.mask = self.rays.mask
-        except AttributeError:
-            # Basic mask setup
-            self.voxel_mask_setup()
-        
-        save_rays = self.iteration_params.get('save_rays', False)
-        # Ray saving should be done before self.rays.prepare_for_all_rays_at_once()
-        if save_rays:
-            time0 = time.time()
-            rays_save_path = os.path.join(self.recon_directory, 'config_parameters', 'rays.pkl')
-            with open(rays_save_path, 'wb') as file:
-                pickle.dump(self.rays, file)
-            print(f"Rays saved in {time.time() - time0:.0f} seconds to {rays_save_path}")
-
-        # Mask initial guess of volume
-        self.apply_mask_to_volume(self.volume_pred)
-
         self.mla_rays_at_once = self.iteration_params.get('mla_rays_at_once', False)
         if self.mla_rays_at_once and not self.rays.MLA_volume_geometry_ready:
             self.rays.prepare_for_all_rays_at_once()
+            if not self.from_simulation:
+                radiometry_path = self.iteration_params.get('radiometry_path', None)
+                if radiometry_path:
+                    num_rays_og = self.rays.ray_valid_indices_all.shape[1]
+                    radiometry = torch.tensor(recon_info.radiometry)
+                    self.rays.filter_from_radiometry(radiometry)
+                    num_rays = self.rays.ray_valid_indices_all.shape[1]
+                    print(f"Radiometry used for filtering rays from {num_rays_og} to {num_rays} rays.")
+                else:
+                    print("No radiometry provided for filtering rays.")
+
+        try:
+            self.mask = self.rays.mask
+        except AttributeError:
+            self.voxel_mask_setup()
+
+        save_rays = self.iteration_params.get('save_rays', False)
+        # Ray saving should be done after self.rays.prepare_for_all_rays_at_once()
+        if save_rays:
+            rays_save_path = os.path.join(self.recon_directory, 'config_parameters', 'rays.pkl')
+            self.rays.save(rays_save_path)
+
+        # Mask initial guess of volume
+        self.apply_mask_to_volume(self.volume_pred)
 
         if self.remove_large_arrs:
             del self.birefringence_simulated
@@ -449,7 +463,7 @@ class Reconstructor:
         """Setup optimizer."""
         trainable_parameters = volume_estimation.get_trainable_variables()
         trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
-        optimizer_type = training_params.get('optimizer', 'Adam')
+        optimizer_type = training_params.get('optimizer', 'Nadam')
         if optimizer_type == 'LBFGS':
             parameters = trainable_parameters
         else:
@@ -480,58 +494,72 @@ class Reconstructor:
 
     def voxel_mask_setup(self):
         """Extract volume voxel related information."""
-        try:
-            vox_indices_path = self.iteration_params['vox_indices_by_mla_idx_path']
-            if not vox_indices_path:
-                raise ValueError("Vox indices path is empty.")
-            start_time = time.perf_counter()
-            with open(vox_indices_path, 'rb') as f:
-                vox_indices_by_mla_idx = pickle.load(f)
-            end_time = time.perf_counter()
-            print(f"Voxel indices by MLA index loaded in {end_time - start_time:.0f} seconds from {vox_indices_path}")
-            self.rays.vox_indices_by_mla_idx = vox_indices_by_mla_idx
-        except (KeyError, FileNotFoundError, ValueError) as e:
-            print(f"KeyError, FileNotFoundError, or ValueError occured: {e}")
-            self.rays.store_shifted_vox_indices()
-            vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
-            dict_save_dir = os.path.join(self.recon_directory, 'config_parameters')
-            if not os.path.exists(dict_save_dir):
-                os.makedirs(dict_save_dir)
-            dict_filename = 'vox_indices_by_mla_idx.pkl'
-            dict_save_path = os.path.join(dict_save_dir, dict_filename)
-            with open(dict_save_path, 'wb') as f:
-                pickle.dump(vox_indices_by_mla_idx, f)
-            print(f"Saving voxel indices by MLA index to {dict_save_path}")
-        if DEBUG:
-            check_for_negative_values_dict(vox_indices_by_mla_idx)
+        if self.rays.MLA_volume_geometry_ready:
+            num_vox_in_volume = self.volume_pred.Delta_n.shape[0]
+            print(f"Identifying the voxels that are reached by the rays out of the {num_vox_in_volume} voxels.")
 
-        print("Collecting the set of voxels that are reached by the rays.")
-        start_time = time.perf_counter()
-        ### Examining values in terms of sets
-        # vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
-        # vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
-        vox_set = set(self.rays.identify_voxels_at_least_one_nonzero_ret())
-        # Excluding voxels that are a part of multiple zero-retardance rays
-        if self.from_simulation:
-            vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+            start_time = time.perf_counter()
+            filtered_voxels = filter_voxels_using_retardance(
+                self.rays.vox_indices_ml_shifted_all, self.rays.ray_valid_indices_all, self.ret_img_meas)
+
+            mask = torch.zeros(num_vox_in_volume, dtype=torch.bool)
+            mask[filtered_voxels] = True
+            self.mask = mask
+            self.rays.mask = mask # Created as a rays arribute for saving purposes
+
+            end_time = time.perf_counter()
+            print(f"Voxel mask created in {end_time - start_time:.2f} seconds")
         else:
-            vox_list_excluding = self.rays.identify_voxels_zero_ret_lenslet()
-        if DEBUG:
-            check_for_negative_values(vox_list_excluding)
-        filtered_vox_list = list(vox_set - set(vox_list_excluding))
-        sorted_vox_list = sorted(filtered_vox_list)
-        print(f"Masking out voxels except for {len(sorted_vox_list)} voxels. " +
-              f"First, at most, 20 voxels are {sorted_vox_list[:20]}")
-        vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
-        # Initialize a mask of the same size as Delta_n with False
-        Delta_n = self.volume_pred.Delta_n
-        mask = torch.zeros(Delta_n.shape[0], dtype=torch.bool)
-        # Use tensor indexing to set True for indices in my_set
-        mask[vox_set_tensor] = True
-        self.mask = mask
-        self.rays.mask = mask # Created as a rays arribute for saving purposes
-        end_time = time.perf_counter()
-        print(f"Voxel mask created in {end_time - start_time:.2f} seconds")
+            try:
+                vox_indices_path = self.iteration_params['vox_indices_by_mla_idx_path']
+                if not vox_indices_path:
+                    raise ValueError("Vox indices path is empty.")
+                start_time = time.perf_counter()
+                with open(vox_indices_path, 'rb') as f:
+                    vox_indices_by_mla_idx = pickle.load(f)
+                end_time = time.perf_counter()
+                print(f"Voxel indices by MLA index loaded in {end_time - start_time:.0f} seconds from {vox_indices_path}")
+                self.rays.vox_indices_by_mla_idx = vox_indices_by_mla_idx
+            except (KeyError, FileNotFoundError, ValueError) as e:
+                print(f"KeyError, FileNotFoundError, or ValueError occured: {e}")
+                self.rays.store_shifted_vox_indices()
+                vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+                dict_save_dir = os.path.join(self.recon_directory, 'config_parameters')
+                if not os.path.exists(dict_save_dir):
+                    os.makedirs(dict_save_dir)
+                dict_filename = 'vox_indices_by_mla_idx.pkl'
+                dict_save_path = os.path.join(dict_save_dir, dict_filename)
+                with open(dict_save_path, 'wb') as f:
+                    pickle.dump(vox_indices_by_mla_idx, f)
+                print(f"Saving voxel indices by MLA index to {dict_save_path}")
+            if DEBUG:
+                check_for_negative_values_dict(vox_indices_by_mla_idx)
+
+            print("Collecting the set of voxels that are reached by the rays.")
+            start_time = time.perf_counter()
+            ### Examining values in terms of sets
+            # vox_set = extract_numbers_from_dict_of_lists(vox_indices_by_mla_idx)
+            # vox_sets_by_mla_idx = transform_dict_list_to_set(vox_indices_by_mla_idx)
+            vox_set = set(self.rays.identify_voxels_at_least_one_nonzero_ret())
+            # Excluding voxels that are a part of multiple zero-retardance rays
+            if self.from_simulation:
+                vox_list_excluding = self.rays.identify_voxels_repeated_zero_ret()
+            else:
+                vox_list_excluding = self.rays.identify_voxels_zero_ret_lenslet()
+            if DEBUG:
+                check_for_negative_values(vox_list_excluding)
+            filtered_vox_list = list(vox_set - set(vox_list_excluding))
+            sorted_vox_list = sorted(filtered_vox_list)
+            print(f"Masking out voxels except for {len(sorted_vox_list)} voxels. " +
+                f"First, at most, 20 voxels are {sorted_vox_list[:20]}")
+            vox_set_tensor = torch.tensor(sorted_vox_list, dtype=torch.long)
+            Delta_n = self.volume_pred.Delta_n
+            mask = torch.zeros(Delta_n.shape[0], dtype=torch.bool)
+            mask[vox_set_tensor] = True
+            self.mask = mask
+            self.rays.mask = mask # Created as a rays arribute for saving purposes
+            end_time = time.perf_counter()
+            print(f"Voxel mask created in {end_time - start_time:.2f} seconds")
         return
     
     def apply_mask_to_volume(self, volume : BirefringentVolume):
@@ -608,7 +636,7 @@ class Reconstructor:
         return
 
     # @profile # to see the memory breakdown of the function
-    def one_iteration(self, optimizer, volume_estimation):
+    def one_iteration(self, optimizer, volume_estimation, scheduler=None):
         if not self.apply_volume_mask:
             optimizer.zero_grad()
         else:
@@ -639,12 +667,16 @@ class Reconstructor:
             print("\nAfter backward pass:")
             self.print_grad_info(volume_estimation)
 
+        if CLIP_GRADIENT_NORM:
+            self.clip_gradient_norms(optimizer, volume_estimation)
+
         # Apply voxel-specific mask
         if self.apply_volume_mask:
             with torch.no_grad():
                 self.volume_pred.Delta_n.grad *= self.mask
 
         optimizer.step()
+        scheduler.step(loss)
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
         adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
         if PRINT_GRADIENTS:
@@ -831,6 +863,21 @@ class Reconstructor:
             writer = csv.writer(file)
             writer.writerow([ep, *self.reg_term_values])
 
+    def clip_gradient_norms(self, model, verbose=False):
+        # Gradient clipping
+        max_norm = 1.0
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)
+        if verbose:
+            # Calculate the total norm of the gradients
+            total_norm = 0
+            for p in model.parameters():
+                if p.grad is not None:
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** 0.5
+            if total_norm > max_norm:
+                print(f"Epoch {self.ep}: Gradients clipped (total_norm: {total_norm:.2f})")
+
     def create_parameters_from_mask(self, volume, mask):
         """Create volume attributes from the volume prperties and
         the mask. These attributes are intended for optimization."""
@@ -890,6 +937,9 @@ class Reconstructor:
         bir_betas = self.iteration_params.get('bir_betas', (0.9, 0.999))
         optimizer.param_groups[0]['betas'] = tuple(optax_betas)
         optimizer.param_groups[1]['betas'] = tuple(bir_betas)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+            mode='min', factor=0.5, patience=5, threshold=1e-4,
+            threshold_mode='rel', cooldown=0, min_lr=1e-6, eps=1e-8)
         figure = setup_visualization(window_title=self.recon_directory, plot_live=plot_live)
         self._create_regularization_terms_csv()
 
@@ -904,9 +954,22 @@ class Reconstructor:
             progress_bar = st.progress(0)
 
         self.prepare_volume_for_recon(self.volume_pred)
+        initial_lr_0 = optimizer.param_groups[0]['lr']
+        initial_lr_1 = optimizer.param_groups[1]['lr']
+        # Parameters for learning rate warmup
+
+        warmup_epochs = 6
+        warmup_start_proportion = 0.1
         # Iterations
         for ep in tqdm(range(1, n_epochs + 1), "Minimizing"):
-            self.one_iteration(optimizer, self.volume_pred)
+            self.ep = ep
+            # Learning rate warmup
+            if ep < warmup_epochs:
+                lr_0 = initial_lr_0 * (warmup_start_proportion + (1 - warmup_start_proportion) * (ep / warmup_epochs))
+                lr_1 = initial_lr_1 * (warmup_start_proportion + (1 - warmup_start_proportion) * (ep / warmup_epochs))
+                optimizer.param_groups[0]['lr'] = lr_0
+                optimizer.param_groups[1]['lr'] = lr_1
+            self.one_iteration(optimizer, self.volume_pred, scheduler=scheduler)
             if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()
 

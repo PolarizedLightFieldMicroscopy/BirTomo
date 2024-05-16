@@ -78,62 +78,36 @@ def retardance_from_su2_numpy(jones):
     return retardance
 
 
-def azimuth_from_jones_numpy(jones):
-    diag_sum = jones[0, 0] + jones[1, 1]
-    diag_diff = jones[1, 1] - jones[0, 0]
-    off_diag_sum = jones[0, 1] + jones[1, 0]
-    a = np.imag(diag_diff / diag_sum)
-    b = np.imag(off_diag_sum / diag_sum)
-    if np.isclose(np.abs(a), 0.0) and np.isclose(np.abs(b), 0.0):
-        azimuth = np.pi / 2
-    else:
-        azimuth = np.arctan2(a, b) / 2 + np.pi / 2
-    # if np.isclose(azimuth,np.pi):
-    #     azimuth = 0.0
+def azimuth_from_jones_numpy(jones, simple=True):
+    j11 = jones[0, 0]
+    j12 = jones[0, 1]
+    imag_j11 = np.imag(j11)
+    imag_j12 = np.imag(j12)
+    azimuth = 0.5 * np.arctan2(imag_j12, imag_j11) + np.pi / 2.0
+    if np.isclose(np.abs(imag_j11), 0.0) and np.isclose(np.abs(imag_j12), 0.0):
+        azimuth = 0.0
     return azimuth
 
 
 def azimuth_from_jones_torch(jones):
-    if jones.ndim == 2:
+    """Compute the azimuth angle from a Jones matrix.
+    Note: possible bug in atan2 when where pi and 0 are switched"""
+    if jones.ndim == 3:
+        # jones is a batch of 2x2 matrices
+        j11 = jones[:, 0, 0]
+        j12 = jones[:, 0, 1]
+    elif jones.ndim == 2:
         # jones is a single 2x2 matrix
-        diag_sum = jones[0, 0] + jones[1, 1]
-        diag_diff = jones[1, 1] - jones[0, 0]
-        off_diag_sum = jones[0, 1] + jones[1, 0]     
-    elif jones.ndim == 3:
-        # jones is a batch of 2x2 matrices           
-        diag_sum = (jones[:, 0, 0] + jones[:, 1, 1])
-        diag_diff = (jones[:, 1, 1] - jones[: ,0, 0])
-        off_diag_sum = jones[:, 0, 1] + jones[:, 1, 0]
-
-    a = (diag_diff / diag_sum).imag
-    b = (off_diag_sum / diag_sum).imag
-
-    # atan2 with zero entries causes nan in backward, so let's filter them out
-
-    # Intermediate variables for zero tensor
-    zero_a = torch.tensor(0.0, dtype=a.dtype, device=a.device)
-    zero_b = torch.tensor(0.0, dtype=b.dtype, device=b.device)
-    zero_for_a = torch.zeros([1], dtype=a.dtype, device=a.device)
-    zero_for_b = torch.zeros([1], dtype=b.dtype, device=b.device)
-
-    # Check if a and b are scalar values (zero-dimensional)
-    if a.ndim == 0 and b.ndim == 0:
-        # Handle the scalar case
-        azimuth = torch.pi / 2.0
-        if not torch.isclose(a, zero_a) or not torch.isclose(b, zero_b):
-            azimuth = torch.arctan2(a, b) / 2.0 + torch.pi / 2.0
+        j11 = jones[0, 0]
+        j12 = jones[0, 1]
     else:
-        # Handle the non-scalar case
-        azimuth = torch.zeros_like(a)
-        close_to_zero_a = torch.isclose(a, zero_for_a)
-        close_to_zero_b = torch.isclose(b, zero_for_b)
-        zero_a_b = close_to_zero_a.bitwise_and(close_to_zero_b)
-        azimuth[~zero_a_b] = torch.arctan2(a[~zero_a_b], b[~zero_a_b]) / 2.0 + torch.pi / 2.0
-        azimuth[zero_a_b] = torch.pi / 2.0
-
-    # TODO: if output azimuth is pi, make it 0 and vice-versa (arctan2 bug)
-    # zero_index = torch.isclose(azimuth, torch.zeros([1]), atol=1e-5)
-    # pi_index = torch.isclose(azimuth, torch.tensor(torch.pi), atol=1e-5)
-    # azimuth[zero_index] = torch.pi
-    # azimuth[pi_index] = 0
+        raise ValueError('Invalid input shape')
+    imag_j11 = torch.imag(j11)
+    imag_j12 = torch.imag(j12)
+    azimuth = torch.zeros_like(imag_j11, dtype=imag_j11.dtype)
+    # Create a mask where both imaginary parts are not close to zero
+    non_zero_mask = ~(torch.isclose(imag_j11, torch.zeros_like(imag_j11)) & torch.isclose(imag_j12, torch.zeros_like(imag_j12)))
+    # Compute azimuth for non-zero mask elements
+    azimuth_non_zero = 0.5 * torch.atan2(imag_j12[non_zero_mask], imag_j11[non_zero_mask]) + torch.pi / 2.0
+    azimuth[non_zero_mask] = azimuth_non_zero
     return azimuth

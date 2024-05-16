@@ -154,12 +154,9 @@ def light_field_to_1D(light_field, n_micro_lenses, pixels_per_ml):
     Returns:
         torch.Tensor: 1D tensor.
     """
-    n_ml_half = floor(n_micro_lenses / 2.0)
     lenslet_list = []
     for ml_ii_idx in range(n_micro_lenses):
-        ml_ii = ml_ii_idx - n_ml_half
         for ml_jj_idx in range(n_micro_lenses):
-            ml_jj = ml_jj_idx - n_ml_half
             lenslet = light_field[
                 ml_ii_idx * pixels_per_ml:(ml_ii_idx + 1) * pixels_per_ml,
                 ml_jj_idx * pixels_per_ml:(ml_jj_idx + 1) * pixels_per_ml
@@ -169,3 +166,38 @@ def light_field_to_1D(light_field, n_micro_lenses, pixels_per_ml):
     # Concatenate all the lenslets to form a single 1D array
     light_field_1D = torch.cat(lenslet_list)
     return light_field_1D
+
+
+def oneD_to_light_field(light_field_1D, n_micro_lenses, pixels_per_ml):
+    """
+    Converts a 1D tensor back to a 4D light field tensor.
+    Args:
+        light_field_1D (torch.Tensor): 1D tensor.
+        n_micro_lenses (int): Number of micro-lenses along one dimension.
+        pixels_per_ml (int): Number of pixels per micro-lens.
+    Returns:
+        torch.Tensor: 4D light field tensor.
+    """
+    num_pixels_per_ml = pixels_per_ml * pixels_per_ml
+    light_field = torch.empty(
+        (n_micro_lenses * pixels_per_ml, n_micro_lenses * pixels_per_ml),
+        dtype=light_field_1D.dtype
+        )
+    # Counter to keep track of the current position in the 1D tensor
+    current_pos = 0
+    # Iterate through each microlens and place it in the correct
+    #   position in the 4D light field
+    for ml_ii_idx in range(n_micro_lenses):
+        for ml_jj_idx in range(n_micro_lenses):
+            # Extract the current micro-lens' flattened image from the 1D tensor
+            lenslet_flat = light_field_1D[current_pos:current_pos + num_pixels_per_ml]
+            # Reshape it back into a 2D tensor
+            lenslet = lenslet_flat.view(pixels_per_ml, pixels_per_ml)
+            # Place the reshaped lenslet into the correct position in the 4D light field
+            light_field[
+                ml_ii_idx * pixels_per_ml:(ml_ii_idx + 1) * pixels_per_ml,
+                ml_jj_idx * pixels_per_ml:(ml_jj_idx + 1) * pixels_per_ml
+            ] = lenslet
+            # Update the current position in the 1D tensor
+            current_pos += num_pixels_per_ml
+    return light_field

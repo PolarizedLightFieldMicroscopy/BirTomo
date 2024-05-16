@@ -3,7 +3,7 @@ import torch
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 
 
-def gather_voxels_of_rays_pytorch_batch(self, microlens_offset, collision_indices, volume_shape, backend):
+def gather_voxels_of_rays_pytorch_batch(microlens_offset, collision_indices, volume_shape, backend):
     """In progress: Gathers the shifted voxel indices based on the microlens offset."""
     err_msg = "This function is for PyTorch backend only."
     assert backend == BackEnds.PYTORCH, err_msg
@@ -13,25 +13,23 @@ def gather_voxels_of_rays_pytorch_batch(self, microlens_offset, collision_indice
         collision_indices_tensors = [torch.tensor(sublist, dtype=torch.long) for sublist in collision_indices]
         collision_indices_nested_tensor = torch.nested_tensor(collision_indices_tensors)
     else:
-        # Convert tuples to lists and pad if necessary
         collision_indices_as_lists = [[list(item) for item in sublist] for sublist in collision_indices]
-        # Find maximum sublist length
         max_sublist_length = max(len(sublist) for sublist in collision_indices_as_lists)
-        # Pad sublists to the maximum length
         padded_collision_indices = [sublist + [(-1, -1, -1)] * (max_sublist_length - len(sublist)) for sublist in collision_indices_as_lists]
-
-        # Convert to a PyTorch tensor
         collision_indices_tensor = torch.tensor(padded_collision_indices, dtype=torch.long)
 
     # Ensure microlens_offset is a tensor and compatible for broadcasting
     microlens_offset_tensor = torch.tensor(microlens_offset, dtype=torch.long)
 
-    # Calculate new indices by adding microlens offset to y and z dimensions (assuming shape is [N, V, 3] where N is number of rays and V is voxels per ray)
-    shifted_indices = collision_indices_tensor.clone().unsqueeze(0).repeat(25, 1, 1, 1)
-    permuted_tensor = microlens_offset_tensor.permute(2, 3, 0, 1, 4)
-    flat_permute_tensor = permuted_tensor.reshape(25, 172, 7, 2)
+    # Calculate new indices by adding microlens offset to y and z dimensions
+    # Assuming collision_indices_tensor is of shape [N, V, 3]
+    shifted_indices = collision_indices_tensor.unsqueeze(0).repeat(microlens_offset_tensor.size(0) * microlens_offset_tensor.size(1), 1, 1, 1)
+
+    microlens_offset_tensor = microlens_offset_tensor.unsqueeze(2).unsqueeze(3)
+    microlens_offset_tensor = microlens_offset_tensor.reshape(-1, 1, 1, 2)
+
     # TODO: make shifted_indices large enough to contain info for all microlenses
-    shifted_indices[..., 1:] += flat_permute_tensor
+    shifted_indices[..., 1:] += microlens_offset_tensor
 
     # Calculate 1D indices for the volume shape
     flat_indices = (shifted_indices[..., 0] * volume_shape[1] * volume_shape[2] +
