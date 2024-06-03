@@ -16,6 +16,14 @@ voxel_args = {
     }
 }
 
+voxel_neg_args = {
+    'init_mode': 'single_voxel',
+    'init_args': {
+        'delta_n': -0.05,
+        'offset': [0, 0, 0]
+    }
+}
+
 voxel_shifted_args = {
     'init_mode': 'single_voxel',
     'init_args': {
@@ -55,6 +63,30 @@ random_args = {
         'axes_range': [-1, 1]
     }
 }
+
+random_neg_args = {
+    'init_mode': 'random',
+    'init_args': {
+        'Delta_n_range': [-0.02, 0],
+        'axes_range': [-1, 1]
+    }
+}
+
+random_all_args1 = {
+    'init_mode' : 'random',
+    'init_args' : {
+        'Delta_n_range' : [-0.01, 0.01],
+        'axes_range' : [-1,1]
+        }
+    }
+
+random_neg_args1 = {
+    'init_mode' : 'random',
+    'init_args' : {
+        'Delta_n_range' : [-0.01, 0],
+        'axes_range' : [-1,1]
+        }
+    }
 
 random_args1 = {
     'init_mode' : 'random',
@@ -150,12 +182,32 @@ sphere_args6_thick = {
     }
 }
 
+sphere_neg_args6_thick = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [6.5, 6.5, 6.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': -0.01,
+        'border_thickness': 2
+    }
+}
+
 sphere_args6_thick_ss3 = {
     'init_mode': 'ellipsoid',
     'init_args': {
         'radius': [19.5, 19.5, 19.5],
         'center': [0.5, 0.5, 0.5],
         'delta_n': 0.01,
+        'border_thickness': 6
+    }
+}
+
+sphere_neg_args6_thick_ss3 = {
+    'init_mode': 'ellipsoid',
+    'init_args': {
+        'radius': [19.5, 19.5, 19.5],
+        'center': [0.5, 0.5, 0.5],
+        'delta_n': -0.01,
         'border_thickness': 6
     }
 }

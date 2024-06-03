@@ -25,6 +25,10 @@ def negative_penalty(data):
     return torch.relu(-data).mean()
 
 
+def positive_penalty(data):
+    return torch.relu(data).mean()
+
+
 def total_variation_3d_volumetric(data):
     """
     Computes the Total Variation regularization for a 4D tensor representing volumetric data.
@@ -40,6 +44,20 @@ def total_variation_3d_volumetric(data):
 
     tv_reg = diff_depth + diff_height + diff_width
     return tv_reg
+
+
+def total_variation(data):
+    """
+    Computes the Total Variation regularization for a 4D tensor representing volumetric data.
+    Args:
+        data (torch.Tensor): Input 1D tensor
+    Returns:
+        torch.Tensor: Computed Total Variation regularization term.
+    """
+    # Calculate the differences between adjacent elements
+    tv_reg = torch.pow(data[1:] - data[:-1], 2).mean()
+    return tv_reg
+
 
 
 def weighted_local_cosine_similarity_loss(vector_arr, scalar_arr):

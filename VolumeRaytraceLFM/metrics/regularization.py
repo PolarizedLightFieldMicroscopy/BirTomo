@@ -39,6 +39,16 @@ def neg_penalty_bir_active(volume: BirefringentVolume):
     return negative_penalty(volume.birefringence_active)
 
 
+def pos_penalty_bir_active(volume: BirefringentVolume):
+    return positive_penalty(volume.birefringence_active)
+
+
+def total_variation_bir_subset(volume: BirefringentVolume):
+    birefringence = volume.birefringence_active
+    return total_variation(birefringence)
+
+
+
 class AnisotropyAnalysis:
     def __init__(self, volume: BirefringentVolume):
         self.volume = volume
