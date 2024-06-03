@@ -21,6 +21,7 @@ DEVICE = torch.device(
     "cuda" if torch.cuda.is_available() else "cpu"
 )
 
+# DEVICE = "cpu"
 
 def recon_gpu(postfix='gpu'):
     '''Reconstruct a volume on the GPU.'''
@@ -39,7 +40,8 @@ def recon_gpu(postfix='gpu'):
     )
     volume_GT.to(DEVICE)  # Move the volume to the GPU
 
-    visualize_volume(volume_GT, optical_info)
+    # visualize_volume(volume_GT, optical_info)
+    simulator.rays.to_device(DEVICE)  # Move the rays to the GPU
     simulator.forward_model(volume_GT)
     ret_image_meas = simulator.ret_img
     azim_image_meas = simulator.azim_img
@@ -161,10 +163,16 @@ def recon_sphere():
             'forward_images', 'azim_' + forward_img_str))
 
     recon_optical_info = optical_info.copy()
-    # recon_optical_info["n_voxels_per_ml"] = 3
-    # recon_optical_info["volume_shape"] = [33, 75, 75]
+    ss_factor = 1
+    if ss_factor == 2:
+        recon_optical_info["n_voxels_per_ml"] = 2
+        recon_optical_info["volume_shape"] = [22, 50, 50]
+    elif ss_factor == 3:
+        recon_optical_info["n_voxels_per_ml"] = 3
+        recon_optical_info["volume_shape"] = [33, 75, 75]
     iteration_params = setup_iteration_parameters(
         "config_settings/iter_config_sphere.json")
+    # iteration_params["saved_ray_path"] = r"config_settings\rays\mla13_vol11_25_25\rays.pkl"
     # initial_volume = BirefringentVolume(
     #     backend=BackEnds.PYTORCH,
     #     optical_info=recon_optical_info,
@@ -175,9 +183,17 @@ def recon_sphere():
     init_volume_path = "objects/sphere3/random_11_30_30.h5"
     initial_volume = BirefringentVolume.init_from_file(
         init_volume_path, BackEnds.PYTORCH, recon_optical_info)
+    initial_volume = BirefringentVolume(
+        backend=BACKEND,
+        optical_info=recon_optical_info,
+        volume_creation_args=volume_args.random_args2
+    )
+    # Hmm should supersample on forward model too. At least should both give the same output
+
     iteration_params["initial volume path"] = init_volume_path
-    parent_dir = os.path.join("reconstructions", "sphere3", "debug")
-    recon_directory = create_unique_directory(parent_dir, postfix='planar')
+    
+    parent_dir = os.path.join("reconstructions", "sphere3", f"ss{ss_factor}")
+    recon_directory = create_unique_directory(parent_dir, postfix='ravel')
     if not simulate:
         volume_GT = BirefringentVolume(
             backend=BACKEND,
@@ -192,7 +208,8 @@ def recon_sphere():
                     omit_rays_based_on_pixels=True, apply_volume_mask=False)
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(plot_live=True)
-    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+    reconstructor.rays.print_timing_info()
+    # visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
 def recon_sphere_ss3_cont(init_volume_path, recon_dir_postfix=''):
@@ -446,12 +463,14 @@ def recon_voxel():
 
     recon_optical_info = optical_info.copy()
     # recon_optical_info["n_voxels_per_ml"] = 3
-    # recon_optical_info["volume_shape"] = [9, 17, 17]
+    # recon_optical_info["volume_shape"] = [9, 27, 27]
+    recon_optical_info["n_voxels_per_ml"] = 2
+    recon_optical_info["volume_shape"] = [6, 18, 18]
     iteration_params = setup_iteration_parameters(
         "config_settings/iter_config.json")
     continue_recon = False
     if continue_recon:
-        volume_path = "reconstructions/2024-01-04_16-31-34/volume_ep_100.h5"
+        volume_path = r"reconstructions/voxel\2024-05-11_15-32-33_vox_debug_ss3\volume_ep_0100.h5"
         initial_volume = BirefringentVolume.init_from_file(
         volume_path, BackEnds.PYTORCH, recon_optical_info)
     else:
@@ -460,9 +479,14 @@ def recon_voxel():
             optical_info=recon_optical_info,
             volume_creation_args=volume_args.random_args
         )
-    recon_directory = create_unique_directory("reconstructions/voxel", postfix='vox')
+    recon_directory = create_unique_directory("reconstructions/voxel/ss2", postfix='debug')
     if not simulate:
-        volume_GT = initial_volume
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.voxel_args
+        )
+        # volume_GT = initial_volume
     recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
         azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
     )
@@ -483,6 +507,74 @@ def recon_voxel():
     reconstructor.reconstruct(all_prop_elements=False, plot_live=True)
     print(f"Raytracing time: {reconstructor.rays.times['ray_trace_through_volume'] * 1000:.2f}")
     reconstructor.rays.print_timing_info()
+    visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
+
+def recon_voxel_neg():
+    optical_info = setup_optical_parameters(
+        "config_settings/optical_config_voxel.json")
+    postfix = get_forward_img_str_postfix(optical_info)
+    forward_img_str = 'voxel_neg' + postfix + '.npy'
+    simulate = False
+    if simulate:
+        optical_system = {'optical_info': optical_info}
+        simulator = ForwardModel(optical_system, backend=BACKEND)
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.voxel_neg_args
+        )
+        visualize_volume(volume_GT, optical_info)
+        simulator.forward_model(volume_GT)
+        simulator.view_images()
+        ret_image_meas = simulator.ret_img
+        azim_image_meas = simulator.azim_img
+        # Save the images as numpy arrays
+        if True:
+            ret_numpy = ret_image_meas.detach().numpy()
+            np.save('forward_images/ret_' + forward_img_str, ret_numpy)
+            azim_numpy = azim_image_meas.detach().numpy()
+            np.save('forward_images/azim_' + forward_img_str, azim_numpy)
+    else:
+        ret_image_meas = np.load(os.path.join(
+            'forward_images', 'ret_' + forward_img_str))
+        azim_image_meas = np.load(os.path.join(
+            'forward_images', 'azim_' + forward_img_str))
+
+    recon_optical_info = optical_info.copy()
+    # recon_optical_info["n_voxels_per_ml"] = 3
+    # recon_optical_info["volume_shape"] = [9, 27, 27]
+    # recon_optical_info["n_voxels_per_ml"] = 2
+    # recon_optical_info["volume_shape"] = [6, 18, 18]
+    iteration_params = setup_iteration_parameters(
+        "config_settings/iter_config.json")
+    continue_recon = False
+    if continue_recon:
+        volume_path = r"reconstructions/voxel\2024-05-11_15-32-33_vox_debug_ss3\volume_ep_0100.h5"
+        initial_volume = BirefringentVolume.init_from_file(
+        volume_path, BackEnds.PYTORCH, recon_optical_info)
+    else:
+        initial_volume = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=recon_optical_info,
+            volume_creation_args=volume_args.random_args
+        )
+    recon_directory = create_unique_directory("reconstructions/voxel_neg/ss1", postfix='debug')
+    if not simulate:
+        volume_GT = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=volume_args.voxel_neg_args
+        )
+        # volume_GT = initial_volume
+    recon_config = ReconstructionConfig(recon_optical_info, ret_image_meas,
+        azim_image_meas, initial_volume, iteration_params, gt_vol=volume_GT
+    )
+    recon_config.save(recon_directory)
+    reconstructor = Reconstructor(recon_config, output_dir=recon_directory,
+                            omit_rays_based_on_pixels=True, apply_volume_mask=False)
+    reconstructor.rays.verbose = False
+    reconstructor.reconstruct(all_prop_elements=False, plot_live=True)
     visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 
@@ -1040,6 +1132,8 @@ def main():
 if __name__ == '__main__':
     # recon()
     # recon_sphere()
+    recon_voxel_neg()
     # recon_gpu(postfix='gpu')
-    recon_voxel()
+    # recon_voxel()
     # recon_voxel_upsampled()
+    # recon_gpu()
