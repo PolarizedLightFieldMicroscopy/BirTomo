@@ -1,5 +1,7 @@
 """Functions to create masks to apply to the volumes."""
 import torch
+import gc
+# from memory_profiler import profile
 from VolumeRaytraceLFM.utils.dimensions_utils import (
     light_field_to_1D, oneD_to_light_field
 )
@@ -53,19 +55,20 @@ def create_half_zero_sandwich_mask(shape):
     return mask.flatten()
 
 
-def get_bool_mask_for_ray_indices(ray_indices, radiometry):
+def get_bool_mask_for_ray_indices(ray_indices, light_field):
     """
     Create a mask of shape (ray_indices.shape[1],) that indicates
-    whether the corresponding index is True in the radiometry array.
+    whether the corresponding index is True in the light field array.
     Args:
         ray_indices (torch.Tensor): Tensor of shape (2, N) containing the ray indices.
-        radiometry (torch.Tensor): 2D radiometry tensor of shape (H, W).
+        light_field (torch.Tensor): 2D light field tensor of shape (H, W).
     Returns:
-        torch.Tensor: 1D boolean mask of shape (N,) indicating validity based on radiometry.
+        torch.Tensor: 1D boolean mask of shape (N,) indicating validity based on light field.
     """
     i_indices = ray_indices[0, :]
     j_indices = ray_indices[1, :]
-    mask = radiometry[i_indices, j_indices].to(torch.bool)
+    radiometry_values = light_field[i_indices, j_indices]
+    mask = radiometry_values >= 1e-7
     return mask
 
 
@@ -104,6 +107,7 @@ def clean_and_unique_elements(voxel_tensor):
     return voxel_tensor.unique()
 
 
+# @profile
 def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
     def print_voxel_info(message, voxel_tensor):
         """Print the number of unique voxels with a message."""
@@ -111,7 +115,7 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
 
     # Get all raytraced voxels and clean them
     voxels_raytraced_wo_neg1 = clean_and_unique_elements(voxels_raytraced)
-    print(f"Number of voxels reached by the rays: {len(voxels_raytraced_wo_neg1)}")
+    print_voxel_info("Number of voxels reached by the rays", voxels_raytraced_wo_neg1)
 
     # Generate mask for valid ray indices
     valid_indices = ray_indices
@@ -123,19 +127,41 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
     total_voxels = clean_and_unique_elements(ray_voxels_raytraced_nonzero_ret)
     print_voxel_info("\tIncluded in nonzero retardance pixels", total_voxels)
 
+    # del ray_voxels_raytraced_nonzero_ret
+    # torch.cuda.empty_cache()  # Only if working with CUDA tensors
+
     # Voxels contributing to zero retardance pixels
     ray_voxels_raytraced_zero_ret = voxels_raytraced[~ret_meas_mask]
     voxels_raytraced_zero_ret = clean_and_unique_elements(ray_voxels_raytraced_zero_ret)
     print_voxel_info("\tIncluded in zero retardance pixels", voxels_raytraced_zero_ret)
+    
+    del voxels_raytraced_zero_ret, ret_meas_mask
+    torch.cuda.empty_cache()  # Only if working with CUDA tensors
 
     # Filter for voxels appearing at least twice
     voxels_zero_ret = remove_neg1_values(ray_voxels_raytraced_zero_ret)
     voxels_zero_ret_two_times, _ = indices_with_multiple_occurences(voxels_zero_ret, 2)
     print_voxel_info("\t\tFor two or more rays", voxels_zero_ret_two_times)
 
+    del ray_voxels_raytraced_zero_ret, voxels_zero_ret
+    torch.cuda.empty_cache()  # Only if working with CUDA tensors
+    gc.collect()
+
     # Exclude voxels that appear in zero retardance pixels at least twice
-    vox_exclusion_mask = ~total_voxels.unsqueeze(1).eq(voxels_zero_ret_two_times).any(1)
-    filtered_voxels = total_voxels[vox_exclusion_mask]
+    memory_intensive = False
+    if memory_intensive:
+        vox_exclusion_mask = ~total_voxels.unsqueeze(1).eq(voxels_zero_ret_two_times).any(1)
+        filtered_voxels = total_voxels[vox_exclusion_mask]
+    else:
+        # Convert tensors to sets
+        total_voxels_set = set(total_voxels.tolist())
+        voxels_zero_ret_two_times_set = set(voxels_zero_ret_two_times.tolist())
+
+        # Perform set difference to find elements in total_voxels that are not in voxels_zero_ret_two_times
+        filtered_voxels_set = total_voxels_set - voxels_zero_ret_two_times_set
+
+        # Convert the result back to a tensor
+        filtered_voxels = torch.tensor(sorted(list(filtered_voxels_set)))
 
     print(f"Masking out voxels except for {len(filtered_voxels)} voxels. " +
           f"First, at most, 20 voxels are {filtered_voxels[:20]}")

@@ -1717,19 +1717,80 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         err_msg = "This function is for PyTorch backend only."
         assert self.backend == BackEnds.PYTORCH, err_msg
         vol_shape = self.optical_info['volume_shape']
-        if DEBUG:
-            list_of_voxel_lists = [
-                [RayTraceLFM.safe_ravel_index(vox[ix], microlens_offset, vol_shape) for ix in range(len(vox))]
-                for vox in collision_indices
-            ]
+
+        tensor_method = False
+        if tensor_method:
+            # perform original method for comparison
+            # list_of_voxel_lists_og = [
+            # [RayTraceLFM.ravel_index((vox[ix][0],
+            #         vox[ix][1] + microlens_offset[0],
+            #         vox[ix][2] + microlens_offset[1]),
+            # vol_shape) for ix in range(len(vox))]
+            # for vox in collision_indices
+            # ]
+            def ravel_index(x, dims):
+                '''Convert multi-dimensional indices to a 1D index using PyTorch operations.'''
+                dims = torch.tensor(dims, dtype=torch.long)
+                c = torch.cumprod(torch.cat((torch.tensor([1]), dims.flip(0))), 0)[:-1].flip(0)
+                if x.ndim == 1:
+                    return torch.sum(c * x, dim=0) #torch.dot(c, x)
+                elif x.ndim == 2:
+                    return torch.sum(c * x, dim=1)
+                else:
+                    raise ValueError("Input tensor x must be 1D or 2D")
+
+            # def ravel_index(x, dims):
+            #     '''Method used for debugging'''
+            #     if torch.all(x < dims):
+            #         c = torch.cumprod(torch.cat((torch.tensor([1]), dims.flip(0))), 0).flip(0)[:-1]
+            #         return torch.sum(c * x, dim=1)
+            #     else:
+            #         raise ValueError("Index out of bounds")
+            vol_shape = torch.tensor(self.optical_info['volume_shape'], dtype=torch.long)
+            # Convert microlens_offset and collision_indices to tensors
+            microlens_offset = torch.tensor(microlens_offset, dtype=torch.long)
+            collision_indices = [torch.tensor(vox, dtype=torch.long) for vox in collision_indices]
+            
+            if DEBUG:
+                list_of_voxel_lists = [
+                    [RayTraceLFM.safe_ravel_index(vox[ix], microlens_offset, vol_shape) for ix in range(len(vox))]
+                    for vox in collision_indices
+                ]
+            else:
+                list_of_voxel_lists = []
+                for vox in collision_indices:
+                    # Create a tensor for the offsets
+                    offsets = torch.zeros_like(vox)
+                    offsets[:, 1] = microlens_offset[0]
+                    offsets[:, 2] = microlens_offset[1]
+
+                    # Add the offsets to the collision indices
+                    shifted_vox = vox + offsets
+
+                    # Check if any indices are out of bounds
+                    if torch.any(shifted_vox >= vol_shape):
+                        print("WARNING: Index out of bounds. Should we skip it?")
+                        raise ValueError("Index out of bounds")
+                        # continue
+
+                    # Convert the shifted voxel indices to 1D using ravel_index
+                    raveled_indices = ravel_index(shifted_vox, vol_shape)
+                    list_of_voxel_lists.append(raveled_indices.tolist())
+            # assert list_of_voxel_lists == list_of_voxel_lists_og, "The tensor method does not match the original method."
         else:
-            list_of_voxel_lists = [
-            [RayTraceLFM.ravel_index((vox[ix][0],
-                    vox[ix][1] + microlens_offset[0],
-                    vox[ix][2] + microlens_offset[1]),
-            vol_shape) for ix in range(len(vox))]
-            for vox in collision_indices
-            ]
+            if DEBUG:
+                list_of_voxel_lists = [
+                    [RayTraceLFM.safe_ravel_index(vox[ix], microlens_offset, vol_shape) for ix in range(len(vox))]
+                    for vox in collision_indices
+                ]
+            else:
+                list_of_voxel_lists = [
+                [RayTraceLFM.ravel_index((vox[ix][0],
+                        vox[ix][1] + microlens_offset[0],
+                        vox[ix][2] + microlens_offset[1]),
+                vol_shape) for ix in range(len(vox))]
+                for vox in collision_indices
+                ]
         return list_of_voxel_lists
 
     def _count_vox_raytrace_occurrences(self, zero_ret_voxels=False,

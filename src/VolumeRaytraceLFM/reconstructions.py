@@ -48,7 +48,7 @@ from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 
 DEBUG = False
 PRINT_GRADIENTS = False
-PRINT_TIMING_INFO = True
+PRINT_TIMING_INFO = False
 CLIP_GRADIENT_NORM = False
 
 if DEBUG:
@@ -293,6 +293,18 @@ class Reconstructor:
                     print(f"Radiometry used for filtering rays from {num_rays_og} to {num_rays} rays.")
                 else:
                     print("No radiometry provided for filtering rays.")
+
+        save_indices = False
+        if save_indices:
+            vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+            dict_save_dir = os.path.join(self.recon_directory, 'config_parameters')
+            if not os.path.exists(dict_save_dir):
+                os.makedirs(dict_save_dir)
+            dict_filename = 'vox_indices_by_mla_idx.pkl'
+            dict_save_path = os.path.join(dict_save_dir, dict_filename)
+            with open(dict_save_path, 'wb') as f:
+                pickle.dump(vox_indices_by_mla_idx, f)
+            print(f"Saving voxel indices by MLA index to {dict_save_path}")
 
         try:
             self.mask = self.rays.mask
@@ -687,6 +699,9 @@ class Reconstructor:
             self.fill_optaxis_component(volume_estimation)
         self.keep_optic_axis_on_sphere(volume_estimation)
 
+        if self.ep % 5 == 0:
+            print(f"birefringence: {volume_estimation.birefringence_active[:5].detach().cpu().numpy()}")
+            print(f"optic axis: {volume_estimation.optic_axis_active[:, :5].detach().cpu().numpy()}")
         # TODO: fix so that measured images do not need to be placeholder for the predicted images
         if self.intensity_bool:
             regenerate = False
@@ -938,7 +953,7 @@ class Reconstructor:
         optimizer.param_groups[0]['betas'] = tuple(optax_betas)
         optimizer.param_groups[1]['betas'] = tuple(bir_betas)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-            mode='min', factor=0.5, patience=5, threshold=1e-4,
+            mode='min', factor=0.5, patience=10, threshold=1e-4,
             threshold_mode='rel', cooldown=0, min_lr=1e-6, eps=1e-8)
         figure = setup_visualization(window_title=self.recon_directory, plot_live=plot_live)
         self._create_regularization_terms_csv()

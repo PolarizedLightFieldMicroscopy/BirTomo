@@ -3,7 +3,40 @@
 # GeoBirT
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
 
-## How to use
+## Installation
+To download an editable installation in developer mode:
+```
+pip install -e .[dev]
+```
+
+### Requirements
+<!-- See environment.txt and environment.yml files. -->
+
+Necessary packages:
+- matplotlib (numpy is included)
+- tqdm
+- torch
+- h5py (for reading and saves volumes)
+- plotly (for visualizing volumes)
+- ipykernel (for using jupyter notebooks)
+- os (for saving images)
+- streamlit (for running the streamlit page locally)
+- pytest (for testing code during development)
+
+Run the following code to create a virtual environment will all the necessary and relevant packages:
+```
+conda create --name model python=3.11 tqdm matplotlib h5py --yes
+conda activate model
+conda install -c conda-forge pytorch ipykernel tifffile --yes
+conda install -c plotly plotly --yes
+pip install streamlit
+conda install -c anaconda pytest --yes
+```
+
+If you have a CUDA on your computer, or having issues with pytorch, try following the instructions [here](https://pytorch.org/get-started/locally/) for installing pytorch.
+
+
+## Model formulations
 For the forward model, the main script is `run_simulations.py`. The workflow within that script is the following:
 
 1. Create a birefringent raytracer.
@@ -31,32 +64,6 @@ streamlit run User_Interface.py
 ```
 
 You can also use our streamlit app that runs on the streamlit cloud and uses the code in the *stream* branch: https://polarizedlightfieldmicroscopy-forward-mo-user-interface-dc1r85.streamlit.app/
-
-## Requirements
-<!-- See environment.txt and environment.yml files. -->
-
-Necessary packages:
-- matplotlib (numpy is included)
-- tqdm
-- torch
-- h5py (for reading and saves volumes)
-- plotly (for visualizing volumes)
-- ipykernel (for using jupyter notebooks)
-- os (for saving images)
-- streamlit (for running the streamlit page locally)
-- pytest (for testing code during development)
-
-Run the following code to create a virtual environment will all the necessary and relevant packages:
-```
-conda create --name model python=3.11 tqdm matplotlib h5py --yes
-conda activate model
-conda install -c conda-forge pytorch ipykernel tifffile --yes
-conda install -c plotly plotly --yes
-pip install streamlit
-conda install -c anaconda pytest --yes
-```
-
-If you have a CUDA on your computer, or having issues with pytorch, try following the instructions [here](https://pytorch.org/get-started/locally/) for installing pytorch.
 
 ## Testing
 - Run ```pytest``` in the terminal to check that all the tests pass.

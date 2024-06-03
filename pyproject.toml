@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
+package-dir = {"" = "src"}
 packages = ["VolumeRaytraceLFM"]
 
 [project.optional-dependencies]
