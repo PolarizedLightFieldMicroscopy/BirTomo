@@ -1,17 +1,17 @@
 """This script contains the ForwardModel class."""
+
 import os
 import time
 import matplotlib.pyplot as plt
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
-    BirefringentVolume, BirefringentRaytraceLFM
+    BirefringentVolume,
+    BirefringentRaytraceLFM,
 )
 from VolumeRaytraceLFM.visualization.plotting_ret_azim import (
-    plot_retardance_orientation
+    plot_retardance_orientation,
 )
-from VolumeRaytraceLFM.visualization.plotting_intensity import (
-    plot_intensity_images
-)
+from VolumeRaytraceLFM.visualization.plotting_intensity import plot_intensity_images
 from VolumeRaytraceLFM.jones.jones_calculus import JonesMatrixGenerators
 
 
@@ -51,10 +51,10 @@ class ForwardModel:
         forward_model: Computes, updates simulation images.
     """
 
-    def __init__(self, optical_system, backend, device='cpu'):
+    def __init__(self, optical_system, backend, device="cpu"):
         self.backend = backend
         # Linking with the optical system
-        self.optical_info = optical_system['optical_info']
+        self.optical_info = optical_system["optical_info"]
         self.rays = self.setup_raytracer(device=device)
         self.rays.use_lenslet_based_filtering = False
         # Placeholders
@@ -114,19 +114,19 @@ class ForwardModel:
         """Check if the object is a pytorch tensor."""
         return "torch.Tensor" in str(type(obj))
 
-    def setup_raytracer(self, device='cpu'):
+    def setup_raytracer(self, device="cpu"):
         """Initialize Birefringent Raytracer."""
-        print(f'For raytracing, using computing device {device}')
+        print(f"For raytracing, using computing device {device}")
         rays = BirefringentRaytraceLFM(
             backend=self.backend, optical_info=self.optical_info
         )
         start_time = time.time()
         rays.compute_rays_geometry()
         self.ray_geometry_computation_time = time.time() - start_time
-        print(f'Raytracing time in seconds: {self.ray_geometry_computation_time:.2f}')
+        print(f"Raytracing time in seconds: {self.ray_geometry_computation_time:.2f}")
         return rays
 
-    def view_images(self, azimuth_plot_type='hsv'):
+    def view_images(self, azimuth_plot_type="hsv"):
         """View the simulated images,
         and pause until the user closes the figure.
         Args:
@@ -156,9 +156,9 @@ class ForwardModel:
         ret_image = self.convert_to_numpy(self.ret_img)
         azim_image = self.convert_to_numpy(self.azim_img)
         my_fig = plot_retardance_orientation(
-            ret_image, azim_image, 'hsv', include_labels=True)
-        my_fig.savefig(self.savedir + '/ret_azim.png',
-                       bbox_inches='tight', dpi=300)
+            ret_image, azim_image, "hsv", include_labels=True
+        )
+        my_fig.savefig(self.savedir + "/ret_azim.png", bbox_inches="tight", dpi=300)
 
     def save_intensity_images(self):
         """Save the simulated intensity images."""
@@ -167,9 +167,10 @@ class ForwardModel:
     def add_polscope_components(self):
         """Add the polarizers and analyzers to the optical system. Non-identity
         polarizers and analyzers are used that model the LC-PolScope setup."""
-        self.optical_info['polarizer'] = JonesMatrixGenerators.polscope_analyzer()
-        self.optical_info['analyzer'] = JonesMatrixGenerators.universal_compensator_modes(
-            setting=0, swing=0)
+        self.optical_info["polarizer"] = JonesMatrixGenerators.polscope_analyzer()
+        self.optical_info["analyzer"] = (
+            JonesMatrixGenerators.universal_compensator_modes(setting=0, swing=0)
+        )
 
     def plot_rays(self):
         """Plot the rays in 3D."""
@@ -183,12 +184,13 @@ class ForwardModel:
         # Here's a basic structure; customize as needed
         if not os.path.exists(self.base_dir):
             os.makedirs(self.base_dir)
-        self.savedir = os.path.join(self.base_dir, "forward_images")
+        self.savedir = os.path.join(self.base_dir, "data/forward_images")
         if not os.path.exists(self.savedir):
             os.makedirs(self.savedir)
 
-    def forward_model(self, volume: BirefringentVolume,
-                      intensity=False, all_lenslets=False):
+    def forward_model(
+        self, volume: BirefringentVolume, intensity=False, all_lenslets=False
+    ):
         """
         Compute the forward model for a given volume using the simulator's
         attributes. This function updates the instance parameters with the
@@ -210,15 +212,16 @@ class ForwardModel:
                 List of intensity images, created only if 'intensity' is True.
         """
         ret_image, azim_image = self.rays.ray_trace_through_volume(
-                                    volume, all_rays_at_once=all_lenslets)
+            volume, all_rays_at_once=all_lenslets
+        )
         # print("Retardance and azimuth images computed with LC-PolScope setup")
         self.ret_img = ret_image
         self.azim_img = azim_image
 
         if intensity:
-            self.optical_info['analyzer'] = JonesMatrixGenerators.left_circular_polarizer()
-            self.optical_info['polarizer_swing'] = 0.03
-            self.img_list = self.rays.ray_trace_through_volume(
-                volume, intensity=True
+            self.optical_info["analyzer"] = (
+                JonesMatrixGenerators.left_circular_polarizer()
             )
+            self.optical_info["polarizer_swing"] = 0.03
+            self.img_list = self.rays.ray_trace_through_volume(volume, intensity=True)
             print("Intensity images computed according to the LC-PolScope setup")

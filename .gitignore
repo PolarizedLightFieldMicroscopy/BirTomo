@@ -2,10 +2,7 @@
 */__pycache__/*
 .ipynb_checkpoints/*
 reconstructions/*
-forward_images/*
 playground/*
-phantoms/*
-xylem_mid_outputs/*
-intensity_images_shape_17/*
-intensity_images_shape_85/*
-forward_images_noise/*
+data/*
+*.pkl
+src/bir_tomo.egg-info/*
