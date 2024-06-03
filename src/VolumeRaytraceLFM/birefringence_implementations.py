@@ -31,6 +31,7 @@ DEBUG = False
 
 if DEBUG:
     from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
+    from utils import errors
 
 ######################################################################
 class BirefringentVolume(BirefringentElement):
