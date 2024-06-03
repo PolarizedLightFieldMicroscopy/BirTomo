@@ -7,7 +7,7 @@ st.subheader("Parameters currently have the following values:")
 # st.subheader('Optical Properties')
 
 try:
-    st.write(st.session_state['optical_info'])
+    st.write(st.session_state["optical_info"])
 except:
     st.write(BirefringentVolume.get_optical_info_template())
 

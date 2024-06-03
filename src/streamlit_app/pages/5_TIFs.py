@@ -2,8 +2,9 @@ import streamlit as st
 import tifffile
 
 st.title("Forward projection TIFs")
-uploaded_file = st.file_uploader("Upload a TIF image generated from a forward projection",
-                                 type=["tif", "tiff"])
+uploaded_file = st.file_uploader(
+    "Upload a TIF image generated from a forward projection", type=["tif", "tiff"]
+)
 
 # Open the TIFF file
 if uploaded_file is not None:
@@ -12,12 +13,12 @@ if uploaded_file is not None:
     metadata = my_tif.pages[0].tags
 
 # Display the image
-st.header('Image')
+st.header("Image")
 if uploaded_file:
     st.image(image_data, clamp=True, use_column_width=True)
 
 # Display the metadata
-st.header('Metadata')
+st.header("Metadata")
 if uploaded_file:
     if False:
         for tag in metadata.values():
@@ -33,12 +34,14 @@ if uploaded_file:
             else:
                 st.write(f"\n{key}: {value}")
 
-    image_description = metadata['ImageDescription'].value
-    image_description = image_description.replace(
-        'true', 'True').replace('false', 'False')
+    image_description = metadata["ImageDescription"].value
+    image_description = image_description.replace("true", "True").replace(
+        "false", "False"
+    )
     image_description_dict = eval(image_description)
     tab1, tab2, tab3, tab4 = st.tabs(
-        ["Description", "Optical info", "Parameters", "All metadata"])
+        ["Description", "Optical info", "Parameters", "All metadata"]
+    )
     with tab1:
         st.header("Description")
         subset_dict = {}
@@ -67,6 +70,6 @@ if uploaded_file:
             value = tag.value
             # Convert the tag value to a string if it's a byte string
             if isinstance(value, bytes):
-                value = value.decode('utf-8')
+                value = value.decode("utf-8")
             tag_dict[tag.name] = value
         st.write(tag_dict)

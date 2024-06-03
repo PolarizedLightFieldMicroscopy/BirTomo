@@ -1,4 +1,5 @@
-'''User interface using the Streamlit package'''
+"""User interface using the Streamlit package"""
+
 # Enter the following into the command line, then refresh the browser
 #   or save an updated file to see updates:
 # pip install streamlit

@@ -6,22 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "bir-tomo"
 version = "0.1.0"
 description = "Birefringence tomography"
-authors = [{name = "Geneva Schlafly", email = "gschlafly@uchicago.edu"}]
+authors = [{ name = "Geneva Schlafly", email = "gschlafly@uchicago.edu" }]
 readme = "README.md"
 requires-python = ">=3.8"
-license = {file = "LICENSE"}
-dependencies = [
-    "numpy >= 1.21.2",
-    "matplotlib >= 3.4.3",
-    "h5py",
-    "tqdm",
-    "plotly",
-    "tifffile"
-]
+license = { file = "LICENSE" }
+dependencies = ["numpy", "matplotlib", "h5py", "tqdm", "plotly", "tifffile"]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
-packages = ["VolumeRaytraceLFM"]
+package-dir = { "" = "src" }
+packages = ["VolumeRaytraceLFM", "streamlit_app"]
 
 [project.optional-dependencies]
 dev = ["pytest", "black", "memory_profiler", "ipykernel", "streamlit"]
