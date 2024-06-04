@@ -637,6 +637,7 @@ class BirefringentVolume(BirefringentElement):
     @staticmethod
     def generate_random_volume(volume_shape,
                                init_args={'Delta_n_range' : [0,1], 'axes_range' : [-1,1]}):
+        np.random.seed(42)
         Delta_n = np.random.uniform(init_args['Delta_n_range'][0],
                                     init_args['Delta_n_range'][1],
                                     volume_shape)
