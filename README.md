@@ -4,39 +4,40 @@
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
 
 ## Installation
+Run the following code to create a virtual environment will all the necessary and relevant packages:
+```
+conda create --name bir-tomo python=3.11 --yes
+conda activate bir-tomo
+pip install -e .
+```
+If you have a CUDA on your computer, or having issues with pytorch, try following the instructions [here](https://pytorch.org/get-started/locally/) for installing pytorch.
+
 To download an editable installation in developer mode:
 ```
 pip install -e .[dev]
 ```
 
 ### Requirements
-<!-- See environment.txt and environment.yml files. -->
+See `pyproject.toml` for the dependencies.
 
 Necessary packages:
 - matplotlib (numpy is included)
 - tqdm
 - torch
-- h5py (for reading and saves volumes)
+- h5py (for reading and saving volumes)
+- tifffile (for reading and saving images)
 - plotly (for visualizing volumes)
 - ipykernel (for using jupyter notebooks)
-- os (for saving images)
 - streamlit (for running the streamlit page locally)
 - pytest (for testing code during development)
-
-Run the following code to create a virtual environment will all the necessary and relevant packages:
-```
-conda create --name model python=3.11 tqdm matplotlib h5py --yes
-conda activate model
-conda install -c conda-forge pytorch ipykernel tifffile --yes
-conda install -c plotly plotly --yes
-pip install streamlit
-conda install -c anaconda pytest --yes
-```
-
-If you have a CUDA on your computer, or having issues with pytorch, try following the instructions [here](https://pytorch.org/get-started/locally/) for installing pytorch.
+- scikit-image (for analyzing images)
 
 
-## Model formulations
+
+
+## Birefringence tomography
+*To be updated soon...*
+
 For the forward model, the main script is `run_simulations.py`. The workflow within that script is the following:
 
 1. Create a birefringent raytracer.
@@ -67,4 +68,4 @@ You can also use our streamlit app that runs on the streamlit cloud and uses the
 
 ## Testing
 - Run ```pytest``` in the terminal to check that all the tests pass.
-- An example of running a particular test is ```pytest -v test_jones.py::test_polscope```.
+- An example of running a particular test is ```pytest -v tests/test_jones.py::test_polscope```.
