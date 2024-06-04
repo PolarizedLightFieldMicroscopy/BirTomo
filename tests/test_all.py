@@ -309,6 +309,7 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     # delta_n = 0.1
     # optic_axis = [1.0,0.0,0]
 
+    np.random.seed(42)
     delta_n = np.random.uniform(0.01, 0.25, 1)[0]
     optic_axis = np.random.uniform(0.01, 0.25, 3)
 
