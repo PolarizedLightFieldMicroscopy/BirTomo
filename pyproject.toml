@@ -8,9 +8,9 @@ version = "0.1.0"
 description = "Birefringence tomography"
 authors = [{ name = "Geneva Schlafly", email = "gschlafly@uchicago.edu" }]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
-dependencies = ["numpy", "matplotlib", "h5py", "tqdm", "plotly", "tifffile"]
+dependencies = ["matplotlib", "h5py", "tqdm", "plotly", "tifffile", "torch"]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -25,3 +25,4 @@ dev = [
     "streamlit",
     "scikit-image",
 ]
+test = ["pytest"]
