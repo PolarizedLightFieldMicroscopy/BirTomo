@@ -1,5 +1,7 @@
 import pytest
 from unittest.mock import patch
+from tests.fixtures_backend import backend_fixture
+from tests.fixtures_forward_model import forward_model_fixture
 from tests.fixtures_optical_info import set_optical_info
 from VolumeRaytraceLFM.simulations import (
     BackEnds,
