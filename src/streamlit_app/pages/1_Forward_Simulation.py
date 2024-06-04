@@ -204,7 +204,7 @@ with column2:
             )
 
 if __name__ == "__main__":
-    optical_info = setup_optical_parameters("config_settings/optical_config1.json")
+    optical_info = setup_optical_parameters("config/optical_config1.json")
     optical_system = {"optical_info": optical_info}
     simulator = ForwardModel(optical_system, backend=BACKEND)
     volume_GT = BirefringentVolume(

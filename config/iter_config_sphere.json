@@ -1,14 +1,14 @@
 {
-    "n_epochs": 100,
+    "n_epochs": 200,
     "regularization_weight": 0.5,
     "lr_birefringence": 1e-3,
     "lr_optic_axis": 1e-1,
-    "bir_betas": [0.9, 0.999],
-    "optax_betas": [0.9, 0.999],
+    "bir_betas": [0.6, 0.9],
+    "optax_betas": [0.6, 0.9],
     "optimizer": "Nadam",
     "datafidelity": "euler",
     "regularization_fcns": [
-        ["birefringence active L2", 5000],
+        ["birefringence active L2", 1000],
         ["birefringence active negative penalty", 1000]
     ],
     "from_simulation": true,
@@ -17,7 +17,7 @@
     "two_optic_axis_components": true,
     "free_memory_by_del_large_arrays": true,
     "save_rays": false,
-    "save_freq": 50,
+    "save_freq": 20,
     "output_posfix": "",
     "notes": ""
 }

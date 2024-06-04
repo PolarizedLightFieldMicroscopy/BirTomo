@@ -58,7 +58,7 @@ for i, tab in enumerate(tabs):
 tabs[0].subheader("Microscope configuration")
 optical_info = BirefringentVolume.get_optical_info_template()
 df_microscope = extract_scalar_params(optical_info)
-df_microscope.loc[0] = ["Number of microlenses", 3]
+df_microscope.loc[0] = ["Number of microlenses", 5]
 edited_df_microscope = tabs[0].data_editor(df_microscope)
 values_from_df = dataframe_to_dict(edited_df_microscope)
 optical_info.update(values_from_df)

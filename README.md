@@ -1,4 +1,4 @@
-![python version](https://img.shields.io/badge/python-3.11-blue)
+![python versions](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
 [![Run Pytest](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml)
 # GeoBirT
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
@@ -31,9 +31,6 @@ Necessary packages:
 - streamlit (for running the streamlit page locally)
 - pytest (for testing code during development)
 - scikit-image (for analyzing images)
-
-
-
 
 ## Birefringence tomography
 *To be updated soon...*
