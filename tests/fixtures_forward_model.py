@@ -1,4 +1,5 @@
 """Forward model fixtures for testing."""
+
 import pytest
 from VolumeRaytraceLFM.simulations import ForwardModel
 from tests.fixtures_optical_info import set_optical_info

@@ -2,10 +2,7 @@ import pytest
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 
 
-BACKENDS = {
-    'numpy': BackEnds.NUMPY,
-    'pytorch': BackEnds.PYTORCH
-}
+BACKENDS = {"numpy": BackEnds.NUMPY, "pytorch": BackEnds.PYTORCH}
 
 
 @pytest.fixture(scope="module")

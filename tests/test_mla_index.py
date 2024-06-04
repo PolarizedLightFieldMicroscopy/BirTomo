@@ -1,14 +1,14 @@
 import pytest
-from unittest.mock import patch, call
-from tests.fixtures_backend import backend_fixture
-from tests.fixtures_forward_model import forward_model_fixture
+from unittest.mock import patch
 from tests.fixtures_optical_info import set_optical_info
 from VolumeRaytraceLFM.simulations import (
-    BackEnds, BirefringentRaytraceLFM, BirefringentVolume
+    BackEnds,
+    BirefringentRaytraceLFM,
+    BirefringentVolume,
 )
 
 
-@pytest.mark.parametrize("backend_fixture", ['numpy', 'pytorch'], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
 def test_mla_index(forward_model_fixture, backend_fixture):
     assert forward_model_fixture.backend == backend_fixture
     optical_info = set_optical_info([3, 7, 7], 17, 1)
@@ -16,12 +16,9 @@ def test_mla_index(forward_model_fixture, backend_fixture):
         backend=backend_fixture,
         optical_info=optical_info,
         volume_creation_args={
-            'init_mode': 'single_voxel',
-            'init_args': {
-                'delta_n': -0.05,
-                'offset': [0, 0, 0]
-            }
-        }
+            "init_mode": "single_voxel",
+            "init_args": {"delta_n": -0.05, "offset": [0, 0, 0]},
+        },
     )
     forward_model_fixture.forward_model(volume, backend_fixture)
     assert forward_model_fixture.ret_img is not None
@@ -46,23 +43,21 @@ def rays_fixture(params):
     )
     return BF_raytrace_torch
 
+
 # @pytest.mark.parametrize("rays_fixture", "['[3, 5, 5], 17, 1']")
 def form_mask_from_nonzero_pixels_dict_unique_index(birefringent_raytrace_lfm):
     rays = birefringent_raytrace_lfm
-    rays.optical_info['n_micro_lenses'] = 5
+    rays.optical_info["n_micro_lenses"] = 5
     rays.compute_rays_geometry()
     volume = BirefringentVolume(
         backend=rays.backend,
         optical_info=rays.optical_info,
         volume_creation_args={
-            'init_mode': 'single_voxel',
-            'init_args': {
-                'delta_n': -0.05,
-                'offset': [0, 0, 0]
-            }
-        }
+            "init_mode": "single_voxel",
+            "init_args": {"delta_n": -0.05, "offset": [0, 0, 0]},
+        },
     )
-    method_as_str = '_form_mask_from_nonzero_pixels_dict'
+    method_as_str = "_form_mask_from_nonzero_pixels_dict"
     with patch.object(BirefringentRaytraceLFM, method_as_str) as mock_method:
         # Simulate calling the method with different indices
         indices_to_test = [(0, 0), (1, 0), (0, 1)]
@@ -79,7 +74,7 @@ def form_mask_from_nonzero_pixels_dict_unique_index(birefringent_raytrace_lfm):
 
 def test_filter_ray_data_unique_index(birefringent_raytrace_lfm):
     rays = birefringent_raytrace_lfm
-    with patch.object(BirefringentRaytraceLFM, '_filter_ray_data') as mock_method:
+    with patch.object(BirefringentRaytraceLFM, "_filter_ray_data") as mock_method:
         # Simulate calling the method with different indices
         indices_to_test = [(0, 0), (1, 0), (0, 1)]
         for idx in indices_to_test:
@@ -88,4 +83,6 @@ def test_filter_ray_data_unique_index(birefringent_raytrace_lfm):
         # Verify that all calls to the method had unique indices
         call_args_list = mock_method.call_args_list
         indices = [call_args[0][0] for call_args in call_args_list]
-        assert len(indices) == len(set(indices)), "Duplicate indices found in method calls"
+        assert len(indices) == len(
+            set(indices)
+        ), "Duplicate indices found in method calls"

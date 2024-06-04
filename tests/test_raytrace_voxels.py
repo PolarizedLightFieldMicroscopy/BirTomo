@@ -1,9 +1,9 @@
 """Tests for identifying voxels to raytrace."""
+
 import pytest
 from tests.fixtures_optical_info import set_optical_info
-from VolumeRaytraceLFM.simulations import (
-    BackEnds, ForwardModel
-)
+from VolumeRaytraceLFM.simulations import BackEnds, ForwardModel
+
 
 def has_common_number(lists):
     """Check if there exists a number that is in every list within the list of lists."""
@@ -29,6 +29,7 @@ def has_common_tuple(lists_of_tuples):
 
 common_voxel_fixed = False
 if common_voxel_fixed is True:
+
     @pytest.mark.parametrize("num_microlenses", [1, 3, 5, 7, 9])
     def test_raytrace_common_voxel(num_microlenses):
         optical_info = set_optical_info([3, 7, 7], 17, num_microlenses)
@@ -42,11 +43,10 @@ if common_voxel_fixed is True:
         vox_indices_list = simulator.rays.vox_indices_by_mla_idx[(ctr_idx, ctr_idx)]
         assert has_common_number(vox_indices_list) == True, err_msg
 
-
     @pytest.mark.parametrize("num_microlenses", [1, 3, 5, 7, 9])
     def test_raytrace_common_collision_voxel(num_microlenses):
         """The common element should be:
-                (1, num_microlenses // 2, num_microlenses // 2).
+        (1, num_microlenses // 2, num_microlenses // 2).
         """
         optical_info = set_optical_info([3, 7, 7], 17, num_microlenses)
         optical_system = {"optical_info": optical_info}
