@@ -1,5 +1,6 @@
 import torch
 
+
 def stay_on_sphere(optic_axis):
     """Function to keep the optic axis on the unit sphere.
     Args:
@@ -22,8 +23,7 @@ def fill_vector_based_on_nonaxial(axis_full, axis_nonaxial):
     """
     with torch.no_grad():
         axis_full[1:, :] = axis_nonaxial
-        square_sum = torch.sum(axis_full[1:, :]**2, dim=0)
+        square_sum = torch.sum(axis_full[1:, :] ** 2, dim=0)
         axis_full[0, :] = torch.sqrt(1 - square_sum)
         axis_full[0, torch.isnan(axis_full[0, :])] = 0
     return axis_full
-

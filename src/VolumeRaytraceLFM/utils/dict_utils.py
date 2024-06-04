@@ -1,5 +1,7 @@
 """Ultility functions for dictionaries."""
+
 import torch
+
 
 def extract_numbers_from_dict_of_lists(input_dict):
     """
@@ -42,8 +44,7 @@ def filter_keys_by_count(counter, count_ths):
     Returns:
         list: Keys with counts >= count_ths.
     """
-    filtered_list = [key for key, count in counter.items() 
-                    if count > count_ths - 1]
+    filtered_list = [key for key, count in counter.items() if count > count_ths - 1]
     return sorted(filtered_list)
 
 
@@ -60,12 +61,18 @@ def convert_to_tensors(dict_of_lists):
     # Create a new dictionary to store the tensor versions of the lists
     tensor_dict = {}
     # Calculate the maximum length across all lists in the dictionary values
-    max_length = max(len(inner_list) for lists in dict_of_lists.values() for inner_list in lists)
+    max_length = max(
+        len(inner_list) for lists in dict_of_lists.values() for inner_list in lists
+    )
     # Process each key and list in the dictionary
     for mla_index, lists in dict_of_lists.items():
         # Pad each list to the maximum length and create a tensor
-        padded_lists = [inner_list + [-1] * (max_length - len(inner_list)) for inner_list in lists]
-        tensor = torch.tensor(padded_lists, dtype=torch.int)  # Specify dtype if necessary
+        padded_lists = [
+            inner_list + [-1] * (max_length - len(inner_list)) for inner_list in lists
+        ]
+        tensor = torch.tensor(
+            padded_lists, dtype=torch.int
+        )  # Specify dtype if necessary
         # Store the tensor in the new dictionary
         tensor_dict[mla_index] = tensor
     return tensor_dict

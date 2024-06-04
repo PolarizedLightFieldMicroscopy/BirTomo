@@ -19,8 +19,8 @@ class VolumeFileManager:
         - tuple: A tuple containing numpy arrays for delta_n and optic_axis.
         """
         volume_file = h5py.File(file_path, "r")
-        delta_n = np.array(volume_file['data/delta_n'])
-        optic_axis = np.array(volume_file['data/optic_axis'])
+        delta_n = np.array(volume_file["data/delta_n"])
+        optic_axis = np.array(volume_file["data/optic_axis"])
 
         return delta_n, optic_axis
 
@@ -38,12 +38,12 @@ class VolumeFileManager:
         volume_file = h5py.File(file_path, "r")
 
         # Fetch birefringence and optic axis
-        delta_n = np.array(volume_file['data/delta_n'])
-        optic_axis = np.array(volume_file['data/optic_axis'])
+        delta_n = np.array(volume_file["data/delta_n"])
+        optic_axis = np.array(volume_file["data/optic_axis"])
 
         # Fetch optical info
-        volume_shape = np.array(volume_file['optical_info/volume_shape'])
-        voxel_size_um = np.array(volume_file['optical_info/voxel_size_um'])
+        volume_shape = np.array(volume_file["optical_info/volume_shape"])
+        voxel_size_um = np.array(volume_file["optical_info/voxel_size_um"])
 
         return delta_n, optic_axis, volume_shape, voxel_size_um
 
@@ -60,15 +60,18 @@ class VolumeFileManager:
         and saves it as a TIFF file. Exceptions related to file operations are caught and logged.
         """
         try:
-            print(f'Saving volume to file: {filename}')
+            print(f"Saving volume to file: {filename}")
             combined_data = np.stack(
-                [delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0)
+                [delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0
+            )
             tifffile.imwrite(filename, combined_data)
-            print('Volume saved successfully.')
+            print("Volume saved successfully.")
         except Exception as e:
             print(f"Error saving file: {e}")
 
-    def save_as_h5(self, h5_file_path, delta_n, optic_axis, optical_info, description, optical_all):
+    def save_as_h5(
+        self, h5_file_path, delta_n, optic_axis, optical_info, description, optical_all
+    ):
         """
         Saves the volume data, including birefringence information (delta_n) and optic axis data,
         along with optical metadata into an H5 file.
@@ -107,18 +110,16 @@ class VolumeFileManager:
 
         This method creates a group for optical information and adds datasets to it.
         """
-        optics_grp = file_handle.create_group('optical_info')
-        optics_grp.create_dataset('description', data=np.string_(description))
+        optics_grp = file_handle.create_group("optical_info")
+        optics_grp.create_dataset("description", data=np.string_(description))
         # optics_grp.create_dataset('description', data=description)
         if not optical_all:
-            vol_shape = optical_info.get('volume_shape', None)
-            voxel_size_um = optical_info.get('voxel_size_um', None)
+            vol_shape = optical_info.get("volume_shape", None)
+            voxel_size_um = optical_info.get("voxel_size_um", None)
             if vol_shape is not None:
-                optics_grp.create_dataset(
-                    'volume_shape', data=np.array(vol_shape))
+                optics_grp.create_dataset("volume_shape", data=np.array(vol_shape))
             if voxel_size_um is not None:
-                optics_grp.create_dataset(
-                    'voxel_size_um', data=np.array(voxel_size_um))
+                optics_grp.create_dataset("voxel_size_um", data=np.array(voxel_size_um))
         else:
             for k, v in optical_info.items():
                 optics_grp.create_dataset(k, data=np.array(v))
@@ -134,10 +135,9 @@ class VolumeFileManager:
 
         This method creates a group for volume data and adds datasets for delta_n and optic_axis.
         """
-        data_grp = file_handle.create_group('data')
+        data_grp = file_handle.create_group("data")
         data_grp.create_dataset("delta_n", delta_n.shape, data=delta_n)
-        data_grp.create_dataset(
-            "optic_axis", optic_axis.shape, data=optic_axis)
+        data_grp.create_dataset("optic_axis", optic_axis.shape, data=optic_axis)
 
     def save_as_npz(self, filename, delta_n, optic_axis):
         """
@@ -149,8 +149,8 @@ class VolumeFileManager:
         - optic_axis (np.ndarray): Numpy array containing the optic axis data of the volume.
         """
         try:
-            print(f'Saving volume to file: {filename}')
+            print(f"Saving volume to file: {filename}")
             np.savez(filename, birefringence=delta_n, optic_axis=optic_axis)
-            print('Volume saved successfully as numpy arrays.')
+            print("Volume saved successfully as numpy arrays.")
         except Exception as e:
             print(f"Error saving file: {e}")

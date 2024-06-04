@@ -14,6 +14,7 @@ decoded_array = json_to_complex_array(json_data)
 print(decoded_array)
 """
 
+
 class ComplexArrayEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, complex):
@@ -22,7 +23,6 @@ class ComplexArrayEncoder(json.JSONEncoder):
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
-
 
 
 def decode_complex_list(dct):

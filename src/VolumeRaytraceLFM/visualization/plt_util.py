@@ -8,7 +8,7 @@ def setup_visualization(window_title, plot_live=True):
         plt.ioff()
     fig_size = (10, 9)
     figure = plt.figure(figsize=fig_size)
-    plt.rcParams['image.origin'] = 'lower'
+    plt.rcParams["image.origin"] = "lower"
     manager = plt.get_current_fig_manager()
     manager.set_window_title(window_title)
     if False:

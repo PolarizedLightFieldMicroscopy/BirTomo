@@ -1,7 +1,9 @@
 """Functions for memory management"""
+
 import sys
 import torch
 import numpy as np
+
 
 def tensor_memory_size(tensor):
     """Return the memory size of a tensor in bytes."""
@@ -25,16 +27,20 @@ def calculate_tensor_memory_usage(instance):
     for attr_name, attr_value in vars(instance).items():
         if isinstance(attr_value, torch.Tensor):
             mem_size = tensor_memory_size(attr_value)
-            print(f'Memory used by {attr_name}: {mem_size} bytes or {mem_size / 1024} KB')
+            print(
+                f"Memory used by {attr_name}: {mem_size} bytes or {mem_size / 1024} KB"
+            )
             total_memory += mem_size
-    print(f'Total tensor memory in the instance: {total_memory} bytes or {total_memory / 1024} KB')
+    print(
+        f"Total tensor memory in the instance: {total_memory} bytes or {total_memory / 1024} KB"
+    )
     return total_memory
 
 
 def deep_getsizeof(o, ids):
     """Find the memory footprint of a Python object, including the
     contents of its attributes, with special handling for NumPy arrays.
-    
+
     Example usage: deep_getsizeof(obj, set())
     """
     if id(o) in ids:
@@ -44,15 +50,19 @@ def deep_getsizeof(o, ids):
     size = sys.getsizeof(o)
 
     if isinstance(o, dict):
-        size += sum(deep_getsizeof(k, ids) + deep_getsizeof(v, ids) for k, v in o.items())
+        size += sum(
+            deep_getsizeof(k, ids) + deep_getsizeof(v, ids) for k, v in o.items()
+        )
     elif isinstance(o, (list, tuple, set, frozenset)):
         size += sum(deep_getsizeof(item, ids) for item in o)
     elif isinstance(o, np.ndarray):
         # Use the nbytes attribute for numpy arrays to get the actual data size
         size += o.nbytes
-    elif hasattr(o, '__dict__'):
+    elif hasattr(o, "__dict__"):
         size += deep_getsizeof(o.__dict__, ids)
-    elif hasattr(o, '__iter__') and not isinstance(o, (str, bytes, bytearray, np.ndarray)):
+    elif hasattr(o, "__iter__") and not isinstance(
+        o, (str, bytes, bytearray, np.ndarray)
+    ):
         size += sum(deep_getsizeof(item, ids) for item in o)
     return size
 

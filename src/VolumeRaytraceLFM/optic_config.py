@@ -13,7 +13,9 @@ class OpticBlock(nn.Module):
     """Base class containing all the basic functionality of an optic block"""
 
     def __init__(
-        self, optic_config=None, members_to_learn=None,
+        self,
+        optic_config=None,
+        members_to_learn=None,
     ):
         """
         Initialize the OpticBlock.
@@ -117,10 +119,15 @@ class OpticConfig(nn.Module):
 
         # Sample space information
         # Axial step size in sample space
-        psf_config.voxel_size = [6.5/60, 6.5/60, 0.43]
+        psf_config.voxel_size = [6.5 / 60, 6.5 / 60, 0.43]
         # Axial depths where we compute the PSF
         psf_config.depths = list(
-            np.arange(-10*psf_config.voxel_size[-1], 10*psf_config.voxel_size[-1], psf_config.voxel_size[-1]))
+            np.arange(
+                -10 * psf_config.voxel_size[-1],
+                10 * psf_config.voxel_size[-1],
+                psf_config.voxel_size[-1],
+            )
+        )
 
         return psf_config
 
@@ -141,14 +148,20 @@ class OpticConfig(nn.Module):
         # Setup last PSF parameters
         self.PSF_config.fobj = self.PSF_config.Ftl / self.PSF_config.M
         # Calculate MLA number of pixels behind a lenslet
-        self.mla_config.n_pixels_per_mla = 2 * \
-            [self.mla_config.pitch // self.camera_config.sensor_pitch]
+        self.mla_config.n_pixels_per_mla = 2 * [
+            self.mla_config.pitch // self.camera_config.sensor_pitch
+        ]
         self.mla_config.n_pixels_per_mla = [
-            int(n + (1 if (n % 2 == 0) else 0)) for n in self.mla_config.n_pixels_per_mla]
+            int(n + (1 if (n % 2 == 0) else 0))
+            for n in self.mla_config.n_pixels_per_mla
+        ]
         # Calculate voxel size
         voxel_size_xy = self.camera_config.sensor_pitch / self.PSF_config.M
         self.PSF_config.voxel_size = [
-            voxel_size_xy, voxel_size_xy, self.PSF_config.voxel_size[-1]]
+            voxel_size_xy,
+            voxel_size_xy,
+            self.PSF_config.voxel_size[-1],
+        ]
 
         return
 

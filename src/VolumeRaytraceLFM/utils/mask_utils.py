@@ -1,9 +1,12 @@
 """Functions to create masks to apply to the volumes."""
+
 import torch
 import gc
+
 # from memory_profiler import profile
 from VolumeRaytraceLFM.utils.dimensions_utils import (
-    light_field_to_1D, oneD_to_light_field
+    light_field_to_1D,
+    oneD_to_light_field,
 )
 from VolumeRaytraceLFM.utils.occurences_utils import indices_with_multiple_occurences
 
@@ -51,7 +54,7 @@ def create_half_zero_sandwich_mask(shape):
     half_elements = shape[2] // 2
     for i in range(shape[0]):
         mask[i, :, :half_elements] = 0
-        mask[i, :, half_elements + 2:] = 0
+        mask[i, :, half_elements + 2 :] = 0
     return mask.flatten()
 
 
@@ -72,19 +75,31 @@ def get_bool_mask_for_ray_indices(ray_indices, light_field):
     return mask
 
 
-def form_mask_radiometry_and_valid_rays(ray_indices, radiometry, num_micro_lenses, pixels_per_ml):
+def form_mask_radiometry_and_valid_rays(
+    ray_indices, radiometry, num_micro_lenses, pixels_per_ml
+):
     pixels_per_mla = num_micro_lenses * pixels_per_ml
     valid_indices_mask = torch.zeros((pixels_per_mla, pixels_per_mla), dtype=torch.bool)
     valid_indices_mask[ray_indices[0, :], ray_indices[1, :]] = True
-    valid_indices_mask1D = light_field_to_1D(valid_indices_mask, num_micro_lenses, pixels_per_ml)
-    radiometry1D = light_field_to_1D(radiometry.to(torch.bool), num_micro_lenses, pixels_per_ml)
+    valid_indices_mask1D = light_field_to_1D(
+        valid_indices_mask, num_micro_lenses, pixels_per_ml
+    )
+    radiometry1D = light_field_to_1D(
+        radiometry.to(torch.bool), num_micro_lenses, pixels_per_ml
+    )
     valid_and_radiometry1D = valid_indices_mask1D * radiometry1D
-    valid_and_radiometry = oneD_to_light_field(valid_and_radiometry1D, num_micro_lenses, pixels_per_ml)
+    valid_and_radiometry = oneD_to_light_field(
+        valid_and_radiometry1D, num_micro_lenses, pixels_per_ml
+    )
     return valid_and_radiometry
 
 
-def radiometry_masking_of_ray_indices(ray_indices, radiometry, num_micro_lenses, pixels_per_ml):
-    valid_and_radiometry = form_mask_radiometry_and_valid_rays(ray_indices, radiometry, num_micro_lenses, pixels_per_ml)
+def radiometry_masking_of_ray_indices(
+    ray_indices, radiometry, num_micro_lenses, pixels_per_ml
+):
+    valid_and_radiometry = form_mask_radiometry_and_valid_rays(
+        ray_indices, radiometry, num_micro_lenses, pixels_per_ml
+    )
     adjusted_indices = valid_and_radiometry.nonzero(as_tuple=False).T
     return adjusted_indices
 
@@ -134,7 +149,7 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
     ray_voxels_raytraced_zero_ret = voxels_raytraced[~ret_meas_mask]
     voxels_raytraced_zero_ret = clean_and_unique_elements(ray_voxels_raytraced_zero_ret)
     print_voxel_info("\tIncluded in zero retardance pixels", voxels_raytraced_zero_ret)
-    
+
     del voxels_raytraced_zero_ret, ret_meas_mask
     torch.cuda.empty_cache()  # Only if working with CUDA tensors
 
@@ -150,7 +165,9 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
     # Exclude voxels that appear in zero retardance pixels at least twice
     memory_intensive = False
     if memory_intensive:
-        vox_exclusion_mask = ~total_voxels.unsqueeze(1).eq(voxels_zero_ret_two_times).any(1)
+        vox_exclusion_mask = (
+            ~total_voxels.unsqueeze(1).eq(voxels_zero_ret_two_times).any(1)
+        )
         filtered_voxels = total_voxels[vox_exclusion_mask]
     else:
         # Convert tensors to sets
@@ -163,7 +180,9 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
         # Convert the result back to a tensor
         filtered_voxels = torch.tensor(sorted(list(filtered_voxels_set)))
 
-    print(f"Masking out voxels except for {len(filtered_voxels)} voxels. " +
-          f"First, at most, 20 voxels are {filtered_voxels[:20]}")
+    print(
+        f"Masking out voxels except for {len(filtered_voxels)} voxels. "
+        + f"First, at most, 20 voxels are {filtered_voxels[:20]}"
+    )
 
     return filtered_voxels

@@ -2,6 +2,7 @@ import torch
 import copy
 from math import floor
 
+
 def get_region_of_ones_shape(mask):
     """
     Computes the shape of the smallest bounding box that contains all the ones in the input mask.
@@ -47,8 +48,7 @@ def reshape_crop_and_flatten_parameter(flattened_param, original_shape, new_shap
     end_H = start_H + new_H
     start_W = (W - new_W) // 2
     end_W = start_W + new_W
-    cropped_tensor = reshaped_param[...,
-                                    start_D:end_D, start_H:end_H, start_W:end_W]
+    cropped_tensor = reshaped_param[..., start_D:end_D, start_H:end_H, start_W:end_W]
 
     # Flatten and convert back to a Parameter
     cropped_flattened_parameter = torch.nn.Parameter(cropped_tensor.flatten())
@@ -76,19 +76,18 @@ def reshape_and_crop(flattened_param, original_shape, new_shape):
     end_H = start_H + new_H
     start_W = (W - new_W) // 2
     end_W = start_W + new_W
-    cropped_tensor = reshaped_param[...,
-                                    start_D:end_D, start_H:end_H, start_W:end_W]
+    cropped_tensor = reshaped_param[..., start_D:end_D, start_H:end_H, start_W:end_W]
     return cropped_tensor
 
 
 def store_as_pytorch_parameter(tensor, var_type: str):
-    '''
+    """
     Converts a tensor to a PyTorch parameter and flattens appropriately.
     Note: possibly .type(torch.get_default_dtype()) is needed.
-    '''
-    if var_type == 'scalar':
+    """
+    if var_type == "scalar":
         parameter = torch.nn.Parameter(tensor.flatten())
-    elif var_type == 'vector':
+    elif var_type == "vector":
         parameter = torch.nn.Parameter(tensor.reshape(3, -1))
     return parameter
 
@@ -130,18 +129,19 @@ def upscale_voxel_resolution(volume, upscale_factor):
                             and optic axis.
     """
     vol = copy.deepcopy(volume)
-    vol_shape_og = list(vol.optical_info['volume_shape'])
+    vol_shape_og = list(vol.optical_info["volume_shape"])
     bir_og = vol.get_delta_n()
     optic_axis_og = vol.get_optic_axis()
     bir_upscaled = upscale_birefringence(bir_og, upscale_factor)
     optic_axis_upscaled = upscale_optic_axis(optic_axis_og, upscale_factor)
-    vol.Delta_n = store_as_pytorch_parameter(bir_upscaled, 'scalar')
-    vol.optic_axis = store_as_pytorch_parameter(optic_axis_upscaled, 'vector')
-    vol.optical_info['volume_shape'] = bir_upscaled.shape
-    vol.optical_info['n_voxels_per_ml'] *= upscale_factor
-    vol.optical_info['voxel_size_um'] = [
-        x / upscale_factor for x in vol.optical_info['voxel_size_um']]
-    vol_shape_final = list(vol.optical_info['volume_shape'])
+    vol.Delta_n = store_as_pytorch_parameter(bir_upscaled, "scalar")
+    vol.optic_axis = store_as_pytorch_parameter(optic_axis_upscaled, "vector")
+    vol.optical_info["volume_shape"] = bir_upscaled.shape
+    vol.optical_info["n_voxels_per_ml"] *= upscale_factor
+    vol.optical_info["voxel_size_um"] = [
+        x / upscale_factor for x in vol.optical_info["voxel_size_um"]
+    ]
+    vol_shape_final = list(vol.optical_info["volume_shape"])
     print(f"Volume shape upscaled from {vol_shape_og} to {vol_shape_final}.")
     return vol
 
@@ -158,8 +158,8 @@ def light_field_to_1D(light_field, n_micro_lenses, pixels_per_ml):
     for ml_ii_idx in range(n_micro_lenses):
         for ml_jj_idx in range(n_micro_lenses):
             lenslet = light_field[
-                ml_ii_idx * pixels_per_ml:(ml_ii_idx + 1) * pixels_per_ml,
-                ml_jj_idx * pixels_per_ml:(ml_jj_idx + 1) * pixels_per_ml
+                ml_ii_idx * pixels_per_ml : (ml_ii_idx + 1) * pixels_per_ml,
+                ml_jj_idx * pixels_per_ml : (ml_jj_idx + 1) * pixels_per_ml,
             ]
             lenslet_list.append(lenslet.flatten())
 
@@ -181,8 +181,8 @@ def oneD_to_light_field(light_field_1D, n_micro_lenses, pixels_per_ml):
     num_pixels_per_ml = pixels_per_ml * pixels_per_ml
     light_field = torch.empty(
         (n_micro_lenses * pixels_per_ml, n_micro_lenses * pixels_per_ml),
-        dtype=light_field_1D.dtype
-        )
+        dtype=light_field_1D.dtype,
+    )
     # Counter to keep track of the current position in the 1D tensor
     current_pos = 0
     # Iterate through each microlens and place it in the correct
@@ -190,13 +190,13 @@ def oneD_to_light_field(light_field_1D, n_micro_lenses, pixels_per_ml):
     for ml_ii_idx in range(n_micro_lenses):
         for ml_jj_idx in range(n_micro_lenses):
             # Extract the current micro-lens' flattened image from the 1D tensor
-            lenslet_flat = light_field_1D[current_pos:current_pos + num_pixels_per_ml]
+            lenslet_flat = light_field_1D[current_pos : current_pos + num_pixels_per_ml]
             # Reshape it back into a 2D tensor
             lenslet = lenslet_flat.view(pixels_per_ml, pixels_per_ml)
             # Place the reshaped lenslet into the correct position in the 4D light field
             light_field[
-                ml_ii_idx * pixels_per_ml:(ml_ii_idx + 1) * pixels_per_ml,
-                ml_jj_idx * pixels_per_ml:(ml_jj_idx + 1) * pixels_per_ml
+                ml_ii_idx * pixels_per_ml : (ml_ii_idx + 1) * pixels_per_ml,
+                ml_jj_idx * pixels_per_ml : (ml_jj_idx + 1) * pixels_per_ml,
             ] = lenslet
             # Update the current position in the 1D tensor
             current_pos += num_pixels_per_ml

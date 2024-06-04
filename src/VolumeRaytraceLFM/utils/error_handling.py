@@ -41,12 +41,19 @@ def check_for_nans(tensor):
 def check_for_negative_values(my_list):
     if any(value < 0 for value in my_list):
         negative_value = next(value for value in my_list if value < 0)
-        raise ValueError(f"Invalid value: {negative_value}. The list should not contain negative integers.")
+        raise ValueError(
+            f"Invalid value: {negative_value}. The list should not contain negative integers."
+        )
 
 
 def check_for_negative_values_dict(my_dict):
     # Iterate over each sublist in the lists of lists stored as values in the dictionary
-    if any(value < 0 for nested_list in my_dict.values() for sublist in nested_list for value in sublist):
+    if any(
+        value < 0
+        for nested_list in my_dict.values()
+        for sublist in nested_list
+        for value in sublist
+    ):
         raise ValueError("The dictionary contains negative values.")
     else:
         print("All entries are nonnegative.")

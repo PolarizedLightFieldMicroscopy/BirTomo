@@ -1,4 +1,5 @@
-'''Regularization metrics for a birefringent volume'''
+"""Regularization metrics for a birefringent volume"""
+
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.metrics.regularization_fundamentals import *
 import torch.nn.functional as F
@@ -27,7 +28,7 @@ def total_variation_optax(volume: BirefringentVolume):
 
 
 def cosine_similarity_neighbors(volume: BirefringentVolume):
-    """ Compute a loss that encourages each vector in optic_axis to
+    """Compute a loss that encourages each vector in optic_axis to
     align with its neighbors, weighted by delta_n.
     """
     delta_n = volume.get_delta_n()
@@ -46,7 +47,6 @@ def pos_penalty_bir_active(volume: BirefringentVolume):
 def total_variation_bir_subset(volume: BirefringentVolume):
     birefringence = volume.birefringence_active
     return total_variation(birefringence)
-
 
 
 class AnisotropyAnalysis:

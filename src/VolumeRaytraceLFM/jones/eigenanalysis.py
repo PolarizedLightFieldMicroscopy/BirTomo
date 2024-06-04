@@ -9,8 +9,14 @@ def calc_theta(jones):
     device = jones.device
     # Clamp the real part to the valid range of acos to prevent NaNs
     # Note: bounds of -1 and 1 cause NaNs in backward pass
-    upper_limit = torch.nextafter(torch.tensor(1.0, dtype=torch.float64), torch.tensor(-np.inf, dtype=torch.float64)).to(device)
-    lower_limit = torch.nextafter(torch.tensor(-1.0, dtype=torch.float64), torch.tensor(np.inf, dtype=torch.float64)).to(device)
+    upper_limit = torch.nextafter(
+        torch.tensor(1.0, dtype=torch.float64),
+        torch.tensor(-np.inf, dtype=torch.float64),
+    ).to(device)
+    lower_limit = torch.nextafter(
+        torch.tensor(-1.0, dtype=torch.float64),
+        torch.tensor(np.inf, dtype=torch.float64),
+    ).to(device)
     theta = torch.acos(torch.clamp(a.real, lower_limit, upper_limit))
     return theta
 
@@ -18,8 +24,14 @@ def calc_theta(jones):
 def calc_theta_single(jones):
     # jones is a single 2x2 matrix
     a = jones[0, 0].to(torch.complex128)
-    upper_limit = torch.nextafter(torch.tensor(1.0, dtype=torch.float64), torch.tensor(-np.inf, dtype=torch.float64))
-    lower_limit = torch.nextafter(torch.tensor(-1.0, dtype=torch.float64), torch.tensor(np.inf, dtype=torch.float64))
+    upper_limit = torch.nextafter(
+        torch.tensor(1.0, dtype=torch.float64),
+        torch.tensor(-np.inf, dtype=torch.float64),
+    )
+    lower_limit = torch.nextafter(
+        torch.tensor(-1.0, dtype=torch.float64),
+        torch.tensor(np.inf, dtype=torch.float64),
+    )
     theta = torch.acos(torch.clamp(a.real, lower_limit, upper_limit))
     return theta
 
@@ -101,13 +113,19 @@ def azimuth_from_jones_torch(jones):
         j11 = jones[0, 0]
         j12 = jones[0, 1]
     else:
-        raise ValueError('Invalid input shape')
+        raise ValueError("Invalid input shape")
     imag_j11 = torch.imag(j11)
     imag_j12 = torch.imag(j12)
     azimuth = torch.zeros_like(imag_j11, dtype=imag_j11.dtype)
     # Create a mask where both imaginary parts are not close to zero
-    non_zero_mask = ~(torch.isclose(imag_j11, torch.zeros_like(imag_j11)) & torch.isclose(imag_j12, torch.zeros_like(imag_j12)))
+    non_zero_mask = ~(
+        torch.isclose(imag_j11, torch.zeros_like(imag_j11))
+        & torch.isclose(imag_j12, torch.zeros_like(imag_j12))
+    )
     # Compute azimuth for non-zero mask elements
-    azimuth_non_zero = 0.5 * torch.atan2(imag_j12[non_zero_mask], imag_j11[non_zero_mask]) + torch.pi / 2.0
+    azimuth_non_zero = (
+        0.5 * torch.atan2(imag_j12[non_zero_mask], imag_j11[non_zero_mask])
+        + torch.pi / 2.0
+    )
     azimuth[non_zero_mask] = azimuth_non_zero
     return azimuth

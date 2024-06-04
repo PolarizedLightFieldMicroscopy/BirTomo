@@ -8,15 +8,26 @@ def vox_ray_ret_azim_numpy(bir, optic_axis, rayDir, ell, wavelength):
     azim = np.arctan2(np.dot(optic_axis, rayDir[1]), np.dot(optic_axis, rayDir[2]))
     azim = 0 if bir == 0 else (azim + np.pi / 2 if bir < 0 else azim)
     # proj_along_ray = np.dot(optic_axis, rayDir[0])
-    ret = abs(bir) * (1 - np.dot(optic_axis, rayDir[0]) ** 2) * 2 * ell * np.pi / wavelength
+    ret = (
+        abs(bir)
+        * (1 - np.dot(optic_axis, rayDir[0]) ** 2)
+        * 2
+        * ell
+        * np.pi
+        / wavelength
+    )
     return ret, azim
 
 
 def print_ret_azim_numpy(ret, azim):
-    print(f"Azimuth angle of index ellipsoid is " + 
-          f"{np.around(np.rad2deg(azim), decimals=0)} degrees.")
-    print(f"Accumulated retardance from index ellipsoid is " +
-        f"{np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees.")
+    print(
+        f"Azimuth angle of index ellipsoid is "
+        + f"{np.around(np.rad2deg(azim), decimals=0)} degrees."
+    )
+    print(
+        f"Accumulated retardance from index ellipsoid is "
+        + f"{np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees."
+    )
 
 
 def vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength):
@@ -24,8 +35,8 @@ def vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength):
     # Dot product of optical axis and 3 ray-direction vectors
     OA_dot_rayDir = torch.linalg.vecdot(optic_axis, rayDir)
     # TODO: verify x2 should be mult by the azimuth angle
-    azim = 2 * torch.arctan2(OA_dot_rayDir[1,:], OA_dot_rayDir[2,:])
-    ret = abs(bir) * (1 - (OA_dot_rayDir[0,:]) ** 2) * ell * pi_tensor / wavelength
+    azim = 2 * torch.arctan2(OA_dot_rayDir[1, :], OA_dot_rayDir[2, :])
+    ret = abs(bir) * (1 - (OA_dot_rayDir[0, :]) ** 2) * ell * pi_tensor / wavelength
     neg_delta_mask = bir < 0
     # TODO: check how the gradients are affected--might be a discontinuity
     azim[neg_delta_mask] += pi_tensor
@@ -37,12 +48,16 @@ def normalized_projection_torch(optic_axis, rayDir):
     optic axis is not normalized."""
     OA_dot_rayDir = torch.linalg.vecdot(optic_axis, rayDir)
     normAxis = torch.linalg.norm(optic_axis, axis=1)
-    proj_along_ray = torch.full_like(OA_dot_rayDir[0,:], fill_value=1)
-    proj_along_ray[normAxis != 0] = OA_dot_rayDir[0,:][normAxis != 0] / normAxis[normAxis != 0]
+    proj_along_ray = torch.full_like(OA_dot_rayDir[0, :], fill_value=1)
+    proj_along_ray[normAxis != 0] = (
+        OA_dot_rayDir[0, :][normAxis != 0] / normAxis[normAxis != 0]
+    )
     return proj_along_ray
 
 
-def calculate_vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength, nonzeros_only=False):
+def calculate_vox_ray_ret_azim_torch(
+    bir, optic_axis, rayDir, ell, wavelength, nonzeros_only=False
+):
     if nonzeros_only:
         # Faster when the number of non-zero elements is large
         nonzero_indices = bir.nonzero()
@@ -56,7 +71,8 @@ def calculate_vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength, n
             nonzero_ell = ell[nonzero_indices]
 
             ret_nonzeros, azim_nonzeros = vox_ray_ret_azim_torch(
-                nonzero_bir, nonzero_optic_axis, nonzero_rayDir, nonzero_ell, wavelength)
+                nonzero_bir, nonzero_optic_axis, nonzero_rayDir, nonzero_ell, wavelength
+            )
 
             ret[nonzero_indices] = ret_nonzeros
             azim[nonzero_indices] = azim_nonzeros
@@ -64,7 +80,6 @@ def calculate_vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength, n
     else:
         # Faster when the number of non-zero elements is small
         return vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength)
-
 
 
 def jones_torch(ret, azim):
@@ -109,4 +124,3 @@ def calculate_jones_torch(ret, azim, nonzeros_only=False):
     else:
         # Faster when the number of non-zero elements is small
         return jones_torch(ret, azim)
-

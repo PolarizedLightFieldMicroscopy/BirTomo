@@ -1,4 +1,5 @@
-'''Regularization functions that can use used in the optimization process.'''
+"""Regularization functions that can use used in the optimization process."""
+
 import torch
 import torch.nn.functional as F
 
@@ -59,7 +60,6 @@ def total_variation(data):
     return tv_reg
 
 
-
 def weighted_local_cosine_similarity_loss(vector_arr, scalar_arr):
     """
     Compute a loss that encourages each vector to align
@@ -73,14 +73,18 @@ def weighted_local_cosine_similarity_loss(vector_arr, scalar_arr):
 
     Returns:
         torch.Tensor: Scalar tensor representing the loss.
-    
+
     The loss is between 0 and 2.
     """
     # TODO: make unnormalized version to hopefully make this term decrease
     normalized_vector = F.normalize(vector_arr, p=2, dim=0)
     normalized_scalar = scalar_arr / scalar_arr.abs().max() / 2
-    err_message = "Normalized birefringence values are not within the range [-0.5, 0.5]."
-    assert torch.all((normalized_scalar >= -0.5) & (normalized_scalar <= 0.5)), err_message
+    err_message = (
+        "Normalized birefringence values are not within the range [-0.5, 0.5]."
+    )
+    assert torch.all(
+        (normalized_scalar >= -0.5) & (normalized_scalar <= 0.5)
+    ), err_message
 
     cos_sim_loss = 0.0
     valid_comparisons = 0
@@ -88,19 +92,21 @@ def weighted_local_cosine_similarity_loss(vector_arr, scalar_arr):
     # Compute cosine similarity with local neighbors along each dimension
     for i in range(1, 4):  # Iterate over D, H, W dimensions
         rolled_vector = torch.roll(normalized_vector, shifts=-1, dims=i)
-        
+
         # Compute cosine similarity (dot product) along this dimension
         #   Array of shape (D, H, W) with floats between -1 and 1
         cos_sim = (normalized_vector * rolled_vector).sum(dim=0)
 
-        rolled_scalar = torch.roll(normalized_scalar, shifts=-1, dims=i-1)
+        rolled_scalar = torch.roll(normalized_scalar, shifts=-1, dims=i - 1)
 
         weighted_cos_sim = cos_sim * (normalized_scalar.abs() + rolled_scalar.abs()) / 2
 
         # Create the valid mask to avoid boundary elements
         valid_mask = torch.ones_like(weighted_cos_sim, dtype=torch.bool)
-        index_tensor = torch.tensor([weighted_cos_sim.size(i-1) - 1], device=weighted_cos_sim.device)
-        valid_mask.index_fill_(i-1, index_tensor, False)
+        index_tensor = torch.tensor(
+            [weighted_cos_sim.size(i - 1) - 1], device=weighted_cos_sim.device
+        )
+        valid_mask.index_fill_(i - 1, index_tensor, False)
 
         cos_sim_loss += (1 - weighted_cos_sim[valid_mask]).sum()
         valid_comparisons += valid_mask.sum().item()
