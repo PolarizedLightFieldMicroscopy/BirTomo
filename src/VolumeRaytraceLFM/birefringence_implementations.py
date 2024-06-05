@@ -757,7 +757,7 @@ class BirefringentVolume(BirefringentElement):
             voxel_parameters = self.generate_planes_volume(
                 volume_shape, n_planes, z_offset=z_offset, delta_n=delta_n
             )
-        elif init_mode == "ellipsoid":
+        elif init_mode in ["ellipsoid", "shell"]:
             # Look for variables in init_args, else init with something
             radius = (
                 init_args["radius"] if "radius" in init_args.keys() else [5.5, 5.5, 3.5]
@@ -774,8 +774,18 @@ class BirefringentVolume(BirefringentElement):
             voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
+            if init_mode == "shell":
+                if self.backend == BackEnds.PYTORCH:
+                    with torch.no_grad():
+                        self.get_delta_n()[
+                            : self.optical_info["volume_shape"][0] // 2 + 2, ...
+                        ] = 0
+                else:
+                    self.get_delta_n()[
+                        : self.optical_info["volume_shape"][0] // 2 + 2, ...
+                    ] = 0
         else:
-            print(f"The init mode {init_mode} has not been created yet.")
+            raise ValueError(f"The init mode {init_mode} has not been created yet.")
         volume_ref = BirefringentVolume(
             backend=self.backend,
             optical_info=self.optical_info,
@@ -999,7 +1009,7 @@ class BirefringentVolume(BirefringentElement):
             ] = voxel_birefringence_axis
             volume.Delta_n.requires_grad = True
             volume.optic_axis.requires_grad = True
-        elif vol_type in ["ellipsoid", "shell"]:  # whole plane
+        elif vol_type in ["ellipsoid", "shell"]:
             ellipsoid_args = {
                 "radius": [5.5, 9.5, 5.5],
                 "center": [

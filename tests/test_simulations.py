@@ -2,6 +2,7 @@
 
 import pytest
 import numpy as np
+import torch
 from tests.fixtures_backend import backend_fixture
 from tests.fixtures_forward_model import forward_model_fixture
 from tests.fixtures_optical_info import set_optical_info
@@ -9,6 +10,7 @@ from VolumeRaytraceLFM.simulations import (
     BackEnds,
     BirefringentRaytraceLFM,
     BirefringentVolume,
+    ForwardModel,
 )
 
 
@@ -67,3 +69,22 @@ def test_forward_model(forward_model_fixture, backend_fixture):
     forward_model_fixture.forward_model(volume, backend_fixture)
     assert forward_model_fixture.ret_img is not None
     assert forward_model_fixture.azim_img is not None
+
+
+def test_forward_model_all_lenslets():
+    backend = BackEnds.PYTORCH
+    optical_info = set_optical_info([3, 9, 9], 16, 5)
+    volume = BirefringentVolume(
+        backend=backend,
+        optical_info=optical_info,
+        volume_creation_args={"init_mode": "random"},
+    )
+    optical_system = {"optical_info": optical_info}
+    simulator = ForwardModel(optical_system, backend)
+    simulator.forward_model(volume, backend)
+    images = simulator.ret_img, simulator.azim_img
+    simulator.rays.prepare_for_all_rays_at_once()
+    simulator.forward_model(volume, all_lenslets=True)
+    images_all_lenslets = simulator.ret_img, simulator.azim_img
+    assert torch.allclose(images[0], images_all_lenslets[0]), "Retardance images differ"
+    assert torch.allclose(images[1], images_all_lenslets[1]), "Azimuth images differ"

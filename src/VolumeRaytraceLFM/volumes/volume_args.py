@@ -193,9 +193,19 @@ sphere_shifted45 = {
 }
 
 shell_args = {
-    "init_mode": "ellipsoid",
+    "init_mode": "shell",
     "init_args": {
         "radius": [5.5, 9.5, 5.5],
+        "center": [0.5, 0.5, 0.5],
+        "delta_n": -0.01,
+        "border_thickness": 1,
+    },
+}
+
+shell_small_args = {
+    "init_mode": "shell",
+    "init_args": {
+        "radius": [2.5, 5.5, 3.5],
         "center": [0.5, 0.5, 0.5],
         "delta_n": -0.01,
         "border_thickness": 1,
