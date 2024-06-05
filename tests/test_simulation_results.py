@@ -6,8 +6,6 @@ from VolumeRaytraceLFM.simulations import ForwardModel
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.volumes import volume_args
-from tests.fixtures_backend import backend_fixture
-from tests.fixtures_forward_model import forward_model_general_fixture
 from tests.fixtures_optical_info import set_optical_info
 
 BACKEND = BackEnds.PYTORCH
