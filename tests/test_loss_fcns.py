@@ -7,7 +7,7 @@ def test_weighted_local_cosine_similarity_loss():
     between 0 and 2.
     """
     for _ in range(10):
-        optic_axis = torch.randn(3, 10, 10, 10)  
+        optic_axis = torch.randn(3, 10, 10, 10)
         delta_n = torch.randn(10, 10, 10)
 
         loss = weighted_local_cosine_similarity_loss(optic_axis, delta_n)

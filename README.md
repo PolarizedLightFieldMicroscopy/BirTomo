@@ -1,9 +1,40 @@
-![python version](https://img.shields.io/badge/python-3.11-blue)
+![python versions](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)
 [![Run Pytest](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml/badge.svg)](https://github.com/PolarizedLightFieldMicroscopy/forward-model/actions/workflows/pytest-action.yml)
 # GeoBirT
 Polarized light field microscopy forward model and inverse model using geometrical optics and Jones Calculus.
 
-## How to use
+## Installation
+Run the following code to create a virtual environment will all the necessary and relevant packages:
+```
+conda create --name bir-tomo python=3.11 --yes
+conda activate bir-tomo
+pip install -e .
+```
+If you have a CUDA on your computer, or having issues with pytorch, try following the instructions [here](https://pytorch.org/get-started/locally/) for installing pytorch.
+
+To download an editable installation in developer mode:
+```
+pip install -e .[dev]
+```
+
+### Requirements
+See `pyproject.toml` for the dependencies.
+
+Necessary packages:
+- matplotlib (numpy is included)
+- tqdm
+- torch
+- h5py (for reading and saving volumes)
+- tifffile (for reading and saving images)
+- plotly (for visualizing volumes)
+- ipykernel (for using jupyter notebooks)
+- streamlit (for running the streamlit page locally)
+- pytest (for testing code during development)
+- scikit-image (for analyzing images)
+
+## Birefringence tomography
+*To be updated soon...*
+
 For the forward model, the main script is `run_simulations.py`. The workflow within that script is the following:
 
 1. Create a birefringent raytracer.
@@ -32,32 +63,6 @@ streamlit run User_Interface.py
 
 You can also use our streamlit app that runs on the streamlit cloud and uses the code in the *stream* branch: https://polarizedlightfieldmicroscopy-forward-mo-user-interface-dc1r85.streamlit.app/
 
-## Requirements
-<!-- See environment.txt and environment.yml files. -->
-
-Necessary packages:
-- matplotlib (numpy is included)
-- tqdm
-- torch
-- h5py (for reading and saves volumes)
-- plotly (for visualizing volumes)
-- ipykernel (for using jupyter notebooks)
-- os (for saving images)
-- streamlit (for running the streamlit page locally)
-- pytest (for testing code during development)
-
-Run the following code to create a virtual environment will all the necessary and relevant packages:
-```
-conda create --name model python=3.11 tqdm matplotlib h5py --yes
-conda activate model
-conda install -c conda-forge pytorch ipykernel tifffile --yes
-conda install -c plotly plotly --yes
-pip install streamlit
-conda install -c anaconda pytest --yes
-```
-
-If you have a CUDA on your computer, or having issues with pytorch, try following the instructions [here](https://pytorch.org/get-started/locally/) for installing pytorch.
-
 ## Testing
 - Run ```pytest``` in the terminal to check that all the tests pass.
-- An example of running a particular test is ```pytest -v test_jones.py::test_polscope```.
+- An example of running a particular test is ```pytest -v tests/test_jones.py::test_polscope```.

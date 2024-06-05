@@ -1,4 +1,5 @@
 """Tests for the reconstructions module."""
+
 import numpy as np
 import pytest
 from tests.fixtures_optical_info import set_optical_info
@@ -19,22 +20,20 @@ def recon_info():
         backend=BackEnds.PYTORCH,
         optical_info=optical_info,
         volume_creation_args={
-            'init_mode': 'single_voxel',
-            'init_args': {
-                'delta_n': -0.05,
-                'offset': [0, 0, 0]
-            }
-        }
+            "init_mode": "single_voxel",
+            "init_args": {"delta_n": -0.05, "offset": [0, 0, 0]},
+        },
     )
     iteration_params = {
         "n_epochs": 31,
         "azimuth_weight": 0.5,
         "regularization_weight": 0.1,
         "lr": 1e-3,
-        "output_posfix": ""
+        "output_posfix": "",
     }
-    recon_config = ReconstructionConfig(optical_info, ret_image_meas, azim_image_meas,
-                                        initial_volume, iteration_params)
+    recon_config = ReconstructionConfig(
+        optical_info, ret_image_meas, azim_image_meas, initial_volume, iteration_params
+    )
     return recon_config
 
 
@@ -46,6 +45,7 @@ def reconstructor(recon_info):
 def test_reconstructor_initialization(reconstructor):
     assert isinstance(reconstructor, Reconstructor)
     assert reconstructor.backend == BackEnds.PYTORCH
+
 
 # def test_reconstruction_config():
 #     # Test ReconstructionConfig initialization

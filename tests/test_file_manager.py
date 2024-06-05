@@ -1,4 +1,5 @@
-'''Tests for VolumeFileManager class'''
+"""Tests for VolumeFileManager class"""
+
 import numpy as np
 import h5py
 import os
@@ -24,15 +25,18 @@ def mock_h5_file(return_value):
 
 
 def test_extract_data_from_h5(monkeypatch):
-    test_file_path = 'test_file.h5'
+    test_file_path = "test_file.h5"
     expected_delta_n = np.array([1, 2, 3])
     expected_optic_axis = np.array([4, 5, 6])
 
     # Mocking the h5py.File call
-    monkeypatch.setattr(h5py, 'File', mock_h5_file({
-        'data/delta_n': expected_delta_n,
-        'data/optic_axis': expected_optic_axis
-    }))
+    monkeypatch.setattr(
+        h5py,
+        "File",
+        mock_h5_file(
+            {"data/delta_n": expected_delta_n, "data/optic_axis": expected_optic_axis}
+        ),
+    )
 
     vfm = VolumeFileManager()
     delta_n, optic_axis = vfm.extract_data_from_h5(test_file_path)
@@ -44,23 +48,30 @@ def test_extract_data_from_h5(monkeypatch):
 def test_extract_all_data_from_h5(monkeypatch):
     """Verify that the extract_all_data_from_h5 method correctly
     extracts data and optical information from an H5 file"""
-    test_file_path = 'test_file.h5'
+    test_file_path = "test_file.h5"
     expected_delta_n = np.array([1, 2, 3])
     expected_optic_axis = np.array([4, 5, 6])
     expected_volume_shape = np.array([7, 8, 9])
     expected_voxel_size_um = np.array([10, 11, 12])
 
     # Mocking the h5py.File call
-    monkeypatch.setattr(h5py, 'File', mock_h5_file({
-        'data/delta_n': expected_delta_n,
-        'data/optic_axis': expected_optic_axis,
-        'optical_info/volume_shape': expected_volume_shape,
-        'optical_info/voxel_size_um': expected_voxel_size_um
-    }))
+    monkeypatch.setattr(
+        h5py,
+        "File",
+        mock_h5_file(
+            {
+                "data/delta_n": expected_delta_n,
+                "data/optic_axis": expected_optic_axis,
+                "optical_info/volume_shape": expected_volume_shape,
+                "optical_info/voxel_size_um": expected_voxel_size_um,
+            }
+        ),
+    )
 
     vfm = VolumeFileManager()
     delta_n, optic_axis, volume_shape, voxel_size_um = vfm.extract_all_data_from_h5(
-        test_file_path)
+        test_file_path
+    )
 
     assert np.array_equal(delta_n, expected_delta_n)
     assert np.array_equal(optic_axis, expected_optic_axis)
@@ -69,7 +80,7 @@ def test_extract_all_data_from_h5(monkeypatch):
 
 
 def test_save_as_channel_stack_tiff(monkeypatch):
-    filename = 'test.tiff'
+    filename = "test.tiff"
     shape = (3, 1, 5, 5)
     delta_n = np.random.random(shape[1:])
     optic_axis = np.random.random(shape)
@@ -79,7 +90,7 @@ def test_save_as_channel_stack_tiff(monkeypatch):
     # Create a mock for the imwrite function
     mock_imwrite = Mock()
     # Use monkeypatch to replace imwrite with the mock
-    monkeypatch.setattr('tifffile.imwrite', mock_imwrite)
+    monkeypatch.setattr("tifffile.imwrite", mock_imwrite)
 
     # Create an instance of VolumeFileManager and call the method
     vfm = VolumeFileManager()
@@ -95,9 +106,11 @@ def test_save_as_channel_stack_tiff(monkeypatch):
 
     # Check if the data matches within a tolerance
     expected_data = np.stack(
-        [delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0)
+        [delta_n, optic_axis[0], optic_axis[1], optic_axis[2]], axis=0
+    )
     assert np.allclose(
-        actual_data, expected_data), "Data does not match within tolerance"
+        actual_data, expected_data
+    ), "Data does not match within tolerance"
 
 
 def test_save_as_h5():
@@ -128,7 +141,7 @@ def test_save_as_h5():
         assert np.array_equal(f["data"]["delta_n"][:], mock_delta_n)
         assert np.array_equal(f["data"]["optic_axis"][:], mock_optic_axis)
         description_bytes = f["optical_info"]["description"][()]
-        description_string = description_bytes.decode('utf-8')
+        description_string = description_bytes.decode("utf-8")
         assert description_string == mock_description
 
         # Verify the presence of additional optical metadata if `optical_all` is True
