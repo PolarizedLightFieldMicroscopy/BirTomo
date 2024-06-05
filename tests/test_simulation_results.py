@@ -6,6 +6,7 @@ from VolumeRaytraceLFM.simulations import ForwardModel
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.volumes import volume_args
+from tests.test_all import check_azimuth_images
 from tests.fixtures_optical_info import set_optical_info
 
 BACKEND = BackEnds.PYTORCH
@@ -58,7 +59,7 @@ def compare_images(generated_images, saved_images):
     assert torch.allclose(
         generated_images[0], saved_images[0]
     ), "Retardance images differ"
-    assert torch.allclose(generated_images[1], saved_images[1]), "Azimuth images differ"
+    check_azimuth_images(generated_images[1], saved_images[1])
     print("Images match the saved images.")
 
 
@@ -72,8 +73,10 @@ def compare_images(generated_images, saved_images):
         ("shell_small", [7, 18, 18], 16, 9),
     ],
 )
+@pytest.mark.slow
 def test_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
     torch.set_default_dtype(torch.float32)
+    torch.set_grad_enabled(False)
     images = run_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets)
     filename = generate_filename(vol_type, vol_shape, pixels_per_ml, n_lenslets)
     filepath = f"tests/test_data/{filename}"
