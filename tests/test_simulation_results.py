@@ -75,6 +75,7 @@ def compare_images(generated_images, saved_images):
     ],
 )
 def test_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
+    torch.set_default_dtype(torch.float32)
     images = run_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets)
     filename = generate_filename(vol_type, vol_shape, pixels_per_ml, n_lenslets)
     filepath = f"tests/test_data/{filename}"
