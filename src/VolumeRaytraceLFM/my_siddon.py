@@ -28,8 +28,8 @@ def siddon_params(start, stop, vox_pitch, vox_count):
                     np.array(vox_count)[i] * np.array(vox_pitch)[i] - start[i]
                 ) / ray_diff[i]
     # Calculate absolute max and min parametric values
-    a_min = max(0, max([min(a_0[i], a_N[i]) for i in range(3)]))
-    a_max = min(1, min([max(a_0[i], a_N[i]) for i in range(3)]))
+    a_min = max(0, *[min(a_0[i], a_N[i]) for i in range(3)])
+    a_max = min(1, *[max(a_0[i], a_N[i]) for i in range(3)])
 
     # now find range of indices corresponding to max/min a values
     if (x2 - x1) >= 0:
@@ -96,18 +96,18 @@ def siddon_midpoints(start, stop, a_list):
 
 
 def vox_indices(midpoints, vox_pitch):
-    """Identifies the voxels for which the midpoints belong by converting to
+    """Identifies the voxels for which the midpoints belong by converting to 
     voxel units, then rounding down to get the voxel index used we are using
     to refer to the voxel"""
     dx, dy, dz = vox_pitch
     i_voxels = []
-    for x, y, z in midpoints:
+    for (x, y, z) in midpoints:
         i_voxels.append((int(x / dx), int(y / dy), int(z / dz)))
     return i_voxels
 
 
 def siddon_lengths(start, stop, a_list):
-    """Finds length of intersections by multiplying difference in parametric
+    """Finds length of intersections by multiplying difference in parametric 
     values by entire ray length"""
     entire_length = np.linalg.norm(stop - start)
     lengths = []
