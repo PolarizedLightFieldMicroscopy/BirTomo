@@ -15,6 +15,7 @@ from VolumeRaytraceLFM.metrics.regularization import (
     cosine_similarity_neighbors,
     neg_penalty_bir_active,
     pos_penalty_bir_active,
+    pos_penalty_l2_bir_active,
 )
 
 
@@ -27,6 +28,7 @@ REGULARIZATION_FCNS = {
     "local cosine similarity": cosine_similarity_neighbors,
     "birefringence active negative penalty": neg_penalty_bir_active,
     "birefringence active positive penalty": pos_penalty_bir_active,
+    "birefringence active positive penalty L2": pos_penalty_l2_bir_active,
 }
 
 
