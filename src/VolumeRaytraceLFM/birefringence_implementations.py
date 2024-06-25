@@ -1835,16 +1835,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             retardance = retardance_from_su2_numpy(jones)
         elif self.backend == BackEnds.PYTORCH:
-            if jones.ndim == 3:
-                # jones is a batch of 2x2 matrices
-                retardance = retardance_from_su2(jones)
-            elif jones.ndim == 2:
-                # jones is a single 2x2 matrix
-                retardance = retardance_from_su2_single(jones)
-            else:
-                raise ValueError(
-                    "Jones matrix must be either a 2x2 matrix or a batch of 2x2 matrices."
-                )
+            retardance = retardance_from_su2(jones)
             if DEBUG:
                 assert not torch.isnan(
                     retardance
