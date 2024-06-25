@@ -147,7 +147,7 @@ def plot_image_subplot(ax, image, title, cmap="plasma"):
 
 
 def plot_combined_loss_subplot(
-    ax, losses, data_term_losses, regularization_term_losses
+    ax, losses, data_term_losses, regularization_term_losses, max_y_limit=None
 ):
     """Helper function to plot all losses on a given axis."""
     epochs = list(range(len(losses)))
@@ -165,6 +165,31 @@ def plot_combined_loss_subplot(
     ax.set_xlabel("iteration")
     ax.set_ylabel("loss")
     ax.legend(loc="upper right")
+
+    # Set y-axis limit to zoom in on the lower range of loss values
+    if max_y_limit is not None:
+        ax.set_ylim([0, max_y_limit])
+
+
+def calculate_dynamic_max_y_limit(losses, window_size=10, scale_factor=1.1):
+    """
+    Calculate the dynamic max_y_limit based on the recent loss values.
+
+    Args:
+        losses (list or np.array): List of total loss values.
+        window_size (int): Number of recent iterations to consider.
+        scale_factor (float): Factor to scale the maximum loss for the y-axis limit.
+
+    Returns:
+        float: Calculated max_y_limit.
+    """
+    if len(losses) < window_size:
+        window_size = len(losses)
+
+    recent_losses = losses[-window_size:]
+    max_recent_loss = max(recent_losses)
+
+    return max_recent_loss * scale_factor
 
 
 def plot_iteration_update_gridspec(
@@ -218,10 +243,20 @@ def plot_iteration_update_gridspec(
     fig.text(
         0.5, 0.33, "Loss Function", ha="center", va="center", fontsize=10, weight="bold"
     )
+
+    # Calculate dynamic max_y_limit based on recent loss values
+    max_y_limit = calculate_dynamic_max_y_limit(
+        losses, window_size=50, scale_factor=1.1
+    )
+
     # Plot combined losses across the entire bottom row
     ax_combined = fig.add_subplot(gs[2, :])
     plot_combined_loss_subplot(
-        ax_combined, losses, data_term_losses, regularization_term_losses
+        ax_combined,
+        losses,
+        data_term_losses,
+        regularization_term_losses,
+        max_y_limit=max_y_limit,
     )
     # Adjust layout to prevent overlap, leave space for row titles
     plt.subplots_adjust(left=0.05, right=0.91, bottom=0.07, top=0.92)
