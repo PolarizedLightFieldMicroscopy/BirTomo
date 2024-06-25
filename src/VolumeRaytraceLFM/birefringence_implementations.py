@@ -1226,6 +1226,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             "calc_jones": 0,
             "retardance_from_jones": 0,
             "azimuth_from_jones": 0,
+            "Diag-Offdiag": 0,
+            "Stacking": 0,
         }
         self.check_errors = False
 
@@ -1310,6 +1312,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         print(
             "\t\t\t\tJones matrix calculation:",
             fmt_str.format(rays_times["calc_jones"] * multiplier),
+            unit_str,
+        )
+        print(
+            "\t\t\t\tMatrix element calculation:",
+            fmt_str.format(rays_times["Diag-Offdiag"] * multiplier),
+            unit_str,
+        )
+        print(
+            "\t\t\t\tFilling the Matrix:",
+            fmt_str.format(rays_times["Stacking"] * multiplier),
             unit_str,
         )
         print(
@@ -2803,9 +2815,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             jones = JonesMatrixGenerators.linear_retarder(ret, azim)
         elif self.backend == BackEnds.PYTORCH:
-            jones = jones_matrix.calculate_jones_torch(
-                ret, azim, nonzeros_only=self.only_nonzero_for_jones
-            )
+            jones_in_2_steps = False
+            if jones_in_2_steps:
+                diag_time_start = time.perf_counter()
+                diag, offdiag = jones_matrix._get_diag_offdiag_jones(ret, azim)
+                diag_time_end = time.perf_counter()
+                jones = jones_matrix.jones_torch_from_diags(diag, offdiag)
+                jones_time_end = time.perf_counter()
+                self.times["Diag-Offdiag"] += diag_time_end - diag_time_start
+                self.times["Stacking"] += jones_time_end - diag_time_end
+            else:
+                jones = jones_matrix.calculate_jones_torch(
+                    ret, azim, nonzeros_only=self.only_nonzero_for_jones
+                )
             if DEBUG:
                 assert not torch.isnan(
                     jones
