@@ -344,12 +344,12 @@ class BirefringentVolume(BirefringentElement):
 
         # Don't plot zero values
         mask = delta_n == 0
-        x_base[mask] = np.NaN
-        y_base[mask] = np.NaN
-        z_base[mask] = np.NaN
-        x_tip[mask] = np.NaN
-        y_tip[mask] = np.NaN
-        z_tip[mask] = np.NaN
+        x_base[mask] = np.nan
+        y_base[mask] = np.nan
+        z_base[mask] = np.nan
+        x_tip[mask] = np.nan
+        y_tip[mask] = np.nan
+        z_tip[mask] = np.nan
 
         # Gather all rays in single arrays, to plot them all at once, placing NAN in between them
         array_size = 3 * len(x_base.flatten())
@@ -357,15 +357,15 @@ class BirefringentVolume(BirefringentElement):
         all_x = np.empty((array_size))
         all_x[::3] = x_base.flatten()
         all_x[1::3] = x_tip.flatten()
-        all_x[2::3] = np.NaN
+        all_x[2::3] = np.nan
         all_y = np.empty((array_size))
         all_y[::3] = y_base.flatten()
         all_y[1::3] = y_tip.flatten()
-        all_y[2::3] = np.NaN
+        all_y[2::3] = np.nan
         all_z = np.empty((array_size))
         all_z[::3] = z_base.flatten()
         all_z[1::3] = z_tip.flatten()
-        all_z[2::3] = np.NaN
+        all_z[2::3] = np.nan
         # Compute colors
         all_color = np.empty((array_size))
         all_color[::3] = (

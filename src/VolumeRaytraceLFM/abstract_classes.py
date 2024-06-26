@@ -471,8 +471,8 @@ class RayTraceLFM(OpticalElement):
 
         # Angles that reach the pixels
         cam_pixels_azim = np.arctan2(jv - ml_ctr[1], iv - ml_ctr[0])
-        cam_pixels_azim[dist_from_ctr > ml_radius] = np.NaN
-        dist_from_ctr[dist_from_ctr > ml_radius] = np.NaN
+        cam_pixels_azim[dist_from_ctr > ml_radius] = np.nan
+        dist_from_ctr[dist_from_ctr > ml_radius] = np.nan
         cam_pixels_tilt = np.arcsin(dist_from_ctr / ml_radius * naObj / nMedium)
 
         # Plotting
@@ -490,7 +490,7 @@ class RayTraceLFM(OpticalElement):
             volume_ctr_um[0] * np.tan(cam_pixels_tilt) * np.cos(cam_pixels_azim)
             + volume_ctr_um[2]
         )
-        ray_enter_x[np.isnan(ray_enter_y)] = np.NaN
+        ray_enter_x[np.isnan(ray_enter_y)] = np.nan
         ray_enter = np.array([ray_enter_x, ray_enter_y, ray_enter_z])
         vol_ctr_grid_tmp = np.array(
             [
@@ -1114,17 +1114,17 @@ class RayTraceLFM(OpticalElement):
                 all_x = np.empty((3 * len(x_entry)))
                 all_x[::3] = x_entry
                 all_x[1::3] = x_exit
-                all_x[2::3] = np.NaN
+                all_x[2::3] = np.nan
 
                 all_y = np.empty((3 * len(y_entry)))
                 all_y[::3] = y_entry
                 all_y[1::3] = y_exit
-                all_y[2::3] = np.NaN
+                all_y[2::3] = np.nan
 
                 all_z = np.empty((3 * len(z_entry)))
                 all_z[::3] = z_entry
                 all_z[1::3] = z_exit
-                all_z[2::3] = np.NaN
+                all_z[2::3] = np.nan
 
                 # prepare colors for each line
                 rgba = [ray_ix / len(all_x) for ray_ix in range(len(all_x))]

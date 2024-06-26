@@ -355,17 +355,17 @@ def plot_rays_at_sample(
             all_x = np.empty((3 * len(x_entry)))
             all_x[::3] = x_entry
             all_x[1::3] = x_exit
-            all_x[2::3] = np.NaN
+            all_x[2::3] = np.nan
 
             all_y = np.empty((3 * len(y_entry)))
             all_y[::3] = y_entry
             all_y[1::3] = y_exit
-            all_y[2::3] = np.NaN
+            all_y[2::3] = np.nan
 
             all_z = np.empty((3 * len(z_entry)))
             all_z[::3] = z_entry
             all_z[1::3] = z_exit
-            all_z[2::3] = np.NaN
+            all_z[2::3] = np.nan
 
             # prepare colors for each line
             rgba = [ray_ix / len(all_x) for ray_ix in range(len(all_x))]
