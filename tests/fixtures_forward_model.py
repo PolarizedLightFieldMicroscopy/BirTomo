@@ -10,5 +10,11 @@ def forward_model_fixture(backend_fixture):
     """Create forward model fixture for testing."""
     optical_info = set_optical_info([3, 5, 5], 17, 1)
     optical_system = {"optical_info": optical_info}
+    return ForwardModel(optical_system, backend_fixture)
 
+
+@pytest.fixture
+def forward_model_general_fixture(backend_fixture, optical_info):
+    """Create general forward model fixture for testing."""
+    optical_system = {"optical_info": optical_info}
     return ForwardModel(optical_system, backend_fixture)

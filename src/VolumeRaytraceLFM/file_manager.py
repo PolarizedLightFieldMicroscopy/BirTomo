@@ -111,8 +111,7 @@ class VolumeFileManager:
         This method creates a group for optical information and adds datasets to it.
         """
         optics_grp = file_handle.create_group("optical_info")
-        optics_grp.create_dataset("description", data=np.string_(description))
-        # optics_grp.create_dataset('description', data=description)
+        optics_grp.create_dataset("description", data=np.bytes_(description))
         if not optical_all:
             vol_shape = optical_info.get("volume_shape", None)
             voxel_size_um = optical_info.get("voxel_size_um", None)

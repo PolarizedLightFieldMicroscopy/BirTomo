@@ -344,12 +344,12 @@ class BirefringentVolume(BirefringentElement):
 
         # Don't plot zero values
         mask = delta_n == 0
-        x_base[mask] = np.NaN
-        y_base[mask] = np.NaN
-        z_base[mask] = np.NaN
-        x_tip[mask] = np.NaN
-        y_tip[mask] = np.NaN
-        z_tip[mask] = np.NaN
+        x_base[mask] = np.nan
+        y_base[mask] = np.nan
+        z_base[mask] = np.nan
+        x_tip[mask] = np.nan
+        y_tip[mask] = np.nan
+        z_tip[mask] = np.nan
 
         # Gather all rays in single arrays, to plot them all at once, placing NAN in between them
         array_size = 3 * len(x_base.flatten())
@@ -357,15 +357,15 @@ class BirefringentVolume(BirefringentElement):
         all_x = np.empty((array_size))
         all_x[::3] = x_base.flatten()
         all_x[1::3] = x_tip.flatten()
-        all_x[2::3] = np.NaN
+        all_x[2::3] = np.nan
         all_y = np.empty((array_size))
         all_y[::3] = y_base.flatten()
         all_y[1::3] = y_tip.flatten()
-        all_y[2::3] = np.NaN
+        all_y[2::3] = np.nan
         all_z = np.empty((array_size))
         all_z[::3] = z_base.flatten()
         all_z[1::3] = z_tip.flatten()
-        all_z[2::3] = np.NaN
+        all_z[2::3] = np.nan
         # Compute colors
         all_color = np.empty((array_size))
         all_color[::3] = (
@@ -1226,6 +1226,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             "calc_jones": 0,
             "retardance_from_jones": 0,
             "azimuth_from_jones": 0,
+            "Diag-Offdiag": 0,
+            "Stacking": 0,
         }
         self.check_errors = False
 
@@ -1310,6 +1312,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         print(
             "\t\t\t\tJones matrix calculation:",
             fmt_str.format(rays_times["calc_jones"] * multiplier),
+            unit_str,
+        )
+        print(
+            "\t\t\t\tMatrix element calculation:",
+            fmt_str.format(rays_times["Diag-Offdiag"] * multiplier),
+            unit_str,
+        )
+        print(
+            "\t\t\t\tFilling the Matrix:",
+            fmt_str.format(rays_times["Stacking"] * multiplier),
             unit_str,
         )
         print(
@@ -1823,16 +1835,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             retardance = retardance_from_su2_numpy(jones)
         elif self.backend == BackEnds.PYTORCH:
-            if jones.ndim == 3:
-                # jones is a batch of 2x2 matrices
-                retardance = retardance_from_su2(jones)
-            elif jones.ndim == 2:
-                # jones is a single 2x2 matrix
-                retardance = retardance_from_su2_single(jones)
-            else:
-                raise ValueError(
-                    "Jones matrix must be either a 2x2 matrix or a batch of 2x2 matrices."
-                )
+            retardance = retardance_from_su2(jones)
             if DEBUG:
                 assert not torch.isnan(
                     retardance
@@ -2803,9 +2806,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             jones = JonesMatrixGenerators.linear_retarder(ret, azim)
         elif self.backend == BackEnds.PYTORCH:
-            jones = jones_matrix.calculate_jones_torch(
-                ret, azim, nonzeros_only=self.only_nonzero_for_jones
-            )
+            jones_in_2_steps = False
+            if jones_in_2_steps:
+                diag_time_start = time.perf_counter()
+                diag, offdiag = jones_matrix._get_diag_offdiag_jones(ret, azim)
+                diag_time_end = time.perf_counter()
+                jones = jones_matrix.jones_torch_from_diags(diag, offdiag)
+                jones_time_end = time.perf_counter()
+                self.times["Diag-Offdiag"] += diag_time_end - diag_time_start
+                self.times["Stacking"] += jones_time_end - diag_time_end
+            else:
+                jones = jones_matrix.calculate_jones_torch(
+                    ret, azim, nonzeros_only=self.only_nonzero_for_jones
+                )
             if DEBUG:
                 assert not torch.isnan(
                     jones

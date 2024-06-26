@@ -23,8 +23,18 @@ def calculate_adjusted_lr(optimizer):
                 step = state["step"]
                 bias_correction1 = 1 - beta1**step
                 bias_correction2 = 1 - beta2**step
-                adjusted_lr = base_lr * (bias_correction2**0.5) / bias_correction1
-                adjusted_lrs[id(p)] = adjusted_lr
+
+                # Retrieve moment estimates
+                m = state["exp_avg"]
+                v = state["exp_avg_sq"]
+
+                # Bias-corrected moment estimates
+                m_hat = m / bias_correction1
+                v_hat = v / bias_correction2
+
+                # Effective learning rate considering the moment estimates
+                adjusted_lr = base_lr * (v_hat.sqrt() + group["eps"]) / m_hat
+                adjusted_lrs[id(p)] = adjusted_lr.abs().mean()
             else:
                 adjusted_lrs[id(p)] = base_lr  # Default to base lr if not adjusted yet
     return adjusted_lrs

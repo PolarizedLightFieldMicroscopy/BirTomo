@@ -15,6 +15,7 @@ from VolumeRaytraceLFM.metrics.regularization import (
     cosine_similarity_neighbors,
     neg_penalty_bir_active,
     pos_penalty_bir_active,
+    pos_penalty_l2_bir_active,
 )
 
 
@@ -27,6 +28,7 @@ REGULARIZATION_FCNS = {
     "local cosine similarity": cosine_similarity_neighbors,
     "birefringence active negative penalty": neg_penalty_bir_active,
     "birefringence active positive penalty": pos_penalty_bir_active,
+    "birefringence active positive penalty L2": pos_penalty_l2_bir_active,
 }
 
 
@@ -195,7 +197,7 @@ class PolarimetricLossFunction:
     def compute_regularization_term(self, data):
         """Compute regularization term"""
         if not self.regularization_fcns:
-            return torch.tensor(0.0, device=data.device)
+            return torch.tensor(0.0, device=data.device), []
 
         term_values = []
 
@@ -203,7 +205,7 @@ class PolarimetricLossFunction:
         first_reg_fn, first_weight = self.regularization_fcns[0]
         first_term_value = first_weight * first_reg_fn(data) * 1000
         term_values.append(first_term_value)
-        regularization_loss = first_term_value
+        regularization_loss = first_term_value.clone()
 
         # Sum up the rest of the regularization terms if any
         for reg_fcn, weight in self.regularization_fcns[1:]:

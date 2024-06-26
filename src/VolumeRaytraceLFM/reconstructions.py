@@ -1,5 +1,6 @@
 """This module contains the ReconstructionConfig and Reconstructor classes."""
 
+import sys
 import copy
 import time
 import os
@@ -800,11 +801,12 @@ class Reconstructor:
             self.fill_optaxis_component(volume_estimation)
         self.keep_optic_axis_on_sphere(volume_estimation)
 
-        if self.ep % 5 == 0:
-            print(
+        if self.ep % 50 == 0 and False:
+            tqdm.write(f"Iteration {self.ep} first 5 values:")
+            tqdm.write(
                 f"birefringence: {volume_estimation.birefringence_active[:5].detach().cpu().numpy()}"
             )
-            print(
+            tqdm.write(
                 f"optic axis: {volume_estimation.optic_axis_active[:, :5].detach().cpu().numpy()}"
             )
         # TODO: fix so that measured images do not need to be placeholder for the predicted images
@@ -1078,7 +1080,11 @@ class Reconstructor:
         check_for_inf_or_nan(volume.optic_axis_active)
 
     def reconstruct(
-        self, use_streamlit=False, plot_live=False, all_prop_elements=False
+        self,
+        use_streamlit=False,
+        plot_live=False,
+        all_prop_elements=False,
+        log_file=None,
     ):
         """
         Method to perform the actual reconstruction based on the provided parameters.
@@ -1144,7 +1150,7 @@ class Reconstructor:
         initial_lr_1 = optimizer.param_groups[1]["lr"]
         # Parameters for learning rate warmup
 
-        warmup_epochs = 6
+        warmup_epochs = 10
         warmup_start_proportion = 0.1
         # Iterations
         for ep in tqdm(range(1, n_epochs + 1), "Minimizing"):
@@ -1161,10 +1167,24 @@ class Reconstructor:
                 )
                 optimizer.param_groups[0]["lr"] = lr_0
                 optimizer.param_groups[1]["lr"] = lr_1
+            else:
+                current_lr_0 = scheduler.optimizer.param_groups[0]["lr"]
+                current_lr_1 = scheduler.optimizer.param_groups[1]["lr"]
+                if lr_0 != current_lr_0 or lr_1 != current_lr_1:
+                    print(
+                        f"Learning rates at iteration {ep - 1}: {lr_0:.2e}, {lr_1:.2e}"
+                    )
+                    print(f"Learning rates changed at epoch {ep}")
+                    print(
+                        f"Learning rates at iteration {ep}: {current_lr_0:.2e}, {current_lr_1:.2e}"
+                    )
+                else:
+                    pass
+                lr_0 = current_lr_0
+                lr_1 = current_lr_1
             self.one_iteration(optimizer, self.volume_pred, scheduler=scheduler)
             if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()
-
             if ep % 20 == 0 and self.intensity_bool:
                 with torch.no_grad():
                     [ret_image_current, azim_image_current] = (
@@ -1172,6 +1192,7 @@ class Reconstructor:
                     )
                 self.ret_img_pred = ret_image_current.detach().cpu().numpy()
                 self.azim_img_pred = azim_image_current.detach().cpu().numpy()
+            sys.stdout.flush()
 
             azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0

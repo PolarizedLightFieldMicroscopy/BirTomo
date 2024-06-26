@@ -82,6 +82,32 @@ def calculate_vox_ray_ret_azim_torch(
         return vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength)
 
 
+def _get_diag_offdiag_jones(ret, azim):
+    ## Trig method
+    # cos_ret = torch.cos(ret)
+    # sin_ret = torch.sin(ret)
+    # cos_azim = torch.cos(azim)
+    # sin_azim = torch.sin(azim)
+    # diag = cos_ret + 1j * cos_azim * sin_ret
+    # offdiag = 1j * sin_azim * sin_ret
+
+    ## Polar method
+    exp_ret = torch.polar(torch.tensor(1.0, device=ret.device), ret)
+    exp_azim = torch.polar(torch.tensor(1.0, device=azim.device), azim)
+    diag = exp_ret.real + 1j * exp_azim.real * exp_ret.imag
+    offdiag = 1j * exp_azim.imag * exp_ret.imag
+    return diag, offdiag
+
+
+def jones_torch_from_diags(diag, offdiag):
+    jones = torch.empty([*diag.shape, 2, 2], dtype=torch.complex64, device=diag.device)
+    jones[:, 0, 0] = diag
+    jones[:, 0, 1] = offdiag
+    jones[:, 1, 0] = offdiag
+    jones[:, 1, 1] = torch.conj(diag)
+    return jones
+
+
 def jones_torch(ret, azim):
     cos_ret = torch.cos(ret)
     sin_ret = torch.sin(ret)

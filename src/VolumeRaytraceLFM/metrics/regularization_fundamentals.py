@@ -26,8 +26,16 @@ def negative_penalty(data):
     return torch.relu(-data).mean()
 
 
+def negative_penalty_l2(data):
+    return negative_penalty(data) ** 2
+
+
 def positive_penalty(data):
     return torch.relu(data).mean()
+
+
+def positive_penalty_l2(data):
+    return positive_penalty(data) ** 2
 
 
 def total_variation_3d_volumetric(data):

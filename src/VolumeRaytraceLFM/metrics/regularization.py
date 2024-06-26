@@ -44,6 +44,10 @@ def pos_penalty_bir_active(volume: BirefringentVolume):
     return positive_penalty(volume.birefringence_active)
 
 
+def pos_penalty_l2_bir_active(volume: BirefringentVolume):
+    return positive_penalty_l2(volume.birefringence_active)
+
+
 def total_variation_bir_subset(volume: BirefringentVolume):
     birefringence = volume.birefringence_active
     return total_variation(birefringence)
