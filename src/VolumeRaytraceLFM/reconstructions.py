@@ -1,5 +1,6 @@
 """This module contains the ReconstructionConfig and Reconstructor classes."""
 
+import sys
 import copy
 import time
 import os
@@ -1184,7 +1185,6 @@ class Reconstructor:
             self.one_iteration(optimizer, self.volume_pred, scheduler=scheduler)
             if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()
-
             if ep % 20 == 0 and self.intensity_bool:
                 with torch.no_grad():
                     [ret_image_current, azim_image_current] = (
@@ -1192,6 +1192,7 @@ class Reconstructor:
                     )
                 self.ret_img_pred = ret_image_current.detach().cpu().numpy()
                 self.azim_img_pred = azim_image_current.detach().cpu().numpy()
+            sys.stdout.flush()
 
             azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0
