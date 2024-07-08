@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 
 def stay_on_sphere(optic_axis):
@@ -27,3 +28,17 @@ def fill_vector_based_on_nonaxial(axis_full, axis_nonaxial):
         axis_full[0, :] = torch.sqrt(1 - square_sum)
         axis_full[0, torch.isnan(axis_full[0, :])] = 0
     return axis_full
+
+
+def spherical_to_unit_vector(theta, phi):
+    """Convert spherical angles to a unit vector.
+    Args:
+        theta (float): Azimuthal angle in radians (0 <= theta < 2*pi).
+        phi (float): Polar angle in radians (0 <= phi <= pi/2).
+    Returns:
+        np.ndarray: Unit vector [z, y, x] where z >= 0.
+    """
+    x = np.sin(phi) * np.cos(theta)
+    y = np.sin(phi) * np.sin(theta)
+    z = np.cos(phi)
+    return np.array([z, y, x])

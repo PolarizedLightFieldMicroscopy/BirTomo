@@ -11,9 +11,7 @@ def generate_single_voxel_volume(
         volume_shape[1] // 2 + offset[1],
         volume_shape[2] // 2 + offset[2],
     ]
-    # Create a volume of all zeros.
     vol = np.zeros((4, *volume_shape))
-    # Set the birefringence and optic axis
     vol[0, vox_idx[0], vox_idx[1], vox_idx[2]] = delta_n
     vol[1:, vox_idx[0], vox_idx[1], vox_idx[2]] = np.array(optic_axis)
     return vol
