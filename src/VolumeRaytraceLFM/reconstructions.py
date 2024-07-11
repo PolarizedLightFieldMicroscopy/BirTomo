@@ -51,12 +51,14 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
     stay_on_sphere,
 )
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
+from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
 
 
 DEBUG = False
 PRINT_GRADIENTS = False
 PRINT_TIMING_INFO = False
 CLIP_GRADIENT_NORM = False
+NERF = True
 
 if DEBUG:
     print("Debug mode is on.")
@@ -718,6 +720,15 @@ class Reconstructor:
         regularization_term = params["regularization_weight"] * reg_loss
         self.reg_term_values = [reg.item() for reg in reg_term_values]
 
+        # Add regularization term for NERF
+        if NERF and False:
+            inr_params = self.rays.inr_model.parameters()
+            l1_reg = 0
+            for param in inr_params:
+                l1_reg += torch.norm(param, 1)
+            regularization_term += params["regularization_weight"] * l1_reg
+            self.reg_term_values = [regularization_term.item()]
+
         # Total loss
         loss = data_term + regularization_term
 
@@ -792,7 +803,11 @@ class Reconstructor:
         optimizer.step()
         scheduler.step(loss)
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
-        adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
+        if NERF:
+            adjusted_lrs = [0]
+        else:
+            adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
+
         if PRINT_GRADIENTS:
             print_moments(optimizer)
 
@@ -910,7 +925,16 @@ class Reconstructor:
         # TODO: only update every 1 epoch if plotting is live
         if ep % 1 == 0:
             # plt.clf()
-            Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
+            if NERF:
+                vol_shape = self.optical_info["volume_shape"]
+                predicted_properties = predict_voxel_properties(
+                    self.rays.inr_model, vol_shape
+                )
+                Delta_n = predicted_properties[..., 0]
+                volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
+                Delta_n = Delta_n.unsqueeze(0)
+            else:
+                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             mip_image = convert_volume_to_2d_mip(Delta_n)
             mip_image_np = prepare_plot_mip(mip_image, plot=False)
             plot_iteration_update_gridspec(
@@ -1011,8 +1035,12 @@ class Reconstructor:
                 self.loss_reg_term_list,
                 self.adjusted_lrs_list,
             )
-            for total, data_term, reg_term, (optax_lr, bir_lr) in zipped_lists:
-                writer.writerow([total, data_term, reg_term, optax_lr, bir_lr])
+            if NERF:
+                for total, data_term, reg_term, lr in zipped_lists:
+                    writer.writerow([total, data_term, reg_term, lr])
+            else:
+                for total, data_term, reg_term, (optax_lr, bir_lr) in zipped_lists:
+                    writer.writerow([total, data_term, reg_term, optax_lr, bir_lr])
 
     def _create_regularization_terms_csv(self):
         """Create a csv file to store the regularization terms."""
@@ -1113,11 +1141,14 @@ class Reconstructor:
                 self.volume_pred.optic_axis.requires_grad = False
         self.specify_variables_to_learn(param_list)
 
-        optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        optax_betas = self.iteration_params.get("optax_betas", (0.9, 0.999))
-        bir_betas = self.iteration_params.get("bir_betas", (0.9, 0.999))
-        optimizer.param_groups[0]["betas"] = tuple(optax_betas)
-        optimizer.param_groups[1]["betas"] = tuple(bir_betas)
+        if NERF:
+            optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
+        else:
+            optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
+            optax_betas = self.iteration_params.get("optax_betas", (0.9, 0.999))
+            bir_betas = self.iteration_params.get("bir_betas", (0.9, 0.999))
+            optimizer.param_groups[0]["betas"] = tuple(optax_betas)
+            optimizer.param_groups[1]["betas"] = tuple(bir_betas)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode="min",
@@ -1147,7 +1178,10 @@ class Reconstructor:
 
         self.prepare_volume_for_recon(self.volume_pred)
         initial_lr_0 = optimizer.param_groups[0]["lr"]
-        initial_lr_1 = optimizer.param_groups[1]["lr"]
+        if NERF:
+            initial_lr_1 = optimizer.param_groups[0]["lr"]
+        else:
+            initial_lr_1 = optimizer.param_groups[1]["lr"]
         # Parameters for learning rate warmup
 
         warmup_epochs = 10
@@ -1166,10 +1200,14 @@ class Reconstructor:
                     + (1 - warmup_start_proportion) * (ep / warmup_epochs)
                 )
                 optimizer.param_groups[0]["lr"] = lr_0
-                optimizer.param_groups[1]["lr"] = lr_1
+                if not NERF:
+                    optimizer.param_groups[1]["lr"] = lr_1
             else:
                 current_lr_0 = scheduler.optimizer.param_groups[0]["lr"]
-                current_lr_1 = scheduler.optimizer.param_groups[1]["lr"]
+                if NERF:
+                    current_lr_1 = lr_0
+                else:
+                    current_lr_1 = scheduler.optimizer.param_groups[1]["lr"]
                 if lr_0 != current_lr_0 or lr_1 != current_lr_1:
                     print(
                         f"Learning rates at iteration {ep - 1}: {lr_0:.2e}, {lr_1:.2e}"

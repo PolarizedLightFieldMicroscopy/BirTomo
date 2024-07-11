@@ -9,6 +9,7 @@ import time
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
+from VolumeRaytraceLFM.nerf import ImplicitRepresentationMLP
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.volumes.modification import (
     pad_to_region_shape,
@@ -41,6 +42,7 @@ from VolumeRaytraceLFM.utils.mask_utils import get_bool_mask_for_ray_indices
 
 
 DEBUG = False
+NERF = True
 
 if DEBUG:
     from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
@@ -989,6 +991,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             "Stacking": 0,
         }
         self.check_errors = False
+        if NERF:
+            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
+            self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
 
     def __str__(self):
         info = (
@@ -1827,9 +1832,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 alt_props = False
                 if volume_in.indices_active is not None:
                     alt_props = True
-                Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
-                    volume_in, vox, active_props_only=alt_props
-                )
+                if NERF:
+                    Delta_n, opticAxis = self.retrieve_properties_from_vox_idx_mlp(
+                        volume_in, vox
+                    )
+                else:
+                    Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
+                        volume_in, vox, active_props_only=alt_props
+                    )
                 if DEBUG:
                     assert not torch.isnan(
                         Delta_n
@@ -1924,6 +1934,29 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             Delta_n = volume.Delta_n[vox]
             opticAxis = volume.optic_axis[:, vox]
         return Delta_n, opticAxis.permute(1, 0)
+
+    def retrieve_properties_from_vox_idx_mlp(self, volume, vox):
+        """Retrieves the birefringence and optic axis from the volume
+        based on the provided voxel indices using an MLP. This function
+        is used to retrieve the properties of the voxels that each ray
+        segment interacts with."""
+        vol_shape = self.optical_info["volume_shape"]
+        vox_3d = RayTraceLFM.unravel_index(vox, vol_shape)
+        vox_3d_float = vox_3d.float().to(volume.Delta_n.device)
+
+        # Normalize the input coordinates based on volume shape
+        vol_shape_tensor = torch.tensor(
+            vol_shape, dtype=vox_3d_float.dtype, device=vox_3d_float.device
+        )
+        vox_3d_float = vox_3d_float / vol_shape_tensor
+
+        # Pass the input through the MLP
+        properties_at_3d_position = self.inr_model(vox_3d_float)
+
+        # Retrieve Delta_n and opticAxis from the MLP output
+        Delta_n = properties_at_3d_position[:, 0]
+        opticAxis = properties_at_3d_position[:, 1:]
+        return Delta_n, opticAxis
 
     def _get_default_jones(self):
         """Returns the default Jones Matrix for a ray that does not
