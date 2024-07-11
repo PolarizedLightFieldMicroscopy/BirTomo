@@ -151,7 +151,10 @@ class OpticalElement(OpticBlock):
                         "analyzer"
                     ]
                 except:
-                    print("Error: Polarizer and Analyzer not found in optical_info")
+                    print(
+                        "Warning: Polarizer and Analyzer not found in optical_info. "
+                        + "This could be problematic if simulating with intensity images."
+                    )
             super(OpticalElement, self).__init__(
                 optic_config=new_torch_args["optic_config"],
                 members_to_learn=(
