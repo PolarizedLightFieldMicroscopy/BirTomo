@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
+from matplotlib.colors import hsv_to_rgb, LinearSegmentedColormap
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 
 def plot_birefringence_lines(
@@ -82,9 +84,26 @@ def plot_birefringence_colorized(retardance_img, azimuth_img):
     plt.imshow(rgb, cmap="hsv")
 
 
-def plot_hue_map(retardance_img, azimuth_img, ax=None):
-    """Plots the overlay of the retardance and orientation images with colorbars."""
+def plot_hue_map(
+    retardance_img,
+    azimuth_img,
+    ax=None,
+    enhance_contrast=False,
+    save_path=None,
+    dpi=300,
+):
+    """Plots the overlay of the retardance and orientation images with
+    colorbars and optionally saves the image with high DPI."""
     # Note: may want to use interpolation="nearest" to avoid aliasing affects
+
+    def contrast_stretching(img):
+        """Performs contrast stretching on an image."""
+        p2, p98 = np.percentile(img, (2, 98))
+        return np.clip((img - p2) / (p98 - p2), 0, 1)
+
+    if enhance_contrast:
+        retardance_img = contrast_stretching(retardance_img)
+
     # Get pixel coords
     colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[1], 3])
     A = azimuth_img * 1
@@ -92,17 +111,15 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
     colors[:, :, 1] = 0.5
     colors[:, :, 2] = retardance_img / retardance_img.max()
     colors[np.isnan(colors)] = 0
-    from matplotlib.colors import hsv_to_rgb, LinearSegmentedColormap
 
     rgb = hsv_to_rgb(colors)
-    if ax == None:
+    if ax is None:
         fig, ax = plt.subplots()
     im = ax.imshow(rgb, cmap="hsv")
     ax.set_xticks([])
     ax.set_yticks([])
-    # Add colorbar for hue (azimuth)
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
+    # Add colorbar for hue (azimuth)
     axins1 = inset_axes(
         ax,
         width="5%",  # width = 5% of parent_bbox width
@@ -121,6 +138,7 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
     cb1.set_ticks([0, 0.5, 1])
     cb1.set_ticklabels(["0", r"$\pi/2$", r"$\pi$"])
     axins1.set_title("Hue", fontsize=8)
+
     # Add colorbar for saturation (retardance)
     axins2 = inset_axes(
         ax,
@@ -144,6 +162,11 @@ def plot_hue_map(retardance_img, azimuth_img, ax=None):
         ["0", round(retardance_img.max() / 2, 1), round(retardance_img.max(), 1)]
     )
     axins2.set_title("Value", fontsize=8)
+
+    if save_path is not None:
+        plt.savefig(save_path, dpi=dpi, bbox_inches="tight")
+        print(f"Saved image to {save_path}")
+
     display_plot = False
     if display_plot:
         plt.show()
