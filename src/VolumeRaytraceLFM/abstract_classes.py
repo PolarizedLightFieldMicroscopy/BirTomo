@@ -89,7 +89,6 @@ class OpticalElement(OpticBlock):
         self, backend: BackEnds = BackEnds.NUMPY, torch_args={}, optical_info={}
     ):
         # torch args could be {'optic_config' : None, 'members_to_learn' : []},
-
         # Optical info is needed
         assert (
             len(optical_info) > 0
@@ -117,49 +116,19 @@ class OpticalElement(OpticBlock):
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks
         # compatibility.
         if backend == BackEnds.PYTORCH:
-            # We need to make a copy if we don't want to modify the torch_args default argument,
-            # very weird.
-            new_torch_args = copy.deepcopy(torch_args)
+            # We need to make a copy if we don't want to modify the
+            # torch_args default argument, very weird.
+            new_args = copy.deepcopy(torch_args)
             # If no optic_config is provided, create one
-            if "optic_config" not in torch_args.keys() or (
-                "optic_config" not in torch_args.keys()
-                and not isinstance(torch_args["optic_config"], OpticConfig)
+            if "optic_config" not in torch_args or not isinstance(
+                torch_args["optic_config"], OpticConfig
             ):
-                new_torch_args["optic_config"] = OpticConfig()
-                new_torch_args["optic_config"].volume_config.volume_shape = (
-                    optical_info["volume_shape"]
-                )
-                new_torch_args["optic_config"].volume_config.voxel_size_um = (
-                    optical_info["voxel_size_um"]
-                )
-                new_torch_args["optic_config"].mla_config.n_pixels_per_mla = (
-                    optical_info["pixels_per_ml"]
-                )
-                new_torch_args["optic_config"].mla_config.n_micro_lenses = optical_info[
-                    "n_micro_lenses"
-                ]
-                new_torch_args["optic_config"].PSF_config.NA = optical_info["na_obj"]
-                new_torch_args["optic_config"].PSF_config.ni = optical_info["n_medium"]
-                new_torch_args["optic_config"].PSF_config.wvl = optical_info[
-                    "wavelength"
-                ]
-                try:
-                    new_torch_args["optic_config"].pol_config.polarizer = optical_info[
-                        "polarizer"
-                    ]
-                    new_torch_args["optic_config"].pol_config.analyzer = optical_info[
-                        "analyzer"
-                    ]
-                except:
-                    print(
-                        "Warning: Polarizer and Analyzer not found in optical_info. "
-                        + "This could be problematic if simulating with intensity images."
-                    )
+                new_args["optic_config"] = self.create_optic_config(optical_info)
             super(OpticalElement, self).__init__(
-                optic_config=new_torch_args["optic_config"],
+                optic_config=new_args["optic_config"],
                 members_to_learn=(
-                    new_torch_args["members_to_learn"]
-                    if "members_to_learn" in new_torch_args.keys()
+                    new_args["members_to_learn"]
+                    if "members_to_learn" in new_args.keys()
                     else []
                 ),
             )
@@ -171,6 +140,42 @@ class OpticalElement(OpticBlock):
     @staticmethod
     def get_optical_info_template():
         return copy.deepcopy(OpticalElement.default_optical_info)
+
+    def create_optic_config(self, optical_info: dict) -> OpticConfig:
+        """Creates an OpticConfig instance and populates it with the
+        provided optical information."""
+        optic_config = OpticConfig()
+
+        # Populate volume configuration
+        optic_config.volume_config.volume_shape = optical_info.get(
+            "volume_shape", [1, 1, 1]
+        )
+        optic_config.volume_config.voxel_size_um = optical_info.get(
+            "voxel_size_um", [1.0, 1.0, 1.0]
+        )
+
+        # Populate microlens array configuration
+        optic_config.mla_config.n_pixels_per_mla = optical_info.get("pixels_per_ml", 1)
+        optic_config.mla_config.n_micro_lenses = optical_info.get("n_micro_lenses", 1)
+
+        # Populate PSF configuration
+        optic_config.PSF_config.NA = optical_info.get("na_obj", 1.0)
+        optic_config.PSF_config.ni = optical_info.get("n_medium", 1.0)
+        optic_config.PSF_config.wvl = optical_info.get("wavelength", 0.550)
+
+        # Populate polarizer and analyzer if they exist
+        if "polarizer" in optical_info:
+            optic_config.pol_config.polarizer = optical_info["polarizer"]
+        if "analyzer" in optical_info:
+            optic_config.pol_config.analyzer = optical_info["analyzer"]
+
+        if DEBUG and "polarizer" not in optical_info and "analyzer" not in optical_info:
+            print(
+                f"Warning: polarizer and analyzer not found in optical_info. "
+                + "This could be problematic if simulating with intensity images."
+            )
+
+        return optic_config
 
 
 ###########################################################################################
