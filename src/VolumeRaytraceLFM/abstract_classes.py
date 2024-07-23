@@ -62,7 +62,8 @@ class BackEnds(Enum):
 
 
 class OpticalElement(OpticBlock):
-    """Abstract class defining a elements, with a back-end ans some optical information"""
+    """Abstract class defining optical elements with a back-end and
+    some optical information."""
 
     default_optical_info = {
         # Volume information
@@ -86,64 +87,61 @@ class OpticalElement(OpticBlock):
     }
 
     def __init__(
-        self, backend: BackEnds = BackEnds.NUMPY, torch_args={}, optical_info={}
+        self, backend: BackEnds = BackEnds.NUMPY, torch_args=None, optical_info=None
     ):
         # torch args could be {'optic_config' : None, 'members_to_learn' : []},
         # Optical info is needed
-        assert (
-            len(optical_info) > 0
-        ), f"Optical info (optical_info) dictionary needed: \
-                        use OpticalElement.default_optical_info as reference \
-                        {OpticalElement.default_optical_info}"
+        torch_args = torch_args or {}
+        optical_info = optical_info or {}
+        assert len(optical_info) > 0, (
+            f"Optical info (optical_info) dictionary needed so using the default: "
+            f"{OpticalElement.default_optical_info}"
+        )
+
         # Compute voxel size
-        if optical_info["cube_voxels"] is False:
-            optical_info["voxel_size_um"] = [
-                optical_info["axial_voxel_size_um"],
-            ] + 2 * [
-                optical_info["pixels_per_ml"]
-                * optical_info["camera_pix_pitch"]
-                / optical_info["M_obj"]
-                / optical_info["n_voxels_per_ml"]
-            ]
-        else:
-            # Option to make voxel size uniform
-            optical_info["voxel_size_um"] = 3 * [
-                optical_info["pixels_per_ml"]
-                * optical_info["camera_pix_pitch"]
-                / optical_info["M_obj"]
-                / optical_info["n_voxels_per_ml"]
-            ]
+        voxel_size = self._compute_voxel_size(optical_info)
+        optical_info["voxel_size_um"] = voxel_size
+
         # Check if back-end is torch and overwrite self with an optic block, for Waveblocks
         # compatibility.
         if backend == BackEnds.PYTORCH:
             # We need to make a copy if we don't want to modify the
             # torch_args default argument, very weird.
             new_args = copy.deepcopy(torch_args)
-            # If no optic_config is provided, create one
             if "optic_config" not in torch_args or not isinstance(
                 torch_args["optic_config"], OpticConfig
             ):
                 new_args["optic_config"] = self.create_optic_config(optical_info)
-            super(OpticalElement, self).__init__(
+            super().__init__(
                 optic_config=new_args["optic_config"],
-                members_to_learn=(
-                    new_args["members_to_learn"]
-                    if "members_to_learn" in new_args.keys()
-                    else []
-                ),
+                members_to_learn=new_args.get("members_to_learn", []),
             )
-        # Store variables
+
         self.backend = backend
         self.simul_type = SimulType.NOT_SPECIFIED
         self.optical_info = optical_info
+
+    def _compute_voxel_size(self, optical_info):
+        if not optical_info["cube_voxels"]:
+            return [optical_info["axial_voxel_size_um"]] + 2 * [
+                optical_info["pixels_per_ml"]
+                * optical_info["camera_pix_pitch"]
+                / optical_info["M_obj"]
+                / optical_info["n_voxels_per_ml"]
+            ]
+        return 3 * [
+            optical_info["pixels_per_ml"]
+            * optical_info["camera_pix_pitch"]
+            / optical_info["M_obj"]
+            / optical_info["n_voxels_per_ml"]
+        ]
 
     @staticmethod
     def get_optical_info_template():
         return copy.deepcopy(OpticalElement.default_optical_info)
 
-    def create_optic_config(self, optical_info: dict) -> OpticConfig:
-        """Creates an OpticConfig instance and populates it with the
-        provided optical information."""
+    def create_optic_config(self, optical_info):
+        """Creates an OpticConfig instance and populates it with the provided optical information."""
         optic_config = OpticConfig()
 
         # Populate volume configuration
@@ -171,10 +169,9 @@ class OpticalElement(OpticBlock):
 
         if DEBUG and "polarizer" not in optical_info and "analyzer" not in optical_info:
             print(
-                f"Warning: polarizer and analyzer not found in optical_info. "
+                "Warning: polarizer and analyzer not found in optical_info. "
                 + "This could be problematic if simulating with intensity images."
             )
-
         return optic_config
 
 

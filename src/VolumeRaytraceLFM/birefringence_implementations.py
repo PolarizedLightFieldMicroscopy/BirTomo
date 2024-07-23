@@ -2089,8 +2089,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             start_time_mloop = time.perf_counter()
             material_jones = jones[:, 0]
             for m in range(1, ell_in_voxels.shape[1]):
-                # Determine which rays have remaining voxels to traverse
-                rays_with_voxels = valid_voxels_count > m
+                if DEBUG:
+                    # Determine which rays have remaining voxels to traverse
+                    rays_with_voxels = valid_voxels_count > m
+                    assert rays_with_voxels.all(), "Rays with voxels not found."
                 # Combine the current Jones Matrix with the cumulative one
                 start_time_jones_mult = time.perf_counter()
                 material_jones = material_jones @ jones[:, m]
