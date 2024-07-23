@@ -1,4 +1,11 @@
-"""Tests for the simulation results."""
+"""Tests for the simulation results.
+
+Images to compare against are generated and saved with:
+
+    images = run_simulation("shell_small", [7, 18, 18], 16, 9)
+    filename = generate_filename("shell_small", [7, 18, 18], 16, 9)
+    save_images(images, filename)
+"""
 
 import pytest
 import torch
