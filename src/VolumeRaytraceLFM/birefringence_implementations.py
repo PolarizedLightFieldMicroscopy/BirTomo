@@ -84,7 +84,7 @@ class BirefringentVolume(BirefringentElement):
                     init_args (dic): see self.init_volume function for specific arguments
                     per init_type.
         """
-        super(BirefringentVolume, self).__init__(
+        super().__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
         self._initialize_volume_attributes(optical_info, Delta_n, optic_axis)
@@ -1200,7 +1200,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self, backend: BackEnds = BackEnds.NUMPY, torch_args={}, optical_info={}
     ):
         """Initialize the class with attibriutes, including those from RayTraceLFM."""
-        super(BirefringentRaytraceLFM, self).__init__(
+        super().__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
 

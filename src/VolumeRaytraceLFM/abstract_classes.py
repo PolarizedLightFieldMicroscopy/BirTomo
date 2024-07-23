@@ -200,7 +200,7 @@ class RayTraceLFM(OpticalElement):
         },
     ):
         # Initialize the OpticalElement class
-        super(RayTraceLFM, self).__init__(
+        super().__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
 

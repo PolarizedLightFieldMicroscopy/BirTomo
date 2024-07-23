@@ -15,9 +15,7 @@ class JonesMatrixGenerators(BirefringentElement):
     """2x2 Jones matrices representing various of polariztion elements"""
 
     def __init__(self, backend: BackEnds = BackEnds.NUMPY):
-        super(BirefringentElement, self).__init__(
-            backend=backend, torch_args={}, optical_info={}
-        )
+        super().__init__(backend=backend, torch_args={}, optical_info={})
 
     @staticmethod
     def rotator(angle, backend=BackEnds.NUMPY):
@@ -187,9 +185,7 @@ class JonesVectorGenerators(BirefringentElement):
     """2x1 Jones vectors representing various states of polarized light"""
 
     def __init__(self, backend: BackEnds = BackEnds.NUMPY):
-        super(BirefringentElement, self).__init__(
-            backend=backend, torch_args={}, optical_info={}
-        )
+        super().__init__(backend=backend, torch_args={}, optical_info={})
 
     @staticmethod
     def right_circular():
