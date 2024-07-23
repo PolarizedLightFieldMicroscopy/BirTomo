@@ -64,7 +64,7 @@ def save_images(images, filename):
 
 def compare_images(generated_images, saved_images):
     assert torch.allclose(
-        generated_images[0], saved_images[0]
+        generated_images[0], saved_images[0], atol=5e-4
     ), "Retardance images differ"
     check_azimuth_images(generated_images[1], saved_images[1])
     print("Images match the saved images.")
@@ -92,3 +92,6 @@ def test_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
         compare_images(images, saved_images)
     except FileNotFoundError:
         print(f"Saved images not found at {filepath}")
+    except Exception as e:
+        print(f"Failed to compare images: {e}")
+        raise

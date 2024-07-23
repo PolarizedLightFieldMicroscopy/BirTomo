@@ -84,7 +84,7 @@ class BirefringentVolume(BirefringentElement):
                     init_args (dic): see self.init_volume function for specific arguments
                     per init_type.
         """
-        super(BirefringentVolume, self).__init__(
+        super().__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
         self._initialize_volume_attributes(optical_info, Delta_n, optic_axis)
@@ -689,10 +689,11 @@ class BirefringentVolume(BirefringentElement):
 
         return delta_n, optic_axis
 
-    def save_as_numpy_arrays(self, filename):
-        """Store this volume into a numpy file"""
-        delta_n, optic_axis = self._get_data_as_numpy_arrays()
-        np.savez(filename, birefringence=delta_n, optic_axis=optic_axis)
+    # TODO: remove this function, assuming the 1st one is better
+    # def save_as_numpy_arrays(self, filename):
+    #     """Store this volume into a numpy file"""
+    #     delta_n, optic_axis = self._get_data_as_numpy_arrays()
+    #     np.savez(filename, birefringence=delta_n, optic_axis=optic_axis)
 
     def save_as_tiff(self, filename):
         """Store this volume into a tiff file"""
@@ -1199,7 +1200,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self, backend: BackEnds = BackEnds.NUMPY, torch_args={}, optical_info={}
     ):
         """Initialize the class with attibriutes, including those from RayTraceLFM."""
-        super(BirefringentRaytraceLFM, self).__init__(
+        super().__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
 
@@ -1290,27 +1291,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             unit_str,
         )
         print(
-            "\t\tLoop through across collisions:",
-            fmt_str.format(rays_times["loop_through_vox_collisions"] * multiplier),
-            unit_str,
-        )
-        print(
-            "\t\t\tGather params for voxRayJM:",
+            "\t\tGather params for voxRayJM:",
             fmt_str.format(rays_times["gather_params_for_voxRayJM"] * multiplier),
             unit_str,
         )
         print(
-            "\t\t\tvoxRayJM:",
+            "\t\tvoxRayJM:",
             fmt_str.format(rays_times["voxRayJM"] * multiplier),
             unit_str,
         )
         print(
-            "\t\t\t\tret & azim for JM:",
+            "\t\t\tret & azim for JM:",
             fmt_str.format(rays_times["calc_ret_azim_for_jones"] * multiplier),
             unit_str,
         )
         print(
-            "\t\t\t\tJones matrix calculation:",
+            "\t\t\tJones matrix calculation:",
             fmt_str.format(rays_times["calc_jones"] * multiplier),
             unit_str,
         )
@@ -1322,6 +1318,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         print(
             "\t\t\t\tFilling the Matrix:",
             fmt_str.format(rays_times["Stacking"] * multiplier),
+            unit_str,
+        )
+        print(
+            "\t\tLoop through across collisions:",
+            fmt_str.format(rays_times["loop_through_vox_collisions"] * multiplier),
             unit_str,
         )
         print(
@@ -1970,6 +1971,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     "Optical info between ray-tracer and volume mismatch. "
                     + "This might cause issues on the border microlenses."
                 )
+
         start_time_cummulative_jones = time.perf_counter()
         material_jones = None
         start_time_prep = time.perf_counter()
@@ -2053,79 +2055,69 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Iterate the interactions of all rays with the m-th voxel
         # Some rays interact with less voxels,
         #   so we mask the rays valid with rays_with_voxels.
-        start_time_mloop = time.perf_counter()
-        material_jones = self._get_default_jones()
-        for m in range(ell_in_voxels.shape[1]):
-            # Determine which rays have remaining voxels to traverse
-            rays_with_voxels = valid_voxels_count > m
-            # Get the length that each ray travels through the m-th voxel
-            ell = ell_in_voxels[rays_with_voxels, m]  # .to(Delta_n.device)
-            # Get the voxel coordinates each ray interacts with
-            vox = voxels_of_segs_tensor[rays_with_voxels, m]
-            try:
-                start_time_gather_params = time.perf_counter()
-                # Extract the birefringence and optic axis information from the volume
-                alt_props = False
-                if volume_in.indices_active is not None:
-                    alt_props = True
-                Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
-                    volume_in, vox, active_props_only=alt_props
-                )
+
+        alt_props = False
+        if volume_in.indices_active is not None:
+            alt_props = True
+        if DEBUG:
+            assert not torch.isnan(
+                Delta_n
+            ).any(), f"Delta_n contains NaN values for m = {m}."
+            assert not torch.isnan(
+                opticAxis
+            ).any(), f"Optic axis contains NaN values for m = {m}."
+        try:
+            start_time_gather_params = time.perf_counter()
+            # Extract the birefringence and optic axis information from the volume
+            Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
+                volume_in, voxels_of_segs_tensor.long(), active_props_only=alt_props
+            )
+            end_time_gather_params = time.perf_counter()
+            self.times["gather_params_for_voxRayJM"] += (
+                end_time_gather_params - start_time_gather_params
+            )
+
+            # Compute the interaction from the rays with their corresponding voxels
+            jones = self.voxRayJM(
+                Delta_n=Delta_n,
+                opticAxis=opticAxis,
+                rayDir=ray_dir_basis,
+                ell=ell_in_voxels,
+                wavelength=self.optical_info["wavelength"],
+            )
+
+            start_time_mloop = time.perf_counter()
+            material_jones = jones[:, 0]
+            for m in range(1, ell_in_voxels.shape[1]):
                 if DEBUG:
-                    assert not torch.isnan(
-                        Delta_n
-                    ).any(), f"Delta_n contains NaN values for m = {m}."
-                    assert not torch.isnan(
-                        opticAxis
-                    ).any(), f"Optic axis contains NaN values for m = {m}."
-                # Subset of precomputed ray directions that interact with voxels in this step
-                filtered_ray_directions = ray_dir_basis[
-                    :, rays_with_voxels, :
-                ]  # .to(Delta_n.device)
-                end_time_gather_params = time.perf_counter()
-                self.times["gather_params_for_voxRayJM"] += (
-                    end_time_gather_params - start_time_gather_params
-                )
-
-                # Compute the interaction from the rays with their corresponding voxels
-                jones = self.voxRayJM(
-                    Delta_n=Delta_n,
-                    opticAxis=opticAxis,
-                    rayDir=filtered_ray_directions,
-                    ell=ell,
-                    wavelength=self.optical_info["wavelength"],
-                )
-
+                    # Determine which rays have remaining voxels to traverse
+                    rays_with_voxels = valid_voxels_count > m
+                    assert rays_with_voxels.all(), "Rays with voxels not found."
                 # Combine the current Jones Matrix with the cumulative one
                 start_time_jones_mult = time.perf_counter()
-                if m == 0:
-                    material_jones = jones
-                else:
-                    material_jones[rays_with_voxels, ...] = (
-                        material_jones[rays_with_voxels, ...] @ jones
-                    )
+                material_jones = material_jones @ jones[:, m]
                 end_time_jones_mult = time.perf_counter()
                 self.times["jones_matrix_multiplication"] += (
                     end_time_jones_mult - start_time_jones_mult
                 )
-            except IndexError as e:
-                err_msg = (
-                    "Cumulative Jones Matrix computation failed. "
-                    + "At least one voxel index is out of bounds for the Delta_n "
-                    + f"which is of shape {volume_in.Delta_n.shape}. "
-                    + f"The max of the list of voxel indices (length {len(vox)}) is {max(vox)}."
-                )
-                raise IndexError(err_msg)
-            except AssertionError as e:
-                raise AssertionError(
-                    f"Assertion error in the computation of the cumulative Jones Matrix: {e}"
-                )
-            except RuntimeError as e:
-                raise RuntimeError(
-                    f"Runtime error in the computation of the cumulative Jones Matrix: {e}"
-                )
-            except:
-                raise Exception("Cumulative Jones Matrix computation failed.")
+        except IndexError as e:
+            err_msg = (
+                "Cumulative Jones Matrix computation failed. "
+                + "At least one voxel index is out of bounds for the Delta_n "
+                + f"which is of shape {volume_in.Delta_n.shape}. "
+                + "Check the voxel indices."
+            )
+            raise IndexError(err_msg)
+        except AssertionError as e:
+            raise AssertionError(
+                f"Assertion error in the computation of the cumulative Jones Matrix: {e}"
+            )
+        except RuntimeError as e:
+            raise RuntimeError(
+                f"Runtime error in the computation of the cumulative Jones Matrix: {e}"
+            )
+        except Exception as e:
+            raise Exception(f"Cumulative Jones Matrix computation failed: {e}")
         end_time_mloop = time.perf_counter()
         self.times["loop_through_vox_collisions"] += end_time_mloop - start_time_mloop
         end_time_cummulative_jones = time.perf_counter()
@@ -2164,7 +2156,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         else:
             Delta_n = volume.Delta_n[vox]
             opticAxis = volume.optic_axis[:, vox]
-        return Delta_n, opticAxis.permute(1, 0)
+
+        return Delta_n, opticAxis.permute(1, 0, 2)
 
     def _get_default_jones(self):
         """Returns the default Jones Matrix for a ray that does not
