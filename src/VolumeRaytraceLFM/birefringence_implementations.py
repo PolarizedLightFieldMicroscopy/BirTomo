@@ -16,7 +16,6 @@ from VolumeRaytraceLFM.jones.jones_calculus import (
 )
 from VolumeRaytraceLFM.jones.eigenanalysis import (
     retardance_from_su2,
-    retardance_from_su2_single,
     retardance_from_su2_numpy,
     azimuth_from_jones_torch,
     azimuth_from_jones_numpy,
@@ -40,16 +39,16 @@ if DEBUG:
 
 ######################################################################
 class BirefringentVolume(BirefringentElement):
-    """This class stores a 3D array of voxels with birefringence properties,
+    """Stores a 3D array of voxels with birefringence properties,
     either with a numpy or pytorch back-end."""
 
     def __init__(
         self,
         backend=BackEnds.NUMPY,
-        torch_args={},
-        optical_info={},  # ,
+        torch_args=None,
+        optical_info=None,
         Delta_n=0.0,
-        optic_axis=[1.0, 0.0, 0.0],
+        optic_axis=None,
         volume_creation_args=None,
     ):
         """BirefringentVolume
@@ -84,6 +83,13 @@ class BirefringentVolume(BirefringentElement):
                     init_args (dic): see self.init_volume function for specific arguments
                     per init_type.
         """
+        if torch_args is None:
+            torch_args = {}
+        if optical_info is None:
+            optical_info = {}
+        if optic_axis is None:
+            optic_axis = [1.0, 0.0, 0.0]
+
         super().__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
@@ -91,7 +97,6 @@ class BirefringentVolume(BirefringentElement):
         self.indices_active = None
         self.optic_axis_planar = None
 
-        # Check if a volume creation was requested
         if volume_creation_args is not None:
             self.init_volume(
                 volume_creation_args["init_mode"],
@@ -175,8 +180,6 @@ class BirefringentVolume(BirefringentElement):
             .repeat(self.volume_shape[1], 2)
             .repeat(self.volume_shape[2], 3)
         )
-        # self.optic_axis = np.expand_dims(optic_axis, axis=(1, 2, 3))
-        # self.optic_axis = np.repeat(self.optic_axis, self.volume_shape, axis=(1, 2, 3))
 
     def _handle_3d_optic_axis_torch(self, optic_axis):
         """Normalize and reshape a 3D optic axis array for PyTorch backend."""
@@ -230,32 +233,42 @@ class BirefringentVolume(BirefringentElement):
             self.optic_axis[:, valid_mask] /= mags[valid_mask]
 
     def __iadd__(self, other):
-        """Overload the += operator to be able to sum volumes"""
-        # Check that shapes are the same
-        assert (self.get_delta_n().shape == other.get_delta_n().shape) and (
-            self.get_optic_axis().shape == other.get_optic_axis().shape
-        )
-        # Check if it's pytorch and need to have the grads disabled before modification
-        has_grads = False
-        if hasattr(self.Delta_n, "requires_grad"):
+        """Overload the += operator to sum volumes."""
+        # Ensure shapes are compatible
+        delta_n_shape = self.get_delta_n().shape
+        optic_axis_shape = self.get_optic_axis().shape
+        assert (
+            delta_n_shape == other.get_delta_n().shape
+        ), f"Shape mismatch for Delta_n: {delta_n_shape} vs {other.get_delta_n().shape}"
+        assert (
+            optic_axis_shape == other.get_optic_axis().shape
+        ), f"Shape mismatch for optic_axis: {optic_axis_shape} vs {other.get_optic_axis().shape}"
+
+        # Disable gradients if using PyTorch
+        requires_grad = getattr(self.Delta_n, "requires_grad", False)
+        if requires_grad:
             torch.set_grad_enabled(False)
-            has_grads = True
             self.Delta_n.requires_grad = False
             self.optic_axis.requires_grad = False
 
+        # Perform the addition
         self.Delta_n += other.Delta_n
         self.optic_axis += other.optic_axis
         # Maybe normalize axis again?
 
-        if has_grads:
-            self.optic_axis = self.optic_axis / nn.Parameter(
-                torch.linalg.norm(self.optic_axis, axis=0)
-            )
-            torch.set_grad_enabled(has_grads)
+        # Normalize the optic axis
+        norm = (
+            torch.linalg.norm(self.optic_axis, axis=0)
+            if requires_grad
+            else np.linalg.norm(self.optic_axis)
+        )
+        self.optic_axis /= norm
+
+        # Re-enable gradients if they were disabled
+        if requires_grad:
             self.Delta_n.requires_grad = True
             self.optic_axis.requires_grad = True
-        else:
-            self.optic_axis = self.optic_axis / np.linalg.norm(self.optic_axis)
+            torch.set_grad_enabled(True)
         return self
 
     def plot_lines_plotly(
@@ -586,8 +599,8 @@ class BirefringentVolume(BirefringentElement):
 
     @staticmethod
     def init_from_file(h5_file_path, backend=BackEnds.NUMPY, optical_info=None):
-        """Loads a birefringent volume from an h5 file and places it in the center of the volume
-        It requires to have:
+        """Loads a birefringent volume from an h5 file and places it in the center of the volume.
+        Requires:
             optical_info/volume_shape [3]: shape of the volume in voxels [nz,ny,nx]
             data/delta_n [nz,ny,nx]: Birefringence volumetric information.
             data/optic_axis [3,nz,ny,nx]: Optical axis per voxel.
@@ -606,11 +619,10 @@ class BirefringentVolume(BirefringentElement):
                 delta_n, optic_axis, delta_n.shape, region_shape
             )
         else:
-            err = (
+            raise ValueError(
                 f"BirefringentVolume has dimensions ({delta_n.shape}) that are not all greater "
-                + f"than or less than the volume region dimensions ({region_shape}) set for the microscope"
+                f"than or less than the volume region dimensions ({region_shape}) set for the microscope"
             )
-            raise ValueError(err)
         volume = BirefringentVolume(
             backend=backend,
             optical_info=optical_info,
@@ -621,29 +633,27 @@ class BirefringentVolume(BirefringentElement):
 
     @staticmethod
     def load_from_file(h5_file_path, backend_type="numpy"):
-        """Loads a birefringent volume from an h5 file and places it in the center of the volume
-        It requires to have:
+        """Loads a birefringent volume from an h5 file and places it in the center of the volume.
+        Requires:
             data/delta_n [nz,ny,nx]: Birefringence volumetric information.
-            data/optic_axis [3,nz,ny,nx]: Optical axis per voxel."""
-        if backend_type == "torch":
-            backend = BackEnds.PYTORCH
-        elif backend_type == "numpy":
-            backend = BackEnds.NUMPY
-        else:
+            data/optic_axis [3,nz,ny,nx]: Optical axis per voxel.
+        """
+        backend = {"torch": BackEnds.PYTORCH, "numpy": BackEnds.NUMPY}.get(backend_type)
+
+        if backend is None:
             raise ValueError(f"Backend type {backend_type} is not an option.")
 
         file_manager = VolumeFileManager()
         delta_n, optic_axis, volume_shape, voxel_size_um = (
             file_manager.extract_all_data_from_h5(h5_file_path)
         )
-        cube_voxels = True
         # Create optical info dictionary
         # TODO: add the remaining variables, notably the voxel size and the cube voxels boolean
         optical_info = dict(
             {
                 "volume_shape": volume_shape,
                 "voxel_size_um": voxel_size_um,
-                "cube_voxels": cube_voxels,
+                "cube_voxels": True,
             }
         )
         # Create volume
@@ -660,159 +670,151 @@ class BirefringentVolume(BirefringentElement):
     ):
         """Store this volume into an h5 file"""
         tqdm.write(f"Saving volume to h5 file: {h5_file_path}")
-
-        delta_n, optic_axis = self._get_data_as_numpy_arrays()
-        file_manager = VolumeFileManager()
-        file_manager.save_as_h5(
-            h5_file_path,
-            delta_n,
-            optic_axis,
-            self.optical_info,
-            description,
-            optical_all,
-        )
+        self._save_volume(h5_file_path, description, optical_all, "h5")
 
     def save_as_numpy_arrays(self, filename):
         """Store this volume into a npy file"""
+        self._save_volume(filename, optical_all=False, file_format="npz")
+
+    def save_as_tiff(self, filename):
+        """Store this volume into a tiff file"""
+        self._save_volume(filename, file_format="tiff")
+
+    def _save_volume(
+        self,
+        file_path,
+        description="Temporary description",
+        optical_all=False,
+        file_format="h5",
+    ):
+        """Helper method to save volume data in different formats"""
         delta_n, optic_axis = self._get_data_as_numpy_arrays()
         file_manager = VolumeFileManager()
-        file_manager.save_as_npz(filename, delta_n, optic_axis)
+
+        if file_format == "h5":
+            file_manager.save_as_h5(
+                file_path,
+                delta_n,
+                optic_axis,
+                self.optical_info,
+                description,
+                optical_all,
+            )
+        elif file_format == "npz":
+            file_manager.save_as_npz(file_path, delta_n, optic_axis)
+        elif file_format == "tiff":
+            file_manager.save_as_channel_stack_tiff(file_path, delta_n, optic_axis)
+        else:
+            raise ValueError(f"Unsupported file format: {file_format}")
 
     def _get_data_as_numpy_arrays(self):
         """Converts delta_n and optic_axis based on backend"""
         delta_n = self.get_delta_n()
         optic_axis = self.get_optic_axis()
-
         if self.backend == BackEnds.PYTORCH:
             delta_n = delta_n.detach().cpu().numpy()
             optic_axis = optic_axis.detach().cpu().numpy()
-
         return delta_n, optic_axis
 
-    # TODO: remove this function, assuming the 1st one is better
-    # def save_as_numpy_arrays(self, filename):
-    #     """Store this volume into a numpy file"""
-    #     delta_n, optic_axis = self._get_data_as_numpy_arrays()
-    #     np.savez(filename, birefringence=delta_n, optic_axis=optic_axis)
-
-    def save_as_tiff(self, filename):
-        """Store this volume into a tiff file"""
-        delta_n, optic_axis = self._get_data_as_numpy_arrays()
-        file_manager = VolumeFileManager()
-        file_manager.save_as_channel_stack_tiff(filename, delta_n, optic_axis)
-
     def _get_backend_str(self):
-        if self.backend == BackEnds.PYTORCH:
-            return "pytorch"
-        elif self.backend == BackEnds.NUMPY:
-            return "numpy"
+        """Returns the string representation of the backend type."""
+        backend_map = {BackEnds.PYTORCH: "pytorch", BackEnds.NUMPY: "numpy"}
+        if self.backend in backend_map:
+            return backend_map[self.backend]
         else:
             raise ValueError(f"Backend type {self.backend} is not supported.")
 
     ########### Generate different birefringent volumes ############
     def init_volume(self, init_mode="zeros", init_args={}):
-        """This function creates predefined volumes and shapes, such as
-        planes, ellipsoids, random, etc
-        TODO: use init_args for random and planes
-        """
+        """This function creates predefined volumes and shapes."""
         volume_shape = self.optical_info["volume_shape"]
         if init_mode == "zeros":
-            if self.backend == BackEnds.NUMPY:
-                voxel_parameters = np.zeros(
-                    [
-                        4,
-                    ]
-                    + volume_shape
-                )
-            if self.backend == BackEnds.PYTORCH:
-                voxel_parameters = torch.zeros(
-                    [
-                        4,
-                    ]
-                    + volume_shape
-                )
+            self._init_zeros(volume_shape)
         elif init_mode == "single_voxel":
-            delta_n = init_args["delta_n"] if "delta_n" in init_args.keys() else 0.01
-            optic_axis = (
-                init_args["optic_axis"]
-                if "optic_axis" in init_args.keys()
-                else [1, 0, 0]
-            )
-            offset = init_args["offset"] if "offset" in init_args.keys() else [0, 0, 0]
-            voxel_parameters = self.generate_single_voxel_volume(
-                volume_shape, delta_n, optic_axis, offset
-            )
+            self._init_single_voxel(volume_shape, init_args)
         elif init_mode == "random":
-            if init_args == {}:
-                my_init_args = {"Delta_n_range": [0, 1], "axes_range": [-1, 1]}
-            else:
-                my_init_args = init_args
-            voxel_parameters = self.generate_random_volume(
-                volume_shape, init_args=my_init_args
-            )
+            self._init_random(volume_shape, init_args)
         elif "planes" in init_mode:
-            n_planes = int(init_mode[0])
-            z_offset = init_args["z_offset"] if "z_offset" in init_args.keys() else 0
-            delta_n = init_args["delta_n"] if "delta_n" in init_args.keys() else 0.01
-            # Perpendicular optic axes each with constant birefringence and orientation
-            voxel_parameters = self.generate_planes_volume(
-                volume_shape, n_planes, z_offset=z_offset, delta_n=delta_n
-            )
+            self._init_planes(volume_shape, init_mode, init_args)
         elif init_mode in ["ellipsoid", "shell"]:
-            # Look for variables in init_args, else init with something
-            radius = (
-                init_args["radius"] if "radius" in init_args.keys() else [5.5, 5.5, 3.5]
-            )
-            center = (
-                init_args["center"] if "center" in init_args.keys() else [0.5, 0.5, 0.5]
-            )
-            delta_n = init_args["delta_n"] if "delta_n" in init_args.keys() else 0.01
-            alpha = (
-                init_args["border_thickness"]
-                if "border_thickness" in init_args.keys()
-                else 1
-            )
-            voxel_parameters = self.generate_ellipsoid_volume(
-                volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
-            )
-            if init_mode == "shell":
-                if self.backend == BackEnds.PYTORCH:
-                    with torch.no_grad():
-                        self.get_delta_n()[
-                            : self.optical_info["volume_shape"][0] // 2 + 2, ...
-                        ] = 0
-                else:
-                    self.get_delta_n()[
-                        : self.optical_info["volume_shape"][0] // 2 + 2, ...
-                    ] = 0
+            self._init_ellipsoid_or_shell(volume_shape, init_mode, init_args)
         else:
             raise ValueError(f"The init mode {init_mode} has not been created yet.")
+        self._set_volume_ref()
+
+    def _init_zeros(self, volume_shape):
+        shape = [4] + volume_shape
+        if self.backend == BackEnds.NUMPY:
+            self.voxel_parameters = np.zeros(shape)
+        elif self.backend == BackEnds.PYTORCH:
+            self.voxel_parameters = torch.zeros(shape)
+
+    def _init_single_voxel(self, volume_shape, init_args):
+        delta_n = init_args.get("delta_n", 0.01)
+        optic_axis = init_args.get("optic_axis", [1, 0, 0])
+        offset = init_args.get("offset", [0, 0, 0])
+        self.voxel_parameters = self.generate_single_voxel_volume(
+            volume_shape, delta_n, optic_axis, offset
+        )
+
+    def _init_random(self, volume_shape, init_args):
+        my_init_args = (
+            init_args if init_args else {"Delta_n_range": [0, 1], "axes_range": [-1, 1]}
+        )
+        self.voxel_parameters = self.generate_random_volume(
+            volume_shape, init_args=my_init_args
+        )
+
+    def _init_planes(self, volume_shape, init_mode, init_args):
+        n_planes = int(init_mode[0])
+        z_offset = init_args.get("z_offset", 0)
+        delta_n = init_args.get("delta_n", 0.01)
+        self.voxel_parameters = self.generate_planes_volume(
+            volume_shape, n_planes, z_offset=z_offset, delta_n=delta_n
+        )
+
+    def _init_ellipsoid_or_shell(self, volume_shape, init_mode, init_args):
+        radius = init_args.get("radius", [5.5, 5.5, 3.5])
+        center = init_args.get("center", [0.5, 0.5, 0.5])
+        delta_n = init_args.get("delta_n", 0.01)
+        alpha = init_args.get("border_thickness", 1)
+        self.voxel_parameters = self.generate_ellipsoid_volume(
+            volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+        )
+        if init_mode == "shell":
+            self._apply_shell_modification()
+
+    def _apply_shell_modification(self):
+        if self.backend == BackEnds.PYTORCH:
+            with torch.no_grad():
+                self.get_delta_n()[
+                    : self.optical_info["volume_shape"][0] // 2 + 2, ...
+                ] = 0
+        else:
+            self.get_delta_n()[: self.optical_info["volume_shape"][0] // 2 + 2, ...] = 0
+
+    def _set_volume_ref(self):
         volume_ref = BirefringentVolume(
             backend=self.backend,
             optical_info=self.optical_info,
-            Delta_n=voxel_parameters[0, ...],
-            optic_axis=voxel_parameters[1:, ...],
+            Delta_n=self.voxel_parameters[0, ...],
+            optic_axis=self.voxel_parameters[1:, ...],
         )
         self.Delta_n = volume_ref.Delta_n
         self.optic_axis = volume_ref.optic_axis
 
     @staticmethod
     def generate_single_voxel_volume(
-        volume_shape, delta_n=0.01, optic_axis=[1, 0, 0], offset=[0, 0, 0]
+        volume_shape: list[int, int, int],
+        delta_n: float = 0.01,
+        optic_axis: list = [1, 0, 0],
+        offset: list[int, int, int] = [0, 0, 0],
     ):
+        """Generates a single voxel volume."""
         # Identity the center of the volume after the shifts
-        vox_idx = [
-            volume_shape[0] // 2 + offset[0],
-            volume_shape[1] // 2 + offset[1],
-            volume_shape[2] // 2 + offset[2],
-        ]
+        vox_idx = [s // 2 + o for s, o in zip(volume_shape, offset)]
         # Create a volume of all zeros.
-        vol = np.zeros(
-            [
-                4,
-            ]
-            + volume_shape
-        )
+        vol = np.zeros((4,) + tuple(volume_shape))
         # Set the birefringence and optic axis
         vol[0, vox_idx[0], vox_idx[1], vox_idx[2]] = delta_n
         vol[1:, vox_idx[0], vox_idx[1], vox_idx[2]] = np.array(optic_axis)
@@ -820,61 +822,51 @@ class BirefringentVolume(BirefringentElement):
 
     @staticmethod
     def generate_random_volume(
-        volume_shape, init_args={"Delta_n_range": [0, 1], "axes_range": [-1, 1]}
+        volume_shape: list[int, int, int],
+        init_args: dict = {"Delta_n_range": [0, 1], "axes_range": [-1, 1]},
     ):
+        """Generates a random volume."""
         np.random.seed(42)
-        Delta_n = np.random.uniform(
-            init_args["Delta_n_range"][0], init_args["Delta_n_range"][1], volume_shape
-        )
-        # Random axis
-        min_axis = init_args["axes_range"][0]
-        max_axis = init_args["axes_range"][1]
-        a_0 = np.random.uniform(min_axis, max_axis, volume_shape)
-        a_1 = np.random.uniform(min_axis, max_axis, volume_shape)
-        a_2 = np.random.uniform(min_axis, max_axis, volume_shape)
-        norm_A = np.sqrt(a_0**2 + a_1**2 + a_2**2)
+        Delta_n = np.random.uniform(*init_args["Delta_n_range"], volume_shape)
+        axes = [
+            np.random.uniform(*init_args["axes_range"], volume_shape) for _ in range(3)
+        ]
+        norm_A = np.linalg.norm(axes, axis=0)
         return np.concatenate(
-            (
-                np.expand_dims(Delta_n, axis=0),
-                np.expand_dims(a_0 / norm_A, axis=0),
-                np.expand_dims(a_1 / norm_A, axis=0),
-                np.expand_dims(a_2 / norm_A, axis=0),
-            ),
-            0,
+            [np.expand_dims(Delta_n, axis=0)]
+            + [np.expand_dims(a / norm_A, axis=0) for a in axes],
+            axis=0,
         )
 
     @staticmethod
-    def generate_planes_volume(volume_shape, n_planes=1, z_offset=0, delta_n=0.01):
-        vol = np.zeros(
-            [
-                4,
-            ]
-            + volume_shape
-        )
+    def generate_planes_volume(
+        volume_shape: list[int, int, int],
+        n_planes: int = 1,
+        z_offset: int = 0,
+        delta_n: float = 0.01,
+    ):
+        """Generates a volume with planes."""
+        vol = np.zeros((4,) + tuple(volume_shape))
         z_size = volume_shape[0]
         z_ranges = np.linspace(0, z_size - 1, n_planes * 2).astype(int)
-
-        # Set random optic axis
-        optic_axis = np.random.uniform(-1, 1, [3, *volume_shape])
-        norms = np.linalg.norm(optic_axis, axis=0)
-        vol[1:, ...] = optic_axis / norms
+        optic_axis = np.random.uniform(-1, 1, (3, *volume_shape))
+        vol[1:, ...] = optic_axis / np.linalg.norm(optic_axis, axis=0)
 
         if n_planes == 1:
             # Birefringence
             vol[0, z_size // 2 + z_offset, :, :] = delta_n
             # Axis
-            # vol[1, z_size//2, :, :] = 0.5
             vol[1, z_size // 2 + z_offset, :, :] = 1
             vol[2, z_size // 2 + z_offset, :, :] = 0
             vol[3, z_size // 2 + z_offset, :, :] = 0
             return vol
+
         random_data = BirefringentVolume.generate_random_volume([n_planes])
-        for z_ix in range(0, n_planes):
-            vol[:, z_ranges[z_ix * 2] : z_ranges[z_ix * 2 + 1]] = (
-                np.expand_dims(random_data[:, z_ix], [1, 2, 3])
-                .repeat(1, 1)
-                .repeat(volume_shape[1], 2)
-                .repeat(volume_shape[2], 3)
+        for z_ix in range(n_planes):
+            slice_range = z_ranges[z_ix * 2 : z_ix * 2 + 1]
+            expanded_data = np.expand_dims(random_data[:, z_ix], axis=(1, 2, 3))
+            vol[:, slice_range] = expanded_data.repeat(volume_shape[1], axis=2).repeat(
+                volume_shape[2], axis=3
             )
         return vol
 
@@ -895,12 +887,7 @@ class BirefringentVolume(BirefringentElement):
         """
         # Originally grabbed from https://math.stackexchange.com/questions/2931909/normal-of-a-point-on-the-surface-of-an-ellipsoid,
         #   then modified to do the subtraction of two ellipsoids instead.
-        vol = np.zeros(
-            [
-                4,
-            ]
-            + volume_shape
-        )
+        vol = np.zeros((4,) + tuple(volume_shape))
         kk, jj, ii = np.meshgrid(
             np.arange(volume_shape[0]),
             np.arange(volume_shape[1]),
@@ -963,7 +950,7 @@ class BirefringentVolume(BirefringentElement):
     ):
         """Create different volumes, some of them randomized. Feel free to add
         your volumes here.
-        Parameters:
+        Args:
             backend: BackEnds.NUMPY or BackEnds.PYTORCH
             optical_info (dict): Stores optical properties, primarily the volume shape.
             vol_type (str): Type of volume to generate. Options include "single_voxel", "zeros",
@@ -972,44 +959,21 @@ class BirefringentVolume(BirefringentElement):
         Returns:
             volume (BirefringentVolume)
         """
-        # Where is the center of the volume?
-        vox_ctr_idx = np.array(
-            [
-                optical_info["volume_shape"][0] / 2,
-                optical_info["volume_shape"][1] / 2,
-                optical_info["volume_shape"][2] / 2,
-            ]
-        ).astype(int)
+        volume_shape = optical_info["volume_shape"]
+
         if vol_type in ["single_voxel", "zeros"]:
             if backend == BackEnds.NUMPY:
                 raise NotImplementedError(
                     "There is not a NUMPY single_voxel or"
                     + "zeros volume method implemented. Use PYTORCH instead."
                 )
-            voxel_delta_n = 0.01
-            if vol_type == "zeros":
-                voxel_delta_n = 0
-            # TODO: make numpy version of birefringence axis
-            voxel_birefringence_axis = torch.tensor([1, 0.0, 0])
-            voxel_birefringence_axis /= voxel_birefringence_axis.norm()
-            # Create empty volume
-            volume = BirefringentVolume(
-                backend=backend,
-                optical_info=optical_info,
-                volume_creation_args={"init_mode": "zeros"},
+            voxel_delta_n = 0.01 if vol_type == "single_voxel" else 0
+            return BirefringentVolume.generate_single_voxel_volume(
+                volume_shape,
+                delta_n=voxel_delta_n,
+                optic_axis=[1, 0, 0],
+                offset=[volume_axial_offset, 0, 0],
             )
-            # Set delta_n
-            volume.Delta_n.requires_grad = False
-            volume.optic_axis.requires_grad = False
-            volume.get_delta_n()[
-                volume_axial_offset, vox_ctr_idx[1], vox_ctr_idx[2]
-            ] = voxel_delta_n
-            # set optical_axis
-            volume.get_optic_axis()[
-                :, volume_axial_offset, vox_ctr_idx[1], vox_ctr_idx[2]
-            ] = voxel_birefringence_axis
-            volume.Delta_n.requires_grad = True
-            volume.optic_axis.requires_grad = True
         elif vol_type in ["ellipsoid", "shell"]:
             ellipsoid_args = {
                 "radius": [5.5, 9.5, 5.5],
@@ -1193,7 +1157,7 @@ class BirefringentVolume(BirefringentElement):
 ############ Implementations ############
 class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     """This class extends RayTraceLFM, and implements the forward function,
-    where voxels contribute to ray's Jones-matrices with a retardance and axis
+    where voxels contribute to ray's Jones matrices with a retardance and axis
     in a non-commutative matter"""
 
     def __init__(
@@ -1204,16 +1168,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
 
+        # Initialize voxel indices
         self.vox_indices_ml_shifted = {}
         self.vox_indices_ml_shifted_all = []
+        self.vox_indices_by_mla_idx = {}
+        self.vox_indices_by_mla_idx_tensors = {}
+
+        # Initialize ray-related attributes
         self.ray_valid_indices_all = None
         self.MLA_volume_geometry_ready = False
         self.verbose = True
         self.only_nonzero_for_jones = False
         self.mla_execution_times = {}
-        self.vox_indices_ml_shifted = {}
-        self.vox_indices_by_mla_idx = {}
-        self.vox_indices_by_mla_idx_tensors = {}
+
+        # Initialize timing dictionary
         self.times = {
             "ray_trace_through_volume": 0,
             "cummulative_jones": 0,
@@ -1233,24 +1201,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.check_errors = False
 
     def __str__(self):
-        info = (
-            f"BirefringentRaytraceLFM(backend={self.backend}, "
-            # f"torch_args={self.torch_args},
-            f"optical_info={self.optical_info})"
-            f"\nvox_indices_ml_shifted={self.vox_indices_ml_shifted}"
-            f"\nvox_indices_ml_shifted_all={self.vox_indices_ml_shifted_all}"
-            f"\nMLA_volume_geometry_ready={self.MLA_volume_geometry_ready}"
-            f"\nvox_ctr_idx={self.vox_ctr_idx}"
-            f"\nvoxel_span_per_ml={self.voxel_span_per_ml}"
-            f"\nray_valid_indices[:, 0:3]={self.ray_valid_indices[:, 0:3]}"
-            f"\nray_valid_indices_all={self.ray_valid_indices_all}"
-            f"\nray_direction_basis[0][0]={self.ray_direction_basis[0][0]}"
-            f"\nray_vol_colli_indices[0]={self.ray_vol_colli_indices[0]}"
-            f"\nray_vol_colli_lengths[0]={self.ray_vol_colli_lengths[0]}"
-            f"\nnonzero_pixels_dict[(0, 0)].shape={self.nonzero_pixels_dict[(0, 0)].shape}"
-            f"\nuse_lenslet_based_filtering={self.use_lenslet_based_filtering}"
-        )
-        return info
+        info = [
+            f"BirefringentRaytraceLFM(backend={self.backend}, optical_info={self.optical_info})",
+            f"vox_indices_ml_shifted={self.vox_indices_ml_shifted}",
+            f"vox_indices_ml_shifted_all={self.vox_indices_ml_shifted_all}",
+            f"MLA_volume_geometry_ready={self.MLA_volume_geometry_ready}",
+            f"vox_ctr_idx={self.vox_ctr_idx}",
+            f"voxel_span_per_ml={self.voxel_span_per_ml}",
+            f"ray_valid_indices[:, 0:3]={self.ray_valid_indices[:, 0:3]}",
+            f"ray_valid_indices_all={self.ray_valid_indices_all}",
+            f"ray_direction_basis[0][0]={self.ray_direction_basis[0][0]}",
+            f"ray_vol_colli_indices[0]={self.ray_vol_colli_indices[0]}",
+            f"ray_vol_colli_lengths[0]={self.ray_vol_colli_lengths[0]}",
+            f"nonzero_pixels_dict[(0, 0)].shape={self.nonzero_pixels_dict[(0, 0)].shape}",
+            f"use_lenslet_based_filtering={self.use_lenslet_based_filtering}",
+        ]
+        return "\n".join(info)
 
     def save(self, filepath):
         """Save the BirefringentRaytraceLFM instance to a file"""
@@ -1342,10 +1308,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         )
 
     def reset_timing_info(self):
-        for key in self.mla_execution_times:
-            self.mla_execution_times[key] = 0
-        for key in self.times:
-            self.times[key] = 0
+        self.mla_execution_times = {key: 0 for key in self.mla_execution_times}
+        self.times = {key: 0 for key in self.times}
 
     def to_device(self, device):
         """Move the BirefringentRaytraceLFM to a device"""
@@ -1364,126 +1328,29 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def get_volume_reachable_region(self):
         """Returns a binary mask where the MLA's can reach into the volume"""
-
         n_micro_lenses = self.optical_info["n_micro_lenses"]
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
-        n_ml_half = floor(n_micro_lenses * n_voxels_per_ml / 2.0)
         mask = torch.zeros(self.optical_info["volume_shape"])
-        include_ray_angle_reach = True
-        if include_ray_angle_reach:
+        ctr_idx = self.vox_ctr_idx
+        if True:
+            # Include the ray angle reach
             vox_span_half = int(
                 self.voxel_span_per_ml + (n_micro_lenses * n_voxels_per_ml) / 2
             )
             mask[
                 :,
-                self.vox_ctr_idx[1]
-                - vox_span_half
-                + 1 : self.vox_ctr_idx[1]
-                + vox_span_half,
-                self.vox_ctr_idx[2]
-                - vox_span_half
-                + 1 : self.vox_ctr_idx[2]
-                + vox_span_half,
+                ctr_idx[1] - vox_span_half + 1 : ctr_idx[1] + vox_span_half,
+                ctr_idx[2] - vox_span_half + 1 : ctr_idx[2] + vox_span_half,
             ] = 1.0
         else:
+            # Do not include the ray angle reach
+            n_ml_half = floor(n_micro_lenses * n_voxels_per_ml / 2.0)
             mask[
                 :,
-                self.vox_ctr_idx[1] - n_ml_half + 1 : self.vox_ctr_idx[1] + n_ml_half,
-                self.vox_ctr_idx[2] - n_ml_half + 1 : self.vox_ctr_idx[2] + n_ml_half,
+                ctr_idx[1] - n_ml_half + 1 : ctr_idx[1] + n_ml_half,
+                ctr_idx[2] - n_ml_half + 1 : ctr_idx[2] + n_ml_half,
             ] = 1.0
-        # mask_volume = BirefringentVolume(backend=self.backend,
-        #                   optical_info=self.optical_info, Delta_n=0.01, optic_axis=[0.5,0.5,0])
-        # [r,a] = self.ray_trace_through_volume(mask_volume)
-        # # Check gradients to see what is affected
-        # L = r.mean() + a.mean()
-        # L.backward()
-        # with torch.no_grad():
-        #     mask = mask_volume.Delta_n
-        #     mask[mask.grad==0] = 0
         return mask.detach()
-
-    def precompute_MLA_volume_geometry(self):
-        """Expand the ray-voxel interactions from a single microlens to an nxn MLA"""
-        if self.MLA_volume_geometry_ready:
-            return
-        # volume_shape defines the size of the workspace
-        # the number of micro lenses defines the valid volume inside the workspace
-        volume_shape = self.optical_info["volume_shape"]
-        n_micro_lenses = self.optical_info["n_micro_lenses"]
-        n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
-        n_pixels_per_ml = self.optical_info["pixels_per_ml"]
-        n_ml_half = floor(n_micro_lenses / 2.0)
-        n_voxels_per_ml_half = floor(
-            self.optical_info["n_voxels_per_ml"] * n_micro_lenses / 2.0
-        )
-
-        # Check if the volume_size can fit these micro_lenses.
-        # # considering that some rays go beyond the volume in front of the microlens
-        # border_size_around_mla = np.ceil((volume_shape[1]-(n_micro_lenses*n_voxels_per_ml)) / 2)
-        min_needed_volume_size = int(
-            self.voxel_span_per_ml + (n_micro_lenses * n_voxels_per_ml)
-        )
-        assert (
-            min_needed_volume_size <= volume_shape[1]
-            and min_needed_volume_size <= volume_shape[2]
-        ), (
-            "The volume in front of the microlenses"
-            + f"({n_micro_lenses},{n_micro_lenses}) is too large for a volume_shape: {self.optical_info['volume_shape'][1:]}. "
-            + f"Increase the volume_shape to at least [{min_needed_volume_size+1},{min_needed_volume_size+1}]"
-        )
-
-        odd_mla_shift = np.mod(n_micro_lenses, 2)
-        # Iterate microlenses in y direction
-        for iix, ml_ii in tqdm(
-            enumerate(range(-n_ml_half, n_ml_half + odd_mla_shift)),
-            f"Computing rows of microlens ret+azim {self.backend}",
-        ):
-            # Iterate microlenses in x direction
-            for jjx, ml_jj in enumerate(range(-n_ml_half, n_ml_half + odd_mla_shift)):
-                # Compute offset to top corner of the volume in front of the microlens (ii,jj)
-                current_offset = (
-                    np.array([n_voxels_per_ml * ml_ii, n_voxels_per_ml * ml_jj])
-                    + np.array(self.vox_ctr_idx[1:])
-                    - n_voxels_per_ml_half
-                )
-                self.vox_indices_ml_shifted_all += [
-                    [
-                        RayTraceLFM.ravel_index(
-                            (
-                                vox[ix][0],
-                                vox[ix][1] + current_offset[0],
-                                vox[ix][2] + current_offset[1],
-                            ),
-                            self.optical_info["volume_shape"],
-                        )
-                        for ix in range(len(vox))
-                    ]
-                    for vox in self.ray_vol_colli_indices
-                ]
-                # Shift ray-pixel indices
-                if self.ray_valid_indices_all is None:
-                    self.ray_valid_indices_all = self.ray_valid_indices.clone()
-                else:
-                    self.ray_valid_indices_all = torch.cat(
-                        (
-                            self.ray_valid_indices_all,
-                            self.ray_valid_indices
-                            + torch.tensor(
-                                [jjx * n_pixels_per_ml, iix * n_pixels_per_ml]
-                            ).unsqueeze(1),
-                        ),
-                        1,
-                    )
-        # Replicate ray info for all the microlenses
-        self.ray_vol_colli_lengths = torch.Tensor(
-            self.ray_vol_colli_lengths.repeat(n_micro_lenses**2, 1)
-        )
-        self.ray_direction_basis = torch.Tensor(
-            self.ray_direction_basis.repeat(1, n_micro_lenses**2, 1)
-        )
-
-        self.MLA_volume_geometry_ready = True
-        return
 
     def prepare_for_all_rays_at_once(self):
         if self.MLA_volume_geometry_ready:
@@ -1595,7 +1462,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """Gather the valid ray indices for all microlenses at once."""
         n_micro_lenses = self.optical_info["n_micro_lenses"]
         n_pixels_per_ml = self.optical_info["pixels_per_ml"]
-        n_ml_half = floor(n_micro_lenses / 2.0)
         self.ray_valid_indices_all = None
         device = self.ray_valid_indices.device
         for ml_ii_idx in range(n_micro_lenses):
@@ -1615,11 +1481,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def replicate_ray_info_each_microlens(self):
         """Replicate ray info for all the microlenses"""
         n_micro_lenses = self.optical_info["n_micro_lenses"]
-        self.ray_vol_colli_lengths = torch.Tensor(
-            self.ray_vol_colli_lengths.repeat(n_micro_lenses**2, 1)
+        self.ray_vol_colli_lengths = self.ray_vol_colli_lengths.repeat(
+            n_micro_lenses**2, 1
         )
-        self.ray_direction_basis = torch.Tensor(
-            self.ray_direction_basis.repeat(1, n_micro_lenses**2, 1)
+        self.ray_direction_basis = self.ray_direction_basis.repeat(
+            1, n_micro_lenses**2, 1
         )
 
     def store_vox_indices_by_mla_idx(self):
@@ -1627,15 +1493,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             self.vox_indices_by_mla_idx
         )
 
-    def filter_from_radiometry(self, radiometry):
+    def filter_from_radiometry(self, radiometry: torch.Tensor):
         """Filter out invalid rays based on radiometry image."""
         err_msg = "The geometry for the entire MLA must be prepared first."
-        assert self.MLA_volume_geometry_ready, err_msg
+        if not self.MLA_volume_geometry_ready:
+            raise RuntimeError(err_msg)
+        # Get current ray and voxel data
         ray_indices = self.ray_valid_indices_all
         voxel_indices = self.vox_indices_ml_shifted_all
         collision_lengths = self.ray_vol_colli_lengths
         ray_dir_basis = self.ray_direction_basis
+        # Create a mask for valid rays based on radiometry
         radiomask = get_bool_mask_for_ray_indices(ray_indices, radiometry)
+        # Filter out invalid rays and update attributes
         self.ray_valid_indices_all = ray_indices[:, radiomask]
         self.vox_indices_ml_shifted_all = voxel_indices[radiomask, :]
         self.ray_vol_colli_lengths = collision_lengths[radiomask, :]
@@ -1657,7 +1527,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             volume_in (BirefringentVolume): The volume to be processed.
             all_rays_at_once (bool): Flag to indicate whether all rays should be processed at once.
             intensity (bool): Flag to indicate whether to generate intensity images.
-
         Returns:
             list[ImageType]: A list of images resulting from the ray tracing process.
         """
@@ -1677,10 +1546,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Check if the volume_size can fit these microlenses.
         # # considering that some rays go beyond the volume in front of the microlenses
-        if False:
-            border_size_around_mla = np.ceil(
-                (volume_shape[1] - (n_micro_lenses * n_voxels_per_ml)) / 2
-            )
         min_required_volume_size = self._calculate_min_volume_size(
             n_micro_lenses, n_voxels_per_ml
         )
@@ -1747,14 +1612,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             min_required_volume_size > volume_shape[1]
             or min_required_volume_size > volume_shape[2]
         ):
-            print(
-                f"WARNING: The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}."
+            warning_msg = (
+                f"WARNING: The required volume size ({min_required_volume_size}) "
+                f"exceeds the provided volume shape {volume_shape[1:]}."
             )
+            print(warning_msg)
             raise_error = False  # DEBUG: set to False to avoid raising error
             if raise_error:
-                raise ValueError(
-                    f"The required volume size ({min_required_volume_size}) exceeds the provided volume shape {volume_shape[1:]}."
-                )
+                raise ValueError(warning_msg)
 
     def _calculate_current_offset(
         self, row_index, col_index, num_voxels_per_ml, num_microlenses
@@ -1830,32 +1695,39 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 for img1, img2 in zip(img_list1, img_list2)
             ]
 
+    def _measure_time(self, func, *args, **kwargs):
+        """Helper function to measure execution time of a function."""
+        start_time = time.perf_counter()
+        result = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        return result, end_time - start_time
+
     def retardance(self, jones):
         """Phase delay introduced between the fast and slow axis in a Jones matrix"""
-        start_time = time.perf_counter()
         if self.backend == BackEnds.NUMPY:
-            retardance = retardance_from_su2_numpy(jones)
+            retardance, duration = self._measure_time(retardance_from_su2_numpy, jones)
         elif self.backend == BackEnds.PYTORCH:
-            retardance = retardance_from_su2(jones)
+            retardance, duration = self._measure_time(retardance_from_su2, jones)
             if DEBUG:
                 assert not torch.isnan(
                     retardance
                 ).any(), "Retardance contains NaN values."
         else:
-            raise NotImplementedError
-        end_time = time.perf_counter()
-        self.times["retardance_from_jones"] += end_time - start_time
+            raise NotImplementedError("Unsupported backend")
+
+        self.times["retardance_from_jones"] += duration
         return retardance
 
     def azimuth(self, jones):
         """Rotation angle of the fast axis (neg phase)"""
-        start_time = time.perf_counter()
         if self.backend == BackEnds.NUMPY:
-            azimuth = azimuth_from_jones_numpy(jones)
+            azimuth, duration = self._measure_time(azimuth_from_jones_numpy, jones)
         elif self.backend == BackEnds.PYTORCH:
-            azimuth = azimuth_from_jones_torch(jones)
-        end_time = time.perf_counter()
-        self.times["azimuth_from_jones"] += end_time - start_time
+            azimuth, duration = self._measure_time(azimuth_from_jones_torch, jones)
+        else:
+            raise NotImplementedError("Unsupported backend")
+
+        self.times["azimuth_from_jones"] += duration
         return azimuth
 
     def calc_cummulative_JM_of_ray(
@@ -1884,44 +1756,33 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         jones_list = []
         try:
-            for m in range(len(voxels_of_segs[n_ray])):
+            for m, vox in enumerate(voxels_of_segs[n_ray]):
                 ell = ell_in_voxels[n_ray][m]
-                vox = voxels_of_segs[n_ray][m]
-
                 # Check if indices are within bounds
                 y_index = vox[1] + microlens_offset[0]
                 z_index = vox[2] + microlens_offset[1]
-                y_in_bounds = 0 <= y_index < volume_in.Delta_n.shape[1]
-                z_in_bounds = 0 <= z_index < volume_in.Delta_n.shape[2]
-                if not (y_in_bounds and z_in_bounds):
-                    err_msg = (
-                        "Cumulative Jones Matrix computation failed. "
-                        + "Index out of bounds: Attempted to access Delta_n at index "
+                if not (
+                    0 <= y_index < volume_in.Delta_n.shape[1]
+                    and 0 <= z_index < volume_in.Delta_n.shape[2]
+                ):
+                    raise IndexError(
+                        f"Cumulative Jones Matrix computation failed. "
+                        f"Index out of bounds: Attempted to access Delta_n at index "
                         f"[{vox[0]}, {y_index}, {z_index}], but this is outside "
                         f"the valid range of Delta_n's shape {volume_in.Delta_n.shape}."
                     )
-                    raise IndexError(err_msg)
 
-                Delta_n = volume_in.Delta_n[
-                    vox[0], vox[1] + microlens_offset[0], vox[2] + microlens_offset[1]
-                ]
-                opticAxis = volume_in.optic_axis[
-                    :,
-                    vox[0],
-                    vox[1] + microlens_offset[0],
-                    vox[2] + microlens_offset[1],
-                ]
+                Delta_n = volume_in.Delta_n[vox[0], y_index, z_index]
+                opticAxis = volume_in.optic_axis[:, vox[0], y_index, z_index]
                 jones = self.voxRayJM(
                     Delta_n, opticAxis, rayDir, ell, self.optical_info["wavelength"]
                 )
                 jones_list.append(jones)
-        except IndexError as e:
-            raise IndexError(err_msg)
-        except:
+        except Exception as e:
             raise Exception(
                 "Cumulative Jones Matrix computation failed. "
                 + "Error accessing the volume, try increasing the volume size in Y-Z"
-            )
+            ) from e
         material_jones = BirefringentRaytraceLFM.rayJM_numpy(jones_list)
         return material_jones
 
@@ -1959,17 +1820,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             print("self in: ", self.optical_info)
             print(
                 {
-                    self.optical_info[k] - volume_in.optical_info[k]
-                    for k in self.optical_info.items()
+                    k: self.optical_info[k] - volume_in.optical_info[k]
+                    for k in self.optical_info
                 }
             )
             volume_in.optical_info = self.optical_info
             try:
                 errors.compare_dicts(self.optical_info, volume_in.optical_info)
-            except ValueError as e:
+            except ValueError:
                 print(
-                    "Optical info between ray-tracer and volume mismatch. "
-                    + "This might cause issues on the border microlenses."
+                    "Optical info mismatch between ray-tracer and volume. This might cause issues on the border microlenses."
                 )
 
         start_time_cummulative_jones = time.perf_counter()
@@ -2059,13 +1919,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         alt_props = False
         if volume_in.indices_active is not None:
             alt_props = True
-        if DEBUG:
-            assert not torch.isnan(
-                Delta_n
-            ).any(), f"Delta_n contains NaN values for m = {m}."
-            assert not torch.isnan(
-                opticAxis
-            ).any(), f"Optic axis contains NaN values for m = {m}."
         try:
             start_time_gather_params = time.perf_counter()
             # Extract the birefringence and optic axis information from the volume
@@ -2100,21 +1953,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 self.times["jones_matrix_multiplication"] += (
                     end_time_jones_mult - start_time_jones_mult
                 )
-        except IndexError as e:
-            err_msg = (
-                "Cumulative Jones Matrix computation failed. "
-                + "At least one voxel index is out of bounds for the Delta_n "
-                + f"which is of shape {volume_in.Delta_n.shape}. "
-                + "Check the voxel indices."
+        except IndexError:
+            raise IndexError(
+                f"Cumulative Jones Matrix computation failed. "
+                f"Voxel index out of bounds for Delta_n of shape {volume_in.Delta_n.shape}."
             )
-            raise IndexError(err_msg)
-        except AssertionError as e:
-            raise AssertionError(
-                f"Assertion error in the computation of the cumulative Jones Matrix: {e}"
-            )
-        except RuntimeError as e:
-            raise RuntimeError(
-                f"Runtime error in the computation of the cumulative Jones Matrix: {e}"
+        except (AssertionError, RuntimeError) as e:
+            raise type(e)(
+                f"{type(e).__name__} in cumulative Jones Matrix computation: {e}"
             )
         except Exception as e:
             raise Exception(f"Cumulative Jones Matrix computation failed: {e}")
@@ -2222,76 +2068,79 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         assert self.backend == BackEnds.PYTORCH, err_msg
         vol_shape = self.optical_info["volume_shape"]
 
+        # TODO: test tensor_method to see if equivalent
         tensor_method = False
         if tensor_method:
             # perform original method for comparison
-            # list_of_voxel_lists_og = [
-            # [RayTraceLFM.ravel_index((vox[ix][0],
-            #         vox[ix][1] + microlens_offset[0],
-            #         vox[ix][2] + microlens_offset[1]),
-            # vol_shape) for ix in range(len(vox))]
-            # for vox in collision_indices
-            # ]
-            def ravel_index(x, dims):
+            list_of_voxel_lists_og = [
+                [
+                    RayTraceLFM.ravel_index(
+                        (
+                            vox[ix][0],
+                            vox[ix][1] + microlens_offset[0],
+                            vox[ix][2] + microlens_offset[1],
+                        ),
+                        vol_shape,
+                    )
+                    for ix in range(len(vox))
+                ]
+                for vox in collision_indices
+            ]
+
+            def ravel_index_tensor(x, dims):
                 """Convert multi-dimensional indices to a 1D index using PyTorch operations."""
-                dims = torch.tensor(dims, dtype=torch.long)
-                c = torch.cumprod(torch.cat((torch.tensor([1]), dims.flip(0))), 0)[
-                    :-1
-                ].flip(0)
+                dims = torch.tensor(dims, dtype=torch.long, device=x.device)
+                c = torch.cumprod(
+                    torch.cat((torch.tensor([1], device=x.device), dims.flip(0))), 0
+                )[:-1].flip(0)
                 if x.ndim == 1:
-                    return torch.sum(c * x, dim=0)  # torch.dot(c, x)
+                    return torch.sum(c * x)  # torch.dot(c, x)
                 elif x.ndim == 2:
                     return torch.sum(c * x, dim=1)
                 else:
                     raise ValueError("Input tensor x must be 1D or 2D")
 
-            # def ravel_index(x, dims):
-            #     '''Method used for debugging'''
-            #     if torch.all(x < dims):
-            #         c = torch.cumprod(torch.cat((torch.tensor([1]), dims.flip(0))), 0).flip(0)[:-1]
-            #         return torch.sum(c * x, dim=1)
-            #     else:
-            #         raise ValueError("Index out of bounds")
-            vol_shape = torch.tensor(
-                self.optical_info["volume_shape"], dtype=torch.long
-            )
             # Convert microlens_offset and collision_indices to tensors
-            microlens_offset = torch.tensor(microlens_offset, dtype=torch.long)
+            microlens_offset = torch.tensor(
+                microlens_offset,
+                dtype=torch.long,
+                device="cuda" if torch.cuda.is_available() else "cpu",
+            )
             collision_indices = [
-                torch.tensor(vox, dtype=torch.long) for vox in collision_indices
+                torch.tensor(
+                    vox,
+                    dtype=torch.long,
+                    device="cuda" if torch.cuda.is_available() else "cpu",
+                )
+                for vox in collision_indices
             ]
 
-            if DEBUG:
-                list_of_voxel_lists = [
-                    [
-                        RayTraceLFM.safe_ravel_index(
-                            vox[ix], microlens_offset, vol_shape
-                        )
-                        for ix in range(len(vox))
-                    ]
-                    for vox in collision_indices
-                ]
-            else:
-                list_of_voxel_lists = []
-                for vox in collision_indices:
-                    # Create a tensor for the offsets
-                    offsets = torch.zeros_like(vox)
-                    offsets[:, 1] = microlens_offset[0]
-                    offsets[:, 2] = microlens_offset[1]
+            # Create offsets tensor
+            offsets = torch.zeros(
+                (len(collision_indices), 3),
+                dtype=torch.long,
+                device=microlens_offset.device,
+            )
+            offsets[:, 1] = microlens_offset[0]
+            offsets[:, 2] = microlens_offset[1]
 
-                    # Add the offsets to the collision indices
-                    shifted_vox = vox + offsets
+            # Shift voxel indices
+            shifted_vox = [vox + offsets[i] for i, vox in enumerate(collision_indices)]
 
-                    # Check if any indices are out of bounds
-                    if torch.any(shifted_vox >= vol_shape):
-                        print("WARNING: Index out of bounds. Should we skip it?")
-                        raise ValueError("Index out of bounds")
-                        # continue
+            # Check for out-of-bounds indices
+            for shifted in shifted_vox:
+                if torch.any(shifted >= torch.tensor(vol_shape, device=shifted.device)):
+                    print("WARNING: Index out of bounds. Skipping this voxel.")
+                    continue
 
-                    # Convert the shifted voxel indices to 1D using ravel_index
-                    raveled_indices = ravel_index(shifted_vox, vol_shape)
-                    list_of_voxel_lists.append(raveled_indices.tolist())
-            # assert list_of_voxel_lists == list_of_voxel_lists_og, "The tensor method does not match the original method."
+            # Convert the shifted voxel indices to 1D using ravel_index_tensor
+            raveled_indices = [
+                ravel_index_tensor(shifted, vol_shape) for shifted in shifted_vox
+            ]
+            assert (
+                list_of_voxel_lists == list_of_voxel_lists_og
+            ), "The tensor method does not match the original method."
+            return raveled_indices
         else:
             if DEBUG:
                 list_of_voxel_lists = [
@@ -2425,7 +2274,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         vox_list = filter_keys_by_count(counts, 1)
         return vox_list
 
-    def _filter_ray_data(self, mla_index):
+    def _filter_ray_data(self, mla_index: tuple[int, int]) -> tuple:
         """
         Extract the ray tracing variables that contribute to the image.
         This is done by applying a mask to the ray tracing variables. No class
@@ -2536,35 +2385,25 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         ret_image = torch.zeros(
             (pixels_per_mla, pixels_per_mla),
             dtype=torch.float32,
-            requires_grad=True,
             device=retardance.device,
         )
         azim_image = torch.zeros(
             (pixels_per_mla, pixels_per_mla),
             dtype=torch.float32,
-            requires_grad=True,
             device=azimuth.device,
         )
-        ret_image.requires_grad = False
-        azim_image.requires_grad = False
 
         # Fill the values in the images
         ray_indices_all = self.ray_valid_indices_all
         ret_image[ray_indices_all[0, :], ray_indices_all[1, :]] = retardance
         azim_image[ray_indices_all[0, :], ray_indices_all[1, :]] = azimuth
-        # Alternative version
-        # ret_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices,
-        #                       values = retardance, size=(pixels_per_ml, pixels_per_ml)).to_dense()
-        # azim_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices,
-        #                       values = azimuth, size=(pixels_per_ml, pixels_per_ml)).to_dense()
         return [ret_image, azim_image]
 
     def ret_and_azim_images_torch(
         self, volume_in: BirefringentVolume, microlens_offset=[0, 0], mla_index=(0, 0)
     ):
-        """
-        Computes the retardance and azimuth images for a given volume and
-        microlens offset using PyTorch.
+        """Computes the retardance and azimuth images for a given volume
+        and microlens offset using PyTorch.
 
         This function calculates the retardance and azimuth values for the
         (precomputed) rays passing through a specific region of the volume,
@@ -2572,22 +2411,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         It generates two images: one for retardance and one for azimuth,
         for a single microlens. This offset is included to move the center of
         the volume, as the ray collisions are computed only for a single microlens.
-
         Args:
             volume_in (BirefringentVolume): The volume through which rays pass.
             microlens_offset (list): The offset [x, y] to the center of the
                                      volume for the specific microlens.
             mla_index (tuple, optional): The index of the microlens.
                                          Defaults to (0, 0).
-
         Returns:
             list: A list containing two PyTorch tensors, one for the retardance
                     image and one for the azimuth image.
         """
-        # Fetch the number of pixels per microlens array from the optic configuration
         pixels_per_ml = self.optical_info["pixels_per_ml"]
 
-        # Calculate Jones Matrices for all rays given the volume and microlens offset
+        # Calculate effective Jones Matrices
         effective_jones = self.calc_cummulative_JM_of_ray(
             volume_in, microlens_offset, mla_index=mla_index
         )
@@ -2596,24 +2432,21 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         retardance = self.retardance(effective_jones).to(torch.float32)
         azimuth = self.azimuth(effective_jones).to(torch.float32)
 
-        # Initialize output images for retardance and azimuth on the appropriate device
+        # Initialize output images
         ret_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml),
             dtype=torch.float32,
-            requires_grad=True,
             device=retardance.device,
         )
         azim_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml),
             dtype=torch.float32,
-            requires_grad=True,
             device=azimuth.device,
         )
-        ret_image.requires_grad = False
-        azim_image.requires_grad = False
 
         # Retrieve the ray indices specific to the lenslet
         current_lenslet_indices = self._retrieve_lenslet_indices(mla_index)
+
         # Fill the calculated values into the images at the lenslet indices
         ret_image[current_lenslet_indices[0, :], current_lenslet_indices[1, :]] = (
             retardance
@@ -2621,13 +2454,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         azim_image[current_lenslet_indices[0, :], current_lenslet_indices[1, :]] = (
             azimuth
         )
-
-        # Alternative implementation using sparse tensors (commented out)
-        # ret_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices,
-        #                       values = retardance, size=(pixels_per_ml, pixels_per_ml)).to_dense()
-        # azim_image = torch.sparse_coo_tensor(indices = self.ray_valid_indices,
-        #                       values = azimuth, size=(pixels_per_ml, pixels_per_ml)).to_dense()
-
         return [ret_image, azim_image]
 
     def _retrieve_lenslet_indices(self, mla_index):
@@ -2697,9 +2523,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             volume_in, microlens_offset, mla_index=mla_index
         )
         intensity_image_list = [np.zeros((pixels_per_ml, pixels_per_ml))] * 5
-
-        # if not self.MLA_volume_geometry_ready:
-        #     self.precompute_MLA_volume_geometry()
 
         for setting in range(5):
             polarizer = JonesMatrixGenerators.universal_compensator_modes(
