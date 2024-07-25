@@ -8,7 +8,7 @@ class BirefringentElement(OpticalElement):
     def __init__(
         self, backend: BackEnds = BackEnds.NUMPY, torch_args={}, optical_info=None
     ):
-        super(BirefringentElement, self).__init__(
+        super().__init__(
             backend=backend, torch_args=torch_args, optical_info=optical_info
         )
         self.simul_type = SimulType.BIREFRINGENT

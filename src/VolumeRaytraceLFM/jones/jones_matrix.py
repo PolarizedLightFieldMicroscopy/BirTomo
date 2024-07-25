@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import time
 
 
 def vox_ray_ret_azim_numpy(bir, optic_axis, rayDir, ell, wavelength):
@@ -33,11 +34,12 @@ def print_ret_azim_numpy(ret, azim):
 def vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength):
     pi_tensor = torch.tensor(np.pi, device=bir.device, dtype=bir.dtype)
     # Dot product of optical axis and 3 ray-direction vectors
-    OA_dot_rayDir = torch.linalg.vecdot(optic_axis, rayDir)
+    OA_dot_rayDir = (rayDir.unsqueeze(2) @ optic_axis).squeeze(2)
     # TODO: verify x2 should be mult by the azimuth angle
-    azim = 2 * torch.arctan2(OA_dot_rayDir[1, :], OA_dot_rayDir[2, :])
-    ret = abs(bir) * (1 - (OA_dot_rayDir[0, :]) ** 2) * ell * pi_tensor / wavelength
+    azim = 2 * torch.arctan2(OA_dot_rayDir[1], OA_dot_rayDir[2])
+    ret = abs(bir) * (1 - (OA_dot_rayDir[0]) ** 2) * ell * pi_tensor / wavelength
     neg_delta_mask = bir < 0
+
     # TODO: check how the gradients are affected--might be a discontinuity
     azim[neg_delta_mask] += pi_tensor
     return ret, azim
@@ -83,45 +85,43 @@ def calculate_vox_ray_ret_azim_torch(
 
 
 def _get_diag_offdiag_jones(ret, azim):
-    ## Trig method
     # cos_ret = torch.cos(ret)
     # sin_ret = torch.sin(ret)
     # cos_azim = torch.cos(azim)
     # sin_azim = torch.sin(azim)
+
     # diag = cos_ret + 1j * cos_azim * sin_ret
     # offdiag = 1j * sin_azim * sin_ret
 
-    ## Polar method
     exp_ret = torch.polar(torch.tensor(1.0, device=ret.device), ret)
     exp_azim = torch.polar(torch.tensor(1.0, device=azim.device), azim)
+
     diag = exp_ret.real + 1j * exp_azim.real * exp_ret.imag
     offdiag = 1j * exp_azim.imag * exp_ret.imag
+
     return diag, offdiag
 
 
 def jones_torch_from_diags(diag, offdiag):
     jones = torch.empty([*diag.shape, 2, 2], dtype=torch.complex64, device=diag.device)
-    jones[:, 0, 0] = diag
-    jones[:, 0, 1] = offdiag
-    jones[:, 1, 0] = offdiag
-    jones[:, 1, 1] = torch.conj(diag)
+    jones[:, :, 0, 0] = diag
+    jones[:, :, 0, 1] = offdiag
+    jones[:, :, 1, 0] = offdiag
+    jones[:, :, 1, 1] = torch.conj(diag)
     return jones
 
 
 def jones_torch(ret, azim):
-    cos_ret = torch.cos(ret)
-    sin_ret = torch.sin(ret)
-    cos_azim = torch.cos(azim)
-    sin_azim = torch.sin(azim)
-    offdiag = 1j * sin_azim * sin_ret
-    diag1 = cos_ret + 1j * cos_azim * sin_ret
-    diag2 = torch.conj(diag1)
-
-    jones = torch.empty([len(ret), 2, 2], dtype=torch.complex64, device=ret.device)
-    jones[:, 0, 0] = diag1
-    jones[:, 0, 1] = offdiag
-    jones[:, 1, 0] = offdiag
-    jones[:, 1, 1] = diag2
+    """Computes the Jones matrix given the retardance and azimuth angles.
+    Args:
+        ret (torch.Tensor): Retardance angles.
+        azim (torch.Tensor): Azimuth angles.
+    Returns:
+        torch.Tensor: The Jones matrices.
+                      Shape: [*ret.shape, 2, 2]
+    """
+    diag, offdiag = _get_diag_offdiag_jones(ret, azim)
+    jones = jones_torch_from_diags(diag, offdiag)
     return jones
 
 

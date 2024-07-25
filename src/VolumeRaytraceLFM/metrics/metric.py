@@ -226,3 +226,15 @@ class PolarimetricLossFunction:
             + self.weight_regularization * regularization_loss
         )
         return total_loss
+
+
+class RetAzimLoss(torch.nn.Module):
+    def __init__(self):
+        super(RetAzimLoss, self).__init__()
+
+    def forward(self, predicted_images, images):
+        """Compute the vector loss"""
+        euler_pred = torch.polar(predicted_images[:, 0], 2 * predicted_images[:, 1])
+        euler_gt = torch.polar(images[:, 0], 2 * images[:, 1])
+        abs_MSE_loss = torch.mean(torch.abs(euler_pred - euler_gt) ** 2)
+        return abs_MSE_loss

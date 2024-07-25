@@ -10,6 +10,8 @@ from VolumeRaytraceLFM.jones.eigenanalysis import (
     calc_theta,
 )
 
+torch.manual_seed(0)
+
 
 # Additional debugging helper
 @pytest.hookimpl(tryfirst=True)
@@ -85,8 +87,7 @@ def test_calc_theta_identity():
 
 def test_retardance_of_identity():
     # Test to ensure that the retardance of the identity matrix is zero
-    identity_matrix = torch.eye(2).unsqueeze(0)  # .repeat(2, 1, 1)
-    # identity_matrix = torch.eye(2, dtype=torch.complex128).unsqueeze(0)
+    identity_matrix = torch.eye(2).unsqueeze(0)
     retardance = retardance_from_su2(identity_matrix)
     err_msg = "Retardance of an identity Jones matrix is not zero."
     assert torch.allclose(retardance, torch.zeros_like(retardance), atol=3e-8), err_msg

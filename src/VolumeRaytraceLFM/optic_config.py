@@ -23,7 +23,7 @@ class OpticBlock(nn.Module):
             optic_config (optional): Configuration for the optic block. Defaults to None.
             members_to_learn (optional): List of members to be optimized. Defaults to None.
         """
-        super(OpticBlock, self).__init__()
+        super().__init__()
         self.optic_config = optic_config
         self.members_to_learn = [] if members_to_learn is None else members_to_learn
         self.device_dummy = nn.Parameter(torch.tensor([1.0]))
@@ -179,7 +179,7 @@ class OpticConfig(nn.Module):
         return pol_config
 
     def __init__(self, PSF_config=None):
-        super(OpticConfig, self).__init__()
+        super().__init__()
         if PSF_config is None:
             self.PSF_config = self.get_default_PSF_config()
         else:
