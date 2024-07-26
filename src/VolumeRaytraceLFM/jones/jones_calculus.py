@@ -78,7 +78,7 @@ class JonesMatrixGenerators(BirefringentElement):
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:
             return torch.tensor(
-                [torch.exp(1j * ret / 2), 0], [0, torch.exp(-1j * ret / 2)]
+                [[torch.exp(1j * ret / 2), 0], [0, torch.exp(-1j * ret / 2)]]
             )
 
     @staticmethod
