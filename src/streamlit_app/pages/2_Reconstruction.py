@@ -398,8 +398,8 @@ if st.button("**Reconstruct birefringent volume!**"):
         st.error("Ground truth volume is unknown.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ret_image_measured = torch.tensor(output_ret_image, device=device)
-    azim_image_measured = torch.tensor(output_azim_image, device=device)
+    ret_image_measured = torch.as_tensor(output_ret_image, device=device)
+    azim_image_measured = torch.as_tensor(output_azim_image, device=device)
     optical_info["volume_shape"] = list(est_vol_shape)
     # Compute ray geometry
     rays_est = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
