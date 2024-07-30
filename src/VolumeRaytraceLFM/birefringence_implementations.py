@@ -1917,7 +1917,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         )
         return material_jones
 
-    def retrieve_properties_from_vox_idx(self, volume, vox, active_props_only=False):
+    def retrieve_properties_from_vox_idx(
+        self, volume: BirefringentVolume, vox: torch.Tensor, active_props_only=False
+    ):
         """Retrieves the birefringence and optic axis from the volume based on the
         provided voxel indices. This function is used to retrieve the properties
         of the voxels that each ray segment interacts with."""
@@ -1928,21 +1930,30 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             safe_indices = torch.clamp(indices, min=0)
             mask = indices >= 0
             Delta_n = torch.where(
-                mask, volume.birefringence_active[safe_indices], torch.tensor(0.0)
+                mask,
+                volume.birefringence_active[safe_indices],
+                torch.tensor(0.0, device=device),
             )
+
             if volume.optic_axis_planar is not None:
                 opticAxis = torch.empty(
-                    (3, len(indices)), dtype=torch.get_default_dtype(), device=device
+                    (3, *indices.shape), dtype=torch.get_default_dtype(), device=device
                 )
-                opticAxis[0, :] = torch.where(
-                    mask, volume.optic_axis_active[0, safe_indices], torch.tensor(0.0)
+                opticAxis[0, :, :] = torch.where(
+                    mask,
+                    volume.optic_axis_active[0, safe_indices],
+                    torch.tensor(0.0, device=device),
                 )
-                opticAxis[1:, :] = torch.where(
-                    mask, volume.optic_axis_planar[:, safe_indices], torch.tensor(0.0)
+                opticAxis[1:, :, :] = torch.where(
+                    mask.unsqueeze(0),
+                    volume.optic_axis_planar[:, safe_indices],
+                    torch.tensor(0.0, device=device),
                 )
             else:
                 opticAxis = torch.where(
-                    mask, volume.optic_axis_active[:, safe_indices], torch.tensor(0.0)
+                    mask.unsqueeze(0),
+                    volume.optic_axis_active[:, safe_indices],
+                    torch.tensor(0.0, device=device),
                 )
         else:
             Delta_n = volume.Delta_n[vox]
