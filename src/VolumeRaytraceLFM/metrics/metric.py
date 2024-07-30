@@ -238,3 +238,15 @@ class RetAzimLoss(torch.nn.Module):
         euler_gt = torch.polar(images[:, 0], 2 * images[:, 1])
         abs_MSE_loss = torch.mean(torch.abs(euler_pred - euler_gt) ** 2)
         return abs_MSE_loss
+
+
+class BirefringenceFieldLoss(torch.nn.Module):
+    def __init__(self):
+        super(BirefringenceFieldLoss, self).__init__()
+
+    def forward(self, predicted_volume, target_volume):
+        """Compute the birefringence field loss"""
+        vector_field1 = predicted_volume[0, ...] * predicted_volume[1:, ...]
+        vector_field2 = target_volume[0, ...] * target_volume[1, ...]
+        loss = F.mse_loss(vector_field1, vector_field2)
+        return loss
