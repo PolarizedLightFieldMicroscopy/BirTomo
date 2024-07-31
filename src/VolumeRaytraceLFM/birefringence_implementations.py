@@ -1137,8 +1137,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         }
         self.check_errors = False
         if NERF:
-            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
-            self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
+            self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
+            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
 
     def __str__(self):
         info = [
@@ -1975,7 +1975,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             Tuple[torch.Tensor, torch.Tensor]: Birefringence and optic axis.
         """
         vol_shape = self.optical_info["volume_shape"]
-        vox_3d = RayTraceLFM.unravel_index(vox, vol_shape)
+        filtered_vox = vox[self.mask[vox]]
+        vox_copy = filtered_vox.clone()
+        vox_3d = RayTraceLFM.unravel_index(vox_copy, vol_shape)
         vox_3d_float = vox_3d.float().to(volume.Delta_n.device)
 
         # Normalize the input coordinates based on volume shape
@@ -1988,8 +1990,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         properties_at_3d_position = self.inr_model(vox_3d_float)
 
         # Retrieve Delta_n and opticAxis from the MLP output
-        Delta_n = properties_at_3d_position[..., 0]
-        opticAxis = properties_at_3d_position[..., 1:]
+        Delta_n_filtered = properties_at_3d_position[..., 0]
+        opticAxis_filtered = properties_at_3d_position[..., 1:]
+        
+        # Initialize with zeros and fill in with the filtered values
+        Delta_n = torch.zeros(vox.shape, dtype=Delta_n_filtered.dtype, device=Delta_n_filtered.device)
+        opticAxis = torch.zeros((*vox.shape, 3), dtype=opticAxis_filtered.dtype, device=opticAxis_filtered.device)
+        Delta_n[self.mask[vox]] = Delta_n_filtered
+        opticAxis[self.mask[vox], :] = opticAxis_filtered
         return Delta_n, opticAxis.permute(0, 2, 1)
 
     def _get_default_jones(self):

@@ -259,7 +259,8 @@ class RayTraceLFM(OpticalElement):
 
     @staticmethod
     def unravel_index(idx, dims):
-        """Convert an array of 1D indices to 3D indices."""
+        """Convert an array of 1D indices to 3D indices.
+        TODO: avoid idx being replaced by a zero tensor"""
         if isinstance(idx, torch.Tensor):
             c = torch.cumprod(torch.tensor([1] + dims[::-1], dtype=idx.dtype), dim=0)[
                 :-1

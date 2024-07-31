@@ -312,7 +312,7 @@ class Reconstructor:
         self.from_simulation = self.iteration_params.get("from_simulation", False)
         self.apply_volume_mask = apply_volume_mask
         self.mask = torch.ones(
-            self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool
+            self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool, device=device
         )
 
         # Volume that will be updated after each iteration
@@ -423,7 +423,7 @@ class Reconstructor:
         if self.volume_ground_truth is not None:
             self.volume_ground_truth = self.volume_ground_truth.to(device)
         self.rays.to_device(device)
-        self.mask.to(device)
+        self.mask = self.mask.to(device)
 
     def save_parameters(self, output_dir, volume_type):
         """In progress.
@@ -932,7 +932,8 @@ class Reconstructor:
                 )
                 Delta_n = predicted_properties[..., 0]
                 volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
-                Delta_n = Delta_n.unsqueeze(0)
+                volume_estimation.Delta_n = torch.nn.Parameter(volume_estimation.Delta_n * self.mask)
+                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             else:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             mip_image = convert_volume_to_2d_mip(Delta_n)
@@ -965,11 +966,15 @@ class Reconstructor:
                 volume_estimation.optic_axis = torch.nn.Parameter(
                     torch.zeros(3, vol_size_flat), requires_grad=False
                 ).to(device)
-            if self.volume_pred.indices_active is not None:
-                with torch.no_grad():
-                    volume_estimation.optic_axis[
-                        :, volume_estimation.indices_active
-                    ] = volume_estimation.optic_axis_active
+            if NERF:
+                optic_axis_flat = predicted_properties.view(-1, predicted_properties.shape[-1])[..., 1:]
+                volume_estimation.optic_axis = torch.nn.Parameter(optic_axis_flat.permute(1, 0))
+            else:
+                if self.volume_pred.indices_active is not None:
+                    with torch.no_grad():
+                        volume_estimation.optic_axis[
+                            :, volume_estimation.indices_active
+                        ] = volume_estimation.optic_axis_active
             my_description = "Volume estimation after " + str(ep) + " iterations."
             volume_estimation.save_as_file(
                 os.path.join(output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5"),
