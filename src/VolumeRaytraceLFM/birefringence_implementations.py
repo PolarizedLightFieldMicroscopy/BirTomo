@@ -1966,29 +1966,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """Retrieves the birefringence and optic axis from the volume
         based on the provided voxel indices using an MLP. This function
         is used to retrieve the properties of the voxels that each ray
-        segment interacts with."""
-        vol_shape = self.optical_info["volume_shape"]
-        vox_3d = RayTraceLFM.unravel_index(vox, vol_shape)
-        vox_3d_float = vox_3d.float().to(volume.Delta_n.device)
-
-        # Normalize the input coordinates based on volume shape
-        vol_shape_tensor = torch.tensor(
-            vol_shape, dtype=vox_3d_float.dtype, device=vox_3d_float.device
-        )
-        vox_3d_float = vox_3d_float / vol_shape_tensor
-
-        # Pass the input through the MLP
-        properties_at_3d_position = self.inr_model(vox_3d_float)
-
-        # Retrieve Delta_n and opticAxis from the MLP output
-        Delta_n = properties_at_3d_position[:, 0]
-        opticAxis = properties_at_3d_position[:, 1:]
-        return Delta_n, opticAxis
-
-    def retrieve_properties_from_vox_idx_mlp(self, volume, vox):
-        """Retrieves the birefringence and optic axis from the volume
-        based on the provided voxel indices using an MLP. This function
-        is used to retrieve the properties of the voxels that each ray
         segment interacts with.
         
         Args:
@@ -2020,7 +1997,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Retrieve Delta_n and opticAxis from the MLP output
         Delta_n = properties_at_3d_position[..., 0]
         opticAxis = properties_at_3d_position[..., 1:]
-        return Delta_n, opticAxis
+        return Delta_n, opticAxis.permute(0, 2, 1)
 
     def _get_default_jones(self):
         """Returns the default Jones Matrix for a ray that does not

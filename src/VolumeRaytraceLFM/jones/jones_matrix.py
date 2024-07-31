@@ -32,6 +32,20 @@ def print_ret_azim_numpy(ret, azim):
 
 
 def vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength):
+    """Calculate the retardance and azimuth angle for a given
+    birefringence, optic axis, and ray direction.
+
+    Args:
+        bir (torch.Tensor): Birefringence values. Shape: [num_voxels, intersection_rows]
+        optic_axis (torch.Tensor): Optic axis vectors. Shape: [num_voxels, 3, intersection_rows]
+        rayDir (torch.Tensor): Ray direction vectors. Shape: [3, num_voxels, 3]
+        ell (torch.Tensor): Path lengths. Shape: [num_voxels, intersection_rows]
+        wavelength (float): Wavelength of light.
+
+    Returns:
+        ret (torch.Tensor): Retardance values. Shape: [num_voxels, intersection_rows]
+        azim (torch.Tensor): Azimuth angles. Shape: [num_voxels, intersection_rows]
+    """
     pi_tensor = torch.tensor(np.pi, device=bir.device, dtype=bir.dtype)
     # Dot product of optical axis and 3 ray-direction vectors
     OA_dot_rayDir = (rayDir.unsqueeze(2) @ optic_axis).squeeze(2)
