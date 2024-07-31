@@ -1870,6 +1870,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
                     volume_in, voxels_of_segs_tensor.long(), active_props_only=alt_props
                 )
+            print(f"Delta_n: {Delta_n.shape}, opticAxis: {opticAxis.shape}")
             end_time_gather_params = time.perf_counter()
             self.times["gather_params_for_voxRayJM"] += (
                 end_time_gather_params - start_time_gather_params
@@ -1988,7 +1989,21 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """Retrieves the birefringence and optic axis from the volume
         based on the provided voxel indices using an MLP. This function
         is used to retrieve the properties of the voxels that each ray
-        segment interacts with."""
+        segment interacts with.
+        
+        Args:
+            volume (BirefringentVolume): Birefringent volume object.
+            vox (torch.Tensor): Voxel indices in 1D.
+        
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: Birefringence and optic axis.
+        """
+        print_nonzeros = True
+        if print_nonzeros:
+            nonzero_indices = torch.nonzero(vox, as_tuple=True)
+            nonzero_elements = vox[nonzero_indices]
+            print("Nonzero indices:", nonzero_indices)
+            print("Nonzero elements:", nonzero_elements)
         vol_shape = self.optical_info["volume_shape"]
         vox_3d = RayTraceLFM.unravel_index(vox, vol_shape)
         vox_3d_float = vox_3d.float().to(volume.Delta_n.device)
@@ -2003,8 +2018,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         properties_at_3d_position = self.inr_model(vox_3d_float)
 
         # Retrieve Delta_n and opticAxis from the MLP output
-        Delta_n = properties_at_3d_position[:, 0]
-        opticAxis = properties_at_3d_position[:, 1:]
+        Delta_n = properties_at_3d_position[..., 0]
+        opticAxis = properties_at_3d_position[..., 1:]
         return Delta_n, opticAxis
 
     def _get_default_jones(self):
