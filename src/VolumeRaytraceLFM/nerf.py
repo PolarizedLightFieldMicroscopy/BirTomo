@@ -47,12 +47,17 @@ class ImplicitRepresentationMLP(nn.Module):
         output_dim (int): Dimensionality of the output.
         hidden_layers (list): List of integers defining the number of
             neurons in each hidden layer.
+        num_frequencies (int): Number of frequencies for positional encoding.
     """
 
-    def __init__(self, input_dim, output_dim, hidden_layers=[128, 64]):
+    def __init__(self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10):
         super(ImplicitRepresentationMLP, self).__init__()
+        self.num_frequencies = num_frequencies
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+
         layers = []
-        in_dim = input_dim
+        in_dim = input_dim * (2 * num_frequencies + 1)
         for h in hidden_layers:
             layers.append(nn.Linear(in_dim, h))
             layers.append(Sine())  # Using Sine activation for INR
@@ -76,6 +81,23 @@ class ImplicitRepresentationMLP(nn.Module):
             final_layer.bias[0] = 0.05  # First output dimension fixed to 0.05
             final_layer.bias[1:].uniform_(-0.5, 0.5)  # Initializing other biases
 
+    def positional_encoding(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply positional encoding to the input tensor.
+        Each element of x is multiplied by each frequency, effectively
+        encoding the input in a higher-dimensional space.
+        Args:
+            x (torch.Tensor): Input tensor of shape (N, input_dim).
+        Returns:
+            torch.Tensor: Encoded tensor of shape (N, input_dim * (2 * num_frequencies + 1)).
+        """
+        frequencies = torch.linspace(0, self.num_frequencies - 1, self.num_frequencies, device=x.device)
+        frequencies = 2.0 ** frequencies
+        x_expanded = x.unsqueeze(-1) * frequencies.unsqueeze(0).unsqueeze(0)
+        x_sin = torch.sin(x_expanded)
+        x_cos = torch.cos(x_expanded)
+        x_encoded = torch.cat([x.unsqueeze(-1), x_sin, x_cos], dim=-1)
+        return x_encoded.view(x.size(0), -1)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the network.
         Args:
@@ -83,6 +105,7 @@ class ImplicitRepresentationMLP(nn.Module):
         Returns:
             torch.Tensor: Output tensor of shape (N, output_dim).
         """
+        x = self.positional_encoding(x)
         x = self.layers(x)
         # Scaling the outputs
         x[:, 0] = torch.sigmoid(x[:, 0]) * 0.1  # First output dimension around 0.05
