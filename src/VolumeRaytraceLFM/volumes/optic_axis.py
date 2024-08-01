@@ -42,3 +42,16 @@ def spherical_to_unit_vector(theta, phi):
     y = np.sin(phi) * np.sin(theta)
     z = np.cos(phi)
     return np.array([z, y, x])
+
+def unit_vector_to_spherical(vector):
+    """Convert a unit vector to spherical angles.
+    Args:
+        vector (np.ndarray): Unit vector [z, y, x] where z >= 0.
+    Returns:
+        tuple: (theta, phi) where theta is the azimuthal angle in radians (0 <= theta < 2*pi)
+               and phi is the polar angle in radians (0 <= phi <= pi/2).
+    """
+    z, y, x = vector
+    phi = np.arccos(z)
+    theta = np.arctan2(y, x)
+    return theta, phi
