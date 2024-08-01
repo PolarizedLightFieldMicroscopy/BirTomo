@@ -49,6 +49,7 @@ from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr, print
 from VolumeRaytraceLFM.volumes.optic_axis import (
     fill_vector_based_on_nonaxial,
     stay_on_sphere,
+    spherical_to_unit_vector_torch,
 )
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
@@ -968,6 +969,8 @@ class Reconstructor:
                 ).to(device)
             if NERF:
                 optic_axis_flat = predicted_properties.view(-1, predicted_properties.shape[-1])[..., 1:]
+                if predicted_properties.shape[-1] == 3:
+                    optic_axis_flat = spherical_to_unit_vector_torch(optic_axis_flat)
                 volume_estimation.optic_axis = torch.nn.Parameter(optic_axis_flat.permute(1, 0))
             else:
                 if self.volume_pred.indices_active is not None:

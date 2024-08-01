@@ -9,7 +9,7 @@ import time
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
-from VolumeRaytraceLFM.nerf import ImplicitRepresentationMLP
+from VolumeRaytraceLFM.nerf import ImplicitRepresentationMLP, ImplicitRepresentationMLPSpherical
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.volumes.modification import (
     pad_to_region_shape,
@@ -21,6 +21,7 @@ from VolumeRaytraceLFM.volumes.generation import (
     generate_planes_volume,
     generate_ellipsoid_volume,
 )
+from VolumeRaytraceLFM.volumes.optic_axis import spherical_to_unit_vector_torch, unit_vector_to_spherical
 from VolumeRaytraceLFM.jones.jones_calculus import (
     JonesMatrixGenerators,
     JonesVectorGenerators,
@@ -1138,7 +1139,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.check_errors = False
         if NERF:
             self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
+            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256])
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
+            self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 128, 64])
 
     def __str__(self):
         info = [
@@ -1991,7 +1994,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Retrieve Delta_n and opticAxis from the MLP output
         Delta_n_filtered = properties_at_3d_position[..., 0]
-        opticAxis_filtered = properties_at_3d_position[..., 1:]
+        if properties_at_3d_position.shape[-1] == 3:
+            spherical_angles = properties_at_3d_position[..., 1:]
+            opticAxis_filtered = spherical_to_unit_vector_torch(spherical_angles)
+        else:
+            opticAxis_filtered = properties_at_3d_position[..., 1:]
         
         # Initialize with zeros and fill in with the filtered values
         Delta_n = torch.zeros(vox.shape, dtype=Delta_n_filtered.dtype, device=Delta_n_filtered.device)

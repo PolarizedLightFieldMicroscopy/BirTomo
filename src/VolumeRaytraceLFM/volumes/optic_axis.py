@@ -30,7 +30,7 @@ def fill_vector_based_on_nonaxial(axis_full, axis_nonaxial):
     return axis_full
 
 
-def spherical_to_unit_vector(theta, phi):
+def spherical_to_unit_vector_np(theta, phi):
     """Convert spherical angles to a unit vector.
     Args:
         theta (float): Azimuthal angle in radians (0 <= theta < 2*pi).
@@ -42,6 +42,23 @@ def spherical_to_unit_vector(theta, phi):
     y = np.sin(phi) * np.sin(theta)
     z = np.cos(phi)
     return np.array([z, y, x])
+
+
+def spherical_to_unit_vector_torch(theta_phi: torch.Tensor) -> torch.Tensor:
+    """Convert a batch of spherical angles to unit vectors.
+    Args:
+        theta_phi (torch.Tensor): Tensor of shape (N, 2) where each row contains
+                                  [theta, phi] angles in radians.
+    Returns:
+        torch.Tensor: Tensor of shape (N, 3) containing unit vectors [z, y, x] where z >= 0.
+    """
+    theta = theta_phi[:, 0]
+    phi = theta_phi[:, 1]
+    x = torch.sin(phi) * torch.cos(theta)
+    y = torch.sin(phi) * torch.sin(theta)
+    z = torch.cos(phi)
+    return torch.stack([z, y, x], dim=-1)
+
 
 def unit_vector_to_spherical(vector):
     """Convert a unit vector to spherical angles.

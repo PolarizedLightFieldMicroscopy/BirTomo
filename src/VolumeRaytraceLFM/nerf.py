@@ -114,6 +114,82 @@ class ImplicitRepresentationMLP(nn.Module):
         return x
 
 
+class ImplicitRepresentationMLPSpherical(nn.Module):
+    """Multi-Layer Perceptron (MLP) that acts as an
+    Implicit Neural Representation.
+
+    Args:
+        input_dim (int): Dimensionality of the input.
+        output_dim (int): Dimensionality of the output.
+        hidden_layers (list): List of integers defining the number of
+            neurons in each hidden layer.
+        num_frequencies (int): Number of frequencies for positional encoding.
+    """
+
+    def __init__(self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10):
+        super(ImplicitRepresentationMLPSpherical, self).__init__()
+        self.num_frequencies = num_frequencies
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+
+        layers = []
+        in_dim = input_dim * (2 * num_frequencies + 1)
+        for h in hidden_layers:
+            layers.append(nn.Linear(in_dim, h))
+            layers.append(Sine())  # Using Sine activation for INR
+            in_dim = h
+        layers.append(nn.Linear(in_dim, output_dim))
+        self.layers = nn.Sequential(*layers)
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """Initialize weights of the network using custom sine initialization."""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                sine_init(m)  # Sine initialization for hidden layers
+        self._initialize_output_layer()
+
+    def _initialize_output_layer(self):
+        """Initialize the weights of the output layer."""
+        final_layer = self.layers[-1]
+        with torch.no_grad():
+            final_layer.weight.uniform_(-0.01, 0.01)
+            final_layer.bias[0] = 0.05  # First output dimension fixed to 0.05
+            final_layer.bias[1:].uniform_(-0.5, 0.5)  # Initializing other biases
+
+    def positional_encoding(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply positional encoding to the input tensor.
+        Each element of x is multiplied by each frequency, effectively
+        encoding the input in a higher-dimensional space.
+        Args:
+            x (torch.Tensor): Input tensor of shape (N, input_dim).
+        Returns:
+            torch.Tensor: Encoded tensor of shape (N, input_dim * (2 * num_frequencies + 1)).
+        """
+        frequencies = torch.linspace(0, self.num_frequencies - 1, self.num_frequencies, device=x.device)
+        frequencies = 2.0 ** frequencies
+        x_expanded = x.unsqueeze(-1) * frequencies.unsqueeze(0).unsqueeze(0)
+        x_sin = torch.sin(x_expanded)
+        x_cos = torch.cos(x_expanded)
+        x_encoded = torch.cat([x.unsqueeze(-1), x_sin, x_cos], dim=-1)
+        return x_encoded.view(x.size(0), -1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the network.
+        Args:
+            x (torch.Tensor): Input tensor of shape (N, input_dim).
+        Returns:
+            torch.Tensor: Output tensor of shape (N, output_dim).
+        """
+        x = self.positional_encoding(x)
+        x = self.layers(x)
+        # Scaling the outputs
+        x[:, 0] = torch.sigmoid(x[:, 0]) * 0.1  # First output dimension around 0.05
+        x[:, 1] = torch.sigmoid(x[:, 1]) * 2 * torch.pi  # Second output dimension between 0 and 2pi
+        x[:, 2] = torch.sigmoid(x[:, 2]) * torch.pi / 2  # Third output dimension between 0 and pi/2
+        return x
+
+
 def setup_optimizer_nerf(
     model: nn.Module, training_params: dict
 ) -> torch.optim.Optimizer:
