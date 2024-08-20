@@ -183,10 +183,14 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
         """
         x = self.positional_encoding(x)
         x = self.layers(x)
-        # Scaling the outputs
-        x[:, 0] = torch.sigmoid(x[:, 0]) * 0.1  # First output dimension around 0.05
-        x[:, 1] = torch.sigmoid(x[:, 1]) * 2 * torch.pi  # Second output dimension between 0 and 2pi
-        x[:, 2] = torch.sigmoid(x[:, 2]) * torch.pi / 2  # Third output dimension between 0 and pi/2
+        # # Scaling the outputs
+        # x[:, 0] = torch.sigmoid(x[:, 0]) * 0.1  # First output dimension around 0.05
+        # x[:, 1] = x[:, 1] % (2 * torch.pi)  # Second output dimension between 0 and 2pi
+        # x[:, 2] = x[:, 2] % (torch.pi / 2)  # Third output dimension between 0 and pi/2
+        # x_new = x.clone()  # Clone the tensor to avoid in-place operations
+        # x_new[:, 1] = torch.atan2(torch.sin(x[:, 1]), torch.cos(x[:, 1]))  # Azimuthal angle (phi) between -pi and pi
+        # x_new[:, 2] = torch.acos(torch.clamp(x[:, 2], -1.0, 1.0))  # Polar angle (theta) between 0 and pi
+        # x = x_new  # Assign the modified tensor back to x
         return x
 
 

@@ -74,6 +74,7 @@ def normalized_projection_torch(optic_axis, rayDir):
 def calculate_vox_ray_ret_azim_torch(
     bir, optic_axis, rayDir, ell, wavelength, nonzeros_only=False
 ):
+    # TODO: update the nonzero_only version now that bir is not 1D
     if nonzeros_only:
         # Faster when the number of non-zero elements is large
         nonzero_indices = bir.nonzero()

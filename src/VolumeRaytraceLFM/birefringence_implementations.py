@@ -1139,9 +1139,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.check_errors = False
         if NERF:
             self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
-            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256])
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
-            self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 128, 64])
+            self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 256, 256])
 
     def __str__(self):
         info = [
