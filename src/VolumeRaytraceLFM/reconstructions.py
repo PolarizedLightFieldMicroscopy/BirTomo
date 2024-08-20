@@ -933,7 +933,9 @@ class Reconstructor:
                 )
                 Delta_n = predicted_properties[..., 0]
                 volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
-                volume_estimation.Delta_n = torch.nn.Parameter(volume_estimation.Delta_n * self.mask)
+                volume_estimation.Delta_n = torch.nn.Parameter(
+                    volume_estimation.Delta_n * self.mask
+                )
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             else:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
@@ -968,10 +970,14 @@ class Reconstructor:
                     torch.zeros(3, vol_size_flat), requires_grad=False
                 ).to(device)
             if NERF:
-                optic_axis_flat = predicted_properties.view(-1, predicted_properties.shape[-1])[..., 1:]
+                optic_axis_flat = predicted_properties.view(
+                    -1, predicted_properties.shape[-1]
+                )[..., 1:]
                 if predicted_properties.shape[-1] == 3:
                     optic_axis_flat = spherical_to_unit_vector_torch(optic_axis_flat)
-                volume_estimation.optic_axis = torch.nn.Parameter(optic_axis_flat.permute(1, 0))
+                volume_estimation.optic_axis = torch.nn.Parameter(
+                    optic_axis_flat.permute(1, 0)
+                )
             else:
                 if self.volume_pred.indices_active is not None:
                     with torch.no_grad():
@@ -1275,3 +1281,8 @@ class Reconstructor:
         print("Saved the final volume estimation to", vol_save_path)
         plt.savefig(os.path.join(self.recon_directory, "optim_final.pdf"))
         plt.close()
+
+        # Save the NeRF model if NERF is enabled
+        if NERF:
+            nerf_model_path = os.path.join(self.recon_directory, "nerf_model.pth")
+            self.rays.save_nerf_model(nerf_model_path)

@@ -50,7 +50,9 @@ class ImplicitRepresentationMLP(nn.Module):
         num_frequencies (int): Number of frequencies for positional encoding.
     """
 
-    def __init__(self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10):
+    def __init__(
+        self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10
+    ):
         super(ImplicitRepresentationMLP, self).__init__()
         self.num_frequencies = num_frequencies
         self.input_dim = input_dim
@@ -90,8 +92,10 @@ class ImplicitRepresentationMLP(nn.Module):
         Returns:
             torch.Tensor: Encoded tensor of shape (N, input_dim * (2 * num_frequencies + 1)).
         """
-        frequencies = torch.linspace(0, self.num_frequencies - 1, self.num_frequencies, device=x.device)
-        frequencies = 2.0 ** frequencies
+        frequencies = torch.linspace(
+            0, self.num_frequencies - 1, self.num_frequencies, device=x.device
+        )
+        frequencies = 2.0**frequencies
         x_expanded = x.unsqueeze(-1) * frequencies.unsqueeze(0).unsqueeze(0)
         x_sin = torch.sin(x_expanded)
         x_cos = torch.cos(x_expanded)
@@ -126,7 +130,9 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
         num_frequencies (int): Number of frequencies for positional encoding.
     """
 
-    def __init__(self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10):
+    def __init__(
+        self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10
+    ):
         super(ImplicitRepresentationMLPSpherical, self).__init__()
         self.num_frequencies = num_frequencies
         self.input_dim = input_dim
@@ -166,8 +172,10 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
         Returns:
             torch.Tensor: Encoded tensor of shape (N, input_dim * (2 * num_frequencies + 1)).
         """
-        frequencies = torch.linspace(0, self.num_frequencies - 1, self.num_frequencies, device=x.device)
-        frequencies = 2.0 ** frequencies
+        frequencies = torch.linspace(
+            0, self.num_frequencies - 1, self.num_frequencies, device=x.device
+        )
+        frequencies = 2.0**frequencies
         x_expanded = x.unsqueeze(-1) * frequencies.unsqueeze(0).unsqueeze(0)
         x_sin = torch.sin(x_expanded)
         x_cos = torch.cos(x_expanded)

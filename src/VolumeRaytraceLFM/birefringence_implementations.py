@@ -9,7 +9,10 @@ import time
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
-from VolumeRaytraceLFM.nerf import ImplicitRepresentationMLP, ImplicitRepresentationMLPSpherical
+from VolumeRaytraceLFM.nerf import (
+    ImplicitRepresentationMLP,
+    ImplicitRepresentationMLPSpherical,
+)
 from VolumeRaytraceLFM.file_manager import VolumeFileManager
 from VolumeRaytraceLFM.volumes.modification import (
     pad_to_region_shape,
@@ -21,7 +24,10 @@ from VolumeRaytraceLFM.volumes.generation import (
     generate_planes_volume,
     generate_ellipsoid_volume,
 )
-from VolumeRaytraceLFM.volumes.optic_axis import spherical_to_unit_vector_torch, unit_vector_to_spherical
+from VolumeRaytraceLFM.volumes.optic_axis import (
+    spherical_to_unit_vector_torch,
+    unit_vector_to_spherical,
+)
 from VolumeRaytraceLFM.jones.jones_calculus import (
     JonesMatrixGenerators,
     JonesVectorGenerators,
@@ -1142,6 +1148,28 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
             self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 256, 256])
 
+    def save_nerf_model(self, filepath):
+        """Save the NeRF model to a file."""
+        if NERF:
+            torch.save(self.inr_model.state_dict(), filepath)
+            print(f"Saved the NeRF model to {filepath}")
+        else:
+            print("NERF is not enabled, no model to save.")
+
+    def load_nerf_model(self, filepath, eval_mode=False):
+        """Load the NeRF model from a file.
+        Args:
+            filepath (str): Path to the saved model file.
+            eval_mode (bool): Whether to set the model to evaluation mode. Default is False.
+        """
+        if NERF:
+            self.inr_model.load_state_dict(torch.load(filepath))
+            if eval_mode:
+                self.inr_model.eval()  # Set the model to evaluation mode if needed
+            print(f"Loaded the NeRF model from {filepath}")
+        else:
+            print("NERF is not enabled, no model to load.")
+
     def __str__(self):
         info = [
             f"BirefringentRaytraceLFM(backend={self.backend}, optical_info={self.optical_info})",
@@ -1968,11 +1996,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         based on the provided voxel indices using an MLP. This function
         is used to retrieve the properties of the voxels that each ray
         segment interacts with.
-        
+
         Args:
             volume (BirefringentVolume): Birefringent volume object.
             vox (torch.Tensor): Voxel indices in 1D.
-        
+
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Birefringence and optic axis.
         """
@@ -1998,10 +2026,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             opticAxis_filtered = spherical_to_unit_vector_torch(spherical_angles)
         else:
             opticAxis_filtered = properties_at_3d_position[..., 1:]
-        
+
         # Initialize with zeros and fill in with the filtered values
-        Delta_n = torch.zeros(vox.shape, dtype=Delta_n_filtered.dtype, device=Delta_n_filtered.device)
-        opticAxis = torch.zeros((*vox.shape, 3), dtype=opticAxis_filtered.dtype, device=opticAxis_filtered.device)
+        Delta_n = torch.zeros(
+            vox.shape, dtype=Delta_n_filtered.dtype, device=Delta_n_filtered.device
+        )
+        opticAxis = torch.zeros(
+            (*vox.shape, 3),
+            dtype=opticAxis_filtered.dtype,
+            device=opticAxis_filtered.device,
+        )
         Delta_n[self.mask[vox]] = Delta_n_filtered
         opticAxis[self.mask[vox], :] = opticAxis_filtered
         return Delta_n, opticAxis.permute(0, 2, 1)
