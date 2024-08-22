@@ -938,9 +938,9 @@ class Reconstructor:
                 Delta_n = predicted_properties[..., 0]
                 volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
                 # TODO: see if mask should be applied here
-                # volume_estimation.Delta_n = torch.nn.Parameter(
-                #     volume_estimation.Delta_n * self.mask
-                # )
+                volume_estimation.Delta_n = torch.nn.Parameter(
+                    volume_estimation.Delta_n * self.mask
+                )
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             else:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
