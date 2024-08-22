@@ -206,7 +206,6 @@ def setup_optimizer_nerf(
     model: nn.Module, training_params: dict
 ) -> torch.optim.Optimizer:
     """Set up the optimizer for the neural network model.
-    TODO: use the training_params to set the optimizer parameters.
 
     Args:
         model (nn.Module): The neural network model.
@@ -218,8 +217,7 @@ def setup_optimizer_nerf(
     parameters = [
         {
             "params": inr_params,
-            "lr": 0.01,
-            # "lr": training_params.get("lr", 0.001),
+            "lr": training_params.get("lr", 0.001),
         }
     ]
     # optimizer_class = getattr(torch.optim, training_params.get("optimizer", "NAdam"))

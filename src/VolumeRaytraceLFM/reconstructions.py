@@ -425,6 +425,7 @@ class Reconstructor:
             self.volume_ground_truth = self.volume_ground_truth.to(device)
         self.rays.to_device(device)
         self.mask = self.mask.to(device)
+        self.volume_pred = self.volume_pred.to(device)
 
     def save_parameters(self, output_dir, volume_type):
         """In progress.
