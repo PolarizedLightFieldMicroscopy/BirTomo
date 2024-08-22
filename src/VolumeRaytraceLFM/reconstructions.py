@@ -711,6 +711,7 @@ class Reconstructor:
         LossFcn.set_retardance_target(retardance_meas)
         LossFcn.set_orientation_target(azimuth_meas)
         LossFcn.set_intensity_list_target(intensity_imgs_meas)
+        LossFcn.mask = self.mask
         data_term = LossFcn.compute_datafidelity_term(
             LossFcn.datafidelity, images_predicted
         )
@@ -721,15 +722,6 @@ class Reconstructor:
         reg_loss, reg_term_values = LossFcn.compute_regularization_term(vol_pred)
         regularization_term = params["regularization_weight"] * reg_loss
         self.reg_term_values = [reg.item() for reg in reg_term_values]
-
-        # Add regularization term for NERF
-        if NERF and False:
-            inr_params = self.rays.inr_model.parameters()
-            l1_reg = 0
-            for param in inr_params:
-                l1_reg += torch.norm(param, 1)
-            regularization_term += params["regularization_weight"] * l1_reg
-            self.reg_term_values = [regularization_term.item()]
 
         # Total loss
         loss = data_term + regularization_term
@@ -779,6 +771,17 @@ class Reconstructor:
                 self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = (
                     self.volume_pred.optic_axis_active
                 )
+        if NERF:
+            # Update Delta_n before loss is computed so the the mask regularization is applied
+            vol_shape = self.optical_info["volume_shape"]
+            predicted_properties = predict_voxel_properties(
+                self.rays.inr_model, vol_shape, enable_grad=True
+            )
+            Delta_n = predicted_properties[..., 0]
+            # # Gradients are lost when setting Delta_n as a torch nn parameter
+            # self.volume_pred.Delta_n = torch.nn.Parameter(Delta_n.flatten())
+            self.volume_pred.birefringence = Delta_n
+
         loss, data_term, regularization_term = self._compute_loss(img_list)
         if self.rays.verbose:
             tqdm.write(f"Computed the loss: {loss.item():.5}")
@@ -934,9 +937,10 @@ class Reconstructor:
                 )
                 Delta_n = predicted_properties[..., 0]
                 volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
-                volume_estimation.Delta_n = torch.nn.Parameter(
-                    volume_estimation.Delta_n * self.mask
-                )
+                # TODO: see if mask should be applied here
+                # volume_estimation.Delta_n = torch.nn.Parameter(
+                #     volume_estimation.Delta_n * self.mask
+                # )
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             else:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
@@ -979,6 +983,8 @@ class Reconstructor:
                 volume_estimation.optic_axis = torch.nn.Parameter(
                     optic_axis_flat.permute(1, 0)
                 )
+                nerf_model_path = os.path.join(output_dir, f"nerf_model_{ep}.pth")
+                self.rays.save_nerf_model(nerf_model_path)
             else:
                 if self.volume_pred.indices_active is not None:
                     with torch.no_grad():

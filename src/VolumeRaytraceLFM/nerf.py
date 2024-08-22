@@ -172,10 +172,7 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
         Returns:
             torch.Tensor: Encoded tensor of shape (N, input_dim * (2 * num_frequencies + 1)).
         """
-        frequencies = torch.linspace(
-            0, self.num_frequencies - 1, self.num_frequencies, device=x.device
-        )
-        frequencies = 2.0**frequencies
+        frequencies = 2.0**torch.arange(0, self.num_frequencies, device=x.device)
         x_expanded = x.unsqueeze(-1) * frequencies.unsqueeze(0).unsqueeze(0)
         x_sin = torch.sin(x_expanded)
         x_cos = torch.cos(x_expanded)
@@ -191,14 +188,17 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
         """
         x = self.positional_encoding(x)
         x = self.layers(x)
-        # # Scaling the outputs
-        # x[:, 0] = torch.sigmoid(x[:, 0]) * 0.1  # First output dimension around 0.05
         # x[:, 1] = x[:, 1] % (2 * torch.pi)  # Second output dimension between 0 and 2pi
         # x[:, 2] = x[:, 2] % (torch.pi / 2)  # Third output dimension between 0 and pi/2
-        # x_new = x.clone()  # Clone the tensor to avoid in-place operations
         # x_new[:, 1] = torch.atan2(torch.sin(x[:, 1]), torch.cos(x[:, 1]))  # Azimuthal angle (phi) between -pi and pi
         # x_new[:, 2] = torch.acos(torch.clamp(x[:, 2], -1.0, 1.0))  # Polar angle (theta) between 0 and pi
-        # x = x_new  # Assign the modified tensor back to x
+    
+        # Scaling and constraining the outputs
+        x_new = x.clone()   # Clone the tensor to avoid in-place operations
+        x_new[:, 0] = torch.sigmoid(x[:, 0]) * 0.1  # Density output in [0, 0.1]
+        x_new[:, 1] = torch.remainder(x[:, 1], 2 * torch.pi)  # Angle in [0, 2π]
+        x_new[:, 2] = torch.remainder(x[:, 2], torch.pi / 2) # Angle in [0, π/2]
+        x = x_new
         return x
 
 
@@ -242,7 +242,7 @@ def generate_voxel_grid(vol_shape: tuple) -> torch.Tensor:
     return coords
 
 
-def predict_voxel_properties(model: nn.Module, vol_shape: tuple):
+def predict_voxel_properties(model: nn.Module, vol_shape: tuple, enable_grad=False):
     """Predict properties for each voxel in the grid using the given model.
     Args:
         model (nn.Module): The neural network model.
@@ -255,8 +255,12 @@ def predict_voxel_properties(model: nn.Module, vol_shape: tuple):
     coords = generate_voxel_grid(vol_shape).float().to(device)
     vol_shape_tensor = torch.tensor(vol_shape, dtype=coords.dtype, device=device)
     coords_normalized = coords / vol_shape_tensor  # Normalize coordinates if necessary
-    with torch.no_grad():
-        output = model(coords_normalized)  # .cpu()
+    if enable_grad:
+        coords_normalized.requires_grad_(True)
+        output = model(coords_normalized)
+    else:
+        with torch.no_grad():
+            output = model(coords_normalized)  # .cpu()
     return output.reshape(*vol_shape, -1)
 
 

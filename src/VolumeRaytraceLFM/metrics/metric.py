@@ -16,6 +16,7 @@ from VolumeRaytraceLFM.metrics.regularization import (
     neg_penalty_bir_active,
     pos_penalty_bir_active,
     pos_penalty_l2_bir_active,
+    masked_zero_loss,
 )
 
 
@@ -29,6 +30,7 @@ REGULARIZATION_FCNS = {
     "birefringence active negative penalty": neg_penalty_bir_active,
     "birefringence active positive penalty": pos_penalty_bir_active,
     "birefringence active positive penalty L2": pos_penalty_l2_bir_active,
+    "birefringence mask": masked_zero_loss,
 }
 
 
@@ -57,6 +59,7 @@ class PolarimetricLossFunction:
             self.optimizer = "Adam"
             self.datafidelity = "vector"
             self.regularization_fcns = []
+        self.mask = None
 
     def set_retardance_target(self, target):
         self.target_retardance = target
@@ -209,7 +212,10 @@ class PolarimetricLossFunction:
 
         # Sum up the rest of the regularization terms if any
         for reg_fcn, weight in self.regularization_fcns[1:]:
-            term_value = weight * reg_fcn(data) * 1000
+            if reg_fcn == masked_zero_loss:
+                term_value = weight * reg_fcn(data, self.mask) * 1000
+            else:
+                term_value = weight * reg_fcn(data) * 1000
             term_values.append(term_value)
             regularization_loss += term_value
 
