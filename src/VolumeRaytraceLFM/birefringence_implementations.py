@@ -1289,6 +1289,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.ray_valid_indices = self.ray_valid_indices.to(device)
         self.ray_direction_basis = self.ray_direction_basis.to(device)
         self.ray_vol_colli_lengths = self.ray_vol_colli_lengths.to(device)
+        if NERF:
+            self.inr_model = self.inr_model.to(device)
         err_msg = "Moving a BirefringentRaytraceLFM instance to a device has not been implemented yet."
         raise_error = False
         if raise_error:
