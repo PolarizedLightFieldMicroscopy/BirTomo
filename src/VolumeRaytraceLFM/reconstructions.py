@@ -59,7 +59,6 @@ DEBUG = False
 PRINT_GRADIENTS = False
 PRINT_TIMING_INFO = False
 CLIP_GRADIENT_NORM = False
-NERF = True
 
 if DEBUG:
     print("Debug mode is on.")
@@ -309,7 +308,8 @@ class Reconstructor:
         self.rays = self.setup_raytracer(
             image=image_for_rays, filepath=saved_ray_path, device=device
         )
-
+        self.nerf_mode = self.iteration_params.get("nerf_mode", False)
+        self.initialize_nerf_mode(use_nerf=self.nerf_mode)
         self.from_simulation = self.iteration_params.get("from_simulation", False)
         self.apply_volume_mask = apply_volume_mask
         self.mask = torch.ones(
@@ -476,6 +476,9 @@ class Reconstructor:
             rays.compute_rays_geometry(filename=None, image=image)
             print(f"Raytracing time in seconds: {time.time() - start_time:.2f}")
         return rays
+
+    def initialize_nerf_mode(self, use_nerf=True):
+        self.rays.initialize_nerf_mode(use_nerf)
 
     def mask_outside_rays(self):
         """Mask out volume that is outside FOV of the microscope.
@@ -771,7 +774,7 @@ class Reconstructor:
                 self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = (
                     self.volume_pred.optic_axis_active
                 )
-        if NERF:
+        if self.nerf_mode:
             # Update Delta_n before loss is computed so the the mask regularization is applied
             vol_shape = self.optical_info["volume_shape"]
             predicted_properties = predict_voxel_properties(
@@ -808,7 +811,7 @@ class Reconstructor:
         optimizer.step()
         scheduler.step(loss)
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
-        if NERF:
+        if self.nerf_mode:
             adjusted_lrs = [0]
         else:
             adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
@@ -930,7 +933,7 @@ class Reconstructor:
         # TODO: only update every 1 epoch if plotting is live
         if ep % 1 == 0:
             # plt.clf()
-            if NERF:
+            if self.nerf_mode:
                 vol_shape = self.optical_info["volume_shape"]
                 predicted_properties = predict_voxel_properties(
                     self.rays.inr_model, vol_shape
@@ -974,7 +977,7 @@ class Reconstructor:
                 volume_estimation.optic_axis = torch.nn.Parameter(
                     torch.zeros(3, vol_size_flat), requires_grad=False
                 ).to(device)
-            if NERF:
+            if self.nerf_mode:
                 optic_axis_flat = predicted_properties.view(
                     -1, predicted_properties.shape[-1]
                 )[..., 1:]
@@ -1056,7 +1059,7 @@ class Reconstructor:
                 self.loss_reg_term_list,
                 self.adjusted_lrs_list,
             )
-            if NERF:
+            if self.nerf_mode:
                 for total, data_term, reg_term, lr in zipped_lists:
                     writer.writerow([total, data_term, reg_term, lr])
             else:
@@ -1162,7 +1165,7 @@ class Reconstructor:
                 self.volume_pred.optic_axis.requires_grad = False
         self.specify_variables_to_learn(param_list)
 
-        if NERF:
+        if self.nerf_mode:
             optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
         else:
             optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
@@ -1199,7 +1202,7 @@ class Reconstructor:
 
         self.prepare_volume_for_recon(self.volume_pred)
         initial_lr_0 = optimizer.param_groups[0]["lr"]
-        if NERF:
+        if self.nerf_mode:
             initial_lr_1 = optimizer.param_groups[0]["lr"]
         else:
             initial_lr_1 = optimizer.param_groups[1]["lr"]
@@ -1221,11 +1224,11 @@ class Reconstructor:
                     + (1 - warmup_start_proportion) * (ep / warmup_epochs)
                 )
                 optimizer.param_groups[0]["lr"] = lr_0
-                if not NERF:
+                if not self.nerf_mode:
                     optimizer.param_groups[1]["lr"] = lr_1
             else:
                 current_lr_0 = scheduler.optimizer.param_groups[0]["lr"]
-                if NERF:
+                if self.nerf_mode:
                     current_lr_1 = lr_0
                 else:
                     current_lr_1 = scheduler.optimizer.param_groups[1]["lr"]
@@ -1289,7 +1292,6 @@ class Reconstructor:
         plt.savefig(os.path.join(self.recon_directory, "optim_final.pdf"))
         plt.close()
 
-        # Save the NeRF model if NERF is enabled
-        if NERF:
+        if self.nerf_mode:
             nerf_model_path = os.path.join(self.recon_directory, "nerf_model.pth")
-            self.rays.save_nerf_model(nerf_model_path)
+            self.rays.save_nerf_model(nerf_model_path) 

@@ -49,8 +49,6 @@ from VolumeRaytraceLFM.utils.mask_utils import get_bool_mask_for_ray_indices
 
 
 DEBUG = False
-NERF = True
-
 if DEBUG:
     from VolumeRaytraceLFM.utils.error_handling import check_for_inf_or_nan
     from utils import errors
@@ -1143,14 +1141,27 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             "Stacking": 0,
         }
         self.check_errors = False
-        if NERF:
+        self.use_nerf = False
+        self.inr_model = None
+    
+    def initialize_nerf_mode(self, use_nerf=True):
+        """Initialize the NeRF mode based on the user's preference.
+        Args:
+            use_nerf (bool): Flag to enable or disable NeRF mode. Default is True.
+        """
+        self.use_nerf = use_nerf
+        if self.use_nerf:
             self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
             self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 256, 256])
+            print("NeRF mode initialized.")
+        else:
+            self.inr_model = None
+            print("NeRF mode is disabled.")
 
     def save_nerf_model(self, filepath):
         """Save the NeRF model to a file."""
-        if NERF:
+        if self.use_nerf:
             torch.save(self.inr_model.state_dict(), filepath)
             print(f"Saved the NeRF model to {filepath}")
         else:
@@ -1162,7 +1173,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             filepath (str): Path to the saved model file.
             eval_mode (bool): Whether to set the model to evaluation mode. Default is False.
         """
-        if NERF:
+        if self.use_nerf:
             self.inr_model.load_state_dict(torch.load(filepath))
             if eval_mode:
                 self.inr_model.eval()  # Set the model to evaluation mode if needed
@@ -1289,7 +1300,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.ray_valid_indices = self.ray_valid_indices.to(device)
         self.ray_direction_basis = self.ray_direction_basis.to(device)
         self.ray_vol_colli_lengths = self.ray_vol_colli_lengths.to(device)
-        if NERF:
+        if self.use_nerf:
             self.inr_model = self.inr_model.to(device)
         err_msg = "Moving a BirefringentRaytraceLFM instance to a device has not been implemented yet."
         raise_error = False
@@ -1894,7 +1905,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         try:
             start_time_gather_params = time.perf_counter()
             # Extract the birefringence and optic axis information from the volume
-            if NERF:
+            if self.use_nerf:
                 Delta_n, opticAxis = self.retrieve_properties_from_vox_idx_mlp(
                     volume_in, voxels_of_segs_tensor.long()
                 )

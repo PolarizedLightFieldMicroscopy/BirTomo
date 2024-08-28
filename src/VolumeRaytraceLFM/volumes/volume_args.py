@@ -57,6 +57,11 @@ random_neg_args1 = {
     "init_args": {"Delta_n_range": [-0.01, 0], "axes_range": [-1, 1]},
 }
 
+random_neg_args_min05 = {
+    "init_mode": "random",
+    "init_args": {"Delta_n_range": [-0.05, 0], "axes_range": [-1, 1]},
+}
+
 random_args1 = {
     "init_mode": "random",
     "init_args": {"Delta_n_range": [0, 0.01], "axes_range": [-1, 1]},

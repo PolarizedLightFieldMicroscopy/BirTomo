@@ -11,6 +11,7 @@
         ["birefringence active negative penalty", 0],
         ["birefringence mask", 1000]
     ],
+    "nerf_mode": false,
     "from_simulation": true,
     "mla_rays_at_once": true,
     "two_optic_axis_components": true,
