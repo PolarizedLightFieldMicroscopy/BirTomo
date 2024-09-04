@@ -728,13 +728,9 @@ class BirefringentVolume(BirefringentElement):
             self._apply_shell_modification()
 
     def _apply_shell_modification(self):
-        if self.backend == BackEnds.PYTORCH:
-            with torch.no_grad():
-                self.get_delta_n()[
-                    : self.optical_info["volume_shape"][0] // 2 + 2, ...
-                ] = 0
-        else:
-            self.get_delta_n()[: self.optical_info["volume_shape"][0] // 2 + 2, ...] = 0
+        self.voxel_parameters[0, ...][
+            : self.optical_info["volume_shape"][0] // 2 + 2, ...
+        ] = 0
 
     def _set_volume_ref(self):
         volume_ref = BirefringentVolume(
@@ -1294,20 +1290,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def to_device(self, device):
         """Move the BirefringentRaytraceLFM to a device"""
-        # self.ray_valid_indices = self.ray_valid_indices.to(device)
-        ## The following is needed for retrieving the voxel parameters
-        # self.volume.active_idx2spatial_idx_tensor.to(device)
         self.ray_valid_indices = self.ray_valid_indices.to(device)
         self.ray_direction_basis = self.ray_direction_basis.to(device)
         self.ray_vol_colli_lengths = self.ray_vol_colli_lengths.to(device)
         if self.use_nerf:
             self.inr_model = self.inr_model.to(device)
-        err_msg = "Moving a BirefringentRaytraceLFM instance to a device has not been implemented yet."
-        raise_error = False
-        if raise_error:
-            raise NotImplementedError(err_msg)
-        else:
-            print("Note: ", err_msg)
 
     def get_volume_reachable_region(self):
         """Returns a binary mask where the MLA's can reach into the volume"""

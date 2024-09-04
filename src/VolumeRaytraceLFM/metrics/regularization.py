@@ -79,6 +79,12 @@ def masked_zero_loss(volume: BirefringentVolume, mask: torch.Tensor):
     loss = F.mse_loss(masked_birefringence, zero_tensor)
     return loss
 
+def l2_biref(volume: BirefringentVolume):
+    return l2(volume.birefringence)
+
+def pos_penalty_biref(volume: BirefringentVolume):
+    return positive_penalty(volume.birefringence)
+
 
 class AnisotropyAnalysis:
     def __init__(self, volume: BirefringentVolume):

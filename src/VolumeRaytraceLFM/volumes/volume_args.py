@@ -207,6 +207,16 @@ shell_args = {
     },
 }
 
+shell_args_ss3 = {
+    "init_mode": "shell",
+    "init_args": {
+        "radius": [15.5, 29.5, 15.5],
+        "center": [0.5, 0.5, 0.5],
+        "delta_n": -0.01,
+        "border_thickness": 2,
+    },
+}
+
 shell_small_args = {
     "init_mode": "shell",
     "init_args": {
@@ -238,7 +248,7 @@ shell_pos_thick3_args = {
 }
 
 shell1_args = {
-    "init_mode": "ellipsoid",
+    "init_mode": "shell",
     "init_args": {
         "radius": [10.5, 15.5, 10.5],
         "center": [0.5, 0.5, 0.5],

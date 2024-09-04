@@ -17,6 +17,8 @@ from VolumeRaytraceLFM.metrics.regularization import (
     pos_penalty_bir_active,
     pos_penalty_l2_bir_active,
     masked_zero_loss,
+    l2_biref,
+    pos_penalty_biref,
 )
 
 
@@ -31,6 +33,8 @@ REGULARIZATION_FCNS = {
     "birefringence active positive penalty": pos_penalty_bir_active,
     "birefringence active positive penalty L2": pos_penalty_l2_bir_active,
     "birefringence mask": masked_zero_loss,
+    "biref L2": l2_biref,
+    "biref positive penalty": pos_penalty_biref,
 }
 
 
