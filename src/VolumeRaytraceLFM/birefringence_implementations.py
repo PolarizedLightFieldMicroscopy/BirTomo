@@ -1150,6 +1150,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
             self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 256, 256])
+            self.inr_model = torch.nn.DataParallel(self.inr_model)
             print("NeRF mode initialized.")
         else:
             self.inr_model = None
