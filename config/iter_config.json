@@ -1,14 +1,17 @@
 {
-    "n_epochs": 20,
+    "n_epochs": 100,
     "regularization_weight": 0.1,
-    "lr_birefringence": 1e-2,
+    "lr": 1e-3,
+    "lr_birefringence": 1e-3,
     "lr_optic_axis": 1e-1,
     "optimizer": "Nadam",
     "datafidelity": "euler",
     "regularization_fcns": [
         ["birefringence active L2", 0],
-        ["birefringence active negative penalty", 0]
+        ["birefringence active negative penalty", 0],
+        ["birefringence mask", 1000]
     ],
+    "nerf_mode": false,
     "from_simulation": true,
     "mla_rays_at_once": true,
     "two_optic_axis_components": true,

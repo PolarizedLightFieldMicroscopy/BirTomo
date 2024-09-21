@@ -53,6 +53,45 @@ def total_variation_bir_subset(volume: BirefringentVolume):
     return total_variation(birefringence)
 
 
+def masked_zero_loss(volume: BirefringentVolume, mask: torch.Tensor):
+    """Compute the loss enforcing certain positions in the volume's prediction to
+    be zero based on a mask.
+    
+    Args:
+    - volume (BirefringentVolume): The volume object containing the predicted tensor.
+    - mask (torch.Tensor): A binary mask tensor where positions to be zeroed are marked with 1.
+    
+    Returns:
+    - torch.Tensor: The computed loss.
+    """
+    # Ensure the mask is a binary tensor
+    mask = mask.float()
+    
+    # Invert the mask to get positions that should be zero
+    inverted_mask = 1 - mask
+    
+    # Apply the inverted mask to the volume's birefringence
+    masked_birefringence = volume.birefringence.flatten() * inverted_mask
+    
+    # Compute the loss as the mean squared error between the masked
+    #   birefringence and a zero tensor
+    zero_tensor = torch.zeros_like(volume.birefringence.flatten())
+    loss = F.mse_loss(masked_birefringence, zero_tensor)
+    return loss
+
+
+def l2_biref(volume: BirefringentVolume):
+    return l2(volume.birefringence)
+
+
+def pos_penalty_biref(volume: BirefringentVolume):
+    return positive_penalty(volume.birefringence)
+
+
+def pos_penalty_l2_biref(volume: BirefringentVolume):
+    return positive_penalty_l2(volume.birefringence)
+
+
 class AnisotropyAnalysis:
     def __init__(self, volume: BirefringentVolume):
         self.volume = volume

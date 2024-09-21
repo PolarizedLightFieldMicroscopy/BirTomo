@@ -96,18 +96,18 @@ def siddon_midpoints(start, stop, a_list):
 
 
 def vox_indices(midpoints, vox_pitch):
-    """Identifies the voxels for which the midpoints belong by converting to 
+    """Identifies the voxels for which the midpoints belong by converting to
     voxel units, then rounding down to get the voxel index used we are using
     to refer to the voxel"""
     dx, dy, dz = vox_pitch
     i_voxels = []
-    for (x, y, z) in midpoints:
+    for x, y, z in midpoints:
         i_voxels.append((int(x / dx), int(y / dy), int(z / dz)))
     return i_voxels
 
 
 def siddon_lengths(start, stop, a_list):
-    """Finds length of intersections by multiplying difference in parametric 
+    """Finds length of intersections by multiplying difference in parametric
     values by entire ray length"""
     entire_length = np.linalg.norm(stop - start)
     lengths = []

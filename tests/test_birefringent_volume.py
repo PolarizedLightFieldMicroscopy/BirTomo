@@ -9,6 +9,10 @@ from tests.fixtures_backend import backend_fixture
 from tests.fixtures_optical_info import optical_info_vol11
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
+from VolumeRaytraceLFM.volumes.modification import (
+    pad_to_region_shape,
+    crop_to_region_shape,
+)
 
 
 @pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
@@ -149,7 +153,7 @@ def test_crop_to_region_shape(backend_fixture):
     volume_shape = np.array([10, 10, 10])
     region_shape = np.array([5, 5, 5])
 
-    cropped_delta_n, cropped_optic_axis = BirefringentVolume.crop_to_region_shape(
+    cropped_delta_n, cropped_optic_axis = crop_to_region_shape(
         delta_n, optic_axis, volume_shape, region_shape
     )
 
@@ -165,7 +169,7 @@ def test_pad_to_region_shape(backend_fixture):
     volume_shape = np.array([5, 5, 5])
     region_shape = np.array([10, 10, 10])
 
-    padded_delta_n, padded_optic_axis = BirefringentVolume.pad_to_region_shape(
+    padded_delta_n, padded_optic_axis = pad_to_region_shape(
         delta_n, optic_axis, volume_shape, region_shape
     )
 

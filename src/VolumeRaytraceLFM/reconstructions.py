@@ -49,8 +49,10 @@ from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr, print
 from VolumeRaytraceLFM.volumes.optic_axis import (
     fill_vector_based_on_nonaxial,
     stay_on_sphere,
+    spherical_to_unit_vector_torch,
 )
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
+from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
 
 
 DEBUG = False
@@ -306,11 +308,12 @@ class Reconstructor:
         self.rays = self.setup_raytracer(
             image=image_for_rays, filepath=saved_ray_path, device=device
         )
-
+        self.nerf_mode = self.iteration_params.get("nerf_mode", False)
+        self.initialize_nerf_mode(use_nerf=self.nerf_mode)
         self.from_simulation = self.iteration_params.get("from_simulation", False)
         self.apply_volume_mask = apply_volume_mask
         self.mask = torch.ones(
-            self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool
+            self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool, device=device
         )
 
         # Volume that will be updated after each iteration
@@ -421,7 +424,8 @@ class Reconstructor:
         if self.volume_ground_truth is not None:
             self.volume_ground_truth = self.volume_ground_truth.to(device)
         self.rays.to_device(device)
-        self.mask.to(device)
+        self.mask = self.mask.to(device)
+        self.volume_pred = self.volume_pred.to(device)
 
     def save_parameters(self, output_dir, volume_type):
         """In progress.
@@ -472,6 +476,9 @@ class Reconstructor:
             rays.compute_rays_geometry(filename=None, image=image)
             print(f"Raytracing time in seconds: {time.time() - start_time:.2f}")
         return rays
+
+    def initialize_nerf_mode(self, use_nerf=True):
+        self.rays.initialize_nerf_mode(use_nerf)
 
     def mask_outside_rays(self):
         """Mask out volume that is outside FOV of the microscope.
@@ -707,6 +714,7 @@ class Reconstructor:
         LossFcn.set_retardance_target(retardance_meas)
         LossFcn.set_orientation_target(azimuth_meas)
         LossFcn.set_intensity_list_target(intensity_imgs_meas)
+        LossFcn.mask = self.mask
         data_term = LossFcn.compute_datafidelity_term(
             LossFcn.datafidelity, images_predicted
         )
@@ -766,6 +774,17 @@ class Reconstructor:
                 self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = (
                     self.volume_pred.optic_axis_active
                 )
+        if self.nerf_mode:
+            # Update Delta_n before loss is computed so the the mask regularization is applied
+            vol_shape = self.optical_info["volume_shape"]
+            predicted_properties = predict_voxel_properties(
+                self.rays.inr_model, vol_shape, enable_grad=True
+            )
+            Delta_n = predicted_properties[..., 0]
+            # # Gradients are lost when setting Delta_n as a torch nn parameter
+            # self.volume_pred.Delta_n = torch.nn.Parameter(Delta_n.flatten())
+            self.volume_pred.birefringence = Delta_n
+
         loss, data_term, regularization_term = self._compute_loss(img_list)
         if self.rays.verbose:
             tqdm.write(f"Computed the loss: {loss.item():.5}")
@@ -792,7 +811,11 @@ class Reconstructor:
         optimizer.step()
         scheduler.step(loss)
         adj_lrs_dict = calculate_adjusted_lr(optimizer)
-        adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
+        if self.nerf_mode:
+            adjusted_lrs = [0]
+        else:
+            adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
+
         if PRINT_GRADIENTS:
             print_moments(optimizer)
 
@@ -910,7 +933,20 @@ class Reconstructor:
         # TODO: only update every 1 epoch if plotting is live
         if ep % 1 == 0:
             # plt.clf()
-            Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
+            if self.nerf_mode:
+                vol_shape = self.optical_info["volume_shape"]
+                predicted_properties = predict_voxel_properties(
+                    self.rays.inr_model, vol_shape
+                )
+                Delta_n = predicted_properties[..., 0]
+                volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
+                # TODO: see if mask should be applied here
+                volume_estimation.Delta_n = torch.nn.Parameter(
+                    volume_estimation.Delta_n * self.mask
+                )
+                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
+            else:
+                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             mip_image = convert_volume_to_2d_mip(Delta_n)
             mip_image_np = prepare_plot_mip(mip_image, plot=False)
             plot_iteration_update_gridspec(
@@ -941,11 +977,23 @@ class Reconstructor:
                 volume_estimation.optic_axis = torch.nn.Parameter(
                     torch.zeros(3, vol_size_flat), requires_grad=False
                 ).to(device)
-            if self.volume_pred.indices_active is not None:
-                with torch.no_grad():
-                    volume_estimation.optic_axis[
-                        :, volume_estimation.indices_active
-                    ] = volume_estimation.optic_axis_active
+            if self.nerf_mode:
+                optic_axis_flat = predicted_properties.view(
+                    -1, predicted_properties.shape[-1]
+                )[..., 1:]
+                if predicted_properties.shape[-1] == 3:
+                    optic_axis_flat = spherical_to_unit_vector_torch(optic_axis_flat)
+                volume_estimation.optic_axis = torch.nn.Parameter(
+                    optic_axis_flat.permute(1, 0)
+                )
+                nerf_model_path = os.path.join(output_dir, f"nerf_model_{ep}.pth")
+                self.rays.save_nerf_model(nerf_model_path)
+            else:
+                if self.volume_pred.indices_active is not None:
+                    with torch.no_grad():
+                        volume_estimation.optic_axis[
+                            :, volume_estimation.indices_active
+                        ] = volume_estimation.optic_axis_active
             my_description = "Volume estimation after " + str(ep) + " iterations."
             volume_estimation.save_as_file(
                 os.path.join(output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5"),
@@ -1011,8 +1059,12 @@ class Reconstructor:
                 self.loss_reg_term_list,
                 self.adjusted_lrs_list,
             )
-            for total, data_term, reg_term, (optax_lr, bir_lr) in zipped_lists:
-                writer.writerow([total, data_term, reg_term, optax_lr, bir_lr])
+            if self.nerf_mode:
+                for total, data_term, reg_term, lr in zipped_lists:
+                    writer.writerow([total, data_term, reg_term, lr])
+            else:
+                for total, data_term, reg_term, (optax_lr, bir_lr) in zipped_lists:
+                    writer.writerow([total, data_term, reg_term, optax_lr, bir_lr])
 
     def _create_regularization_terms_csv(self):
         """Create a csv file to store the regularization terms."""
@@ -1113,11 +1165,14 @@ class Reconstructor:
                 self.volume_pred.optic_axis.requires_grad = False
         self.specify_variables_to_learn(param_list)
 
-        optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-        optax_betas = self.iteration_params.get("optax_betas", (0.9, 0.999))
-        bir_betas = self.iteration_params.get("bir_betas", (0.9, 0.999))
-        optimizer.param_groups[0]["betas"] = tuple(optax_betas)
-        optimizer.param_groups[1]["betas"] = tuple(bir_betas)
+        if self.nerf_mode:
+            optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
+        else:
+            optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
+            optax_betas = self.iteration_params.get("optax_betas", (0.9, 0.999))
+            bir_betas = self.iteration_params.get("bir_betas", (0.9, 0.999))
+            optimizer.param_groups[0]["betas"] = tuple(optax_betas)
+            optimizer.param_groups[1]["betas"] = tuple(bir_betas)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode="min",
@@ -1147,7 +1202,10 @@ class Reconstructor:
 
         self.prepare_volume_for_recon(self.volume_pred)
         initial_lr_0 = optimizer.param_groups[0]["lr"]
-        initial_lr_1 = optimizer.param_groups[1]["lr"]
+        if self.nerf_mode:
+            initial_lr_1 = optimizer.param_groups[0]["lr"]
+        else:
+            initial_lr_1 = optimizer.param_groups[1]["lr"]
         # Parameters for learning rate warmup
 
         warmup_epochs = 10
@@ -1166,10 +1224,14 @@ class Reconstructor:
                     + (1 - warmup_start_proportion) * (ep / warmup_epochs)
                 )
                 optimizer.param_groups[0]["lr"] = lr_0
-                optimizer.param_groups[1]["lr"] = lr_1
+                if not self.nerf_mode:
+                    optimizer.param_groups[1]["lr"] = lr_1
             else:
                 current_lr_0 = scheduler.optimizer.param_groups[0]["lr"]
-                current_lr_1 = scheduler.optimizer.param_groups[1]["lr"]
+                if self.nerf_mode:
+                    current_lr_1 = lr_0
+                else:
+                    current_lr_1 = scheduler.optimizer.param_groups[1]["lr"]
                 if lr_0 != current_lr_0 or lr_1 != current_lr_1:
                     print(
                         f"Learning rates at iteration {ep - 1}: {lr_0:.2e}, {lr_1:.2e}"
@@ -1229,3 +1291,7 @@ class Reconstructor:
         print("Saved the final volume estimation to", vol_save_path)
         plt.savefig(os.path.join(self.recon_directory, "optim_final.pdf"))
         plt.close()
+
+        if self.nerf_mode:
+            nerf_model_path = os.path.join(self.recon_directory, "nerf_model.pth")
+            self.rays.save_nerf_model(nerf_model_path) 

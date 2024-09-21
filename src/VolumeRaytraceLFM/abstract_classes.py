@@ -258,6 +258,30 @@ class RayTraceLFM(OpticalElement):
         return RayTraceLFM.ravel_index((x, y, z), volume_shape)
 
     @staticmethod
+    def unravel_index(idx, dims):
+        """Convert an array of 1D indices to 3D indices.
+        TODO: avoid idx being replaced by a zero tensor"""
+        if isinstance(idx, torch.Tensor):
+            c = torch.cumprod(torch.tensor([1] + dims[::-1], dtype=idx.dtype), dim=0)[
+                :-1
+            ].flip(0)
+            x = []
+            for factor in c:
+                x.append(idx // factor)
+                idx %= factor
+            idx_3d = torch.stack(x, dim=-1)
+        else:
+            # Ensure idx is a numpy array
+            idx = np.asarray(idx)
+            c = np.cumprod([1] + dims[::-1])[:-1][::-1]
+            x = []
+            for factor in c:
+                x.append(idx // factor)
+                idx %= factor
+            idx_3d = np.stack(x, axis=-1)
+        return idx_3d
+
+    @staticmethod
     def rotation_matrix(axis, angle):
         """Generates the rotation matrix that will rotate a 3D vector
         around "axis" by "angle" counterclockwise."""

@@ -6,3 +6,5 @@ playground/*
 data/*
 *.pkl
 src/bir_tomo.egg-info/*
+assets/style.css
+in_progress/*

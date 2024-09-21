@@ -57,6 +57,11 @@ random_neg_args1 = {
     "init_args": {"Delta_n_range": [-0.01, 0], "axes_range": [-1, 1]},
 }
 
+random_neg_args_min05 = {
+    "init_mode": "random",
+    "init_args": {"Delta_n_range": [-0.05, 0], "axes_range": [-1, 1]},
+}
+
 random_args1 = {
     "init_mode": "random",
     "init_args": {"Delta_n_range": [0, 0.01], "axes_range": [-1, 1]},
@@ -202,6 +207,16 @@ shell_args = {
     },
 }
 
+shell_args_ss3 = {
+    "init_mode": "shell",
+    "init_args": {
+        "radius": [15.5, 29.5, 15.5],
+        "center": [0.5, 0.5, 0.5],
+        "delta_n": -0.01,
+        "border_thickness": 2,
+    },
+}
+
 shell_small_args = {
     "init_mode": "shell",
     "init_args": {
@@ -233,7 +248,7 @@ shell_pos_thick3_args = {
 }
 
 shell1_args = {
-    "init_mode": "ellipsoid",
+    "init_mode": "shell",
     "init_args": {
         "radius": [10.5, 15.5, 10.5],
         "center": [0.5, 0.5, 0.5],
