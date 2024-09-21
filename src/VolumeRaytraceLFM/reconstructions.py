@@ -967,7 +967,7 @@ class Reconstructor:
             self.save_loss_lists_to_csv()
             self._save_regularization_terms_to_csv(ep)
             if ep % save_freq == 0:
-                filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
+                filename = f"optim_iter_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
             time.sleep(0.1)
         if ep % save_freq == 0:
@@ -996,7 +996,7 @@ class Reconstructor:
                         ] = volume_estimation.optic_axis_active
             my_description = "Volume estimation after " + str(ep) + " iterations."
             volume_estimation.save_as_file(
-                os.path.join(output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5"),
+                os.path.join(output_dir, f"volume_iter_{'{:04d}'.format(ep)}.h5"),
                 description=my_description,
             )
             if self.remove_large_arrs:
@@ -1285,7 +1285,7 @@ class Reconstructor:
 
         my_description = "Volume estimation after " + str(ep) + " iterations."
         vol_save_path = os.path.join(
-            self.recon_directory, f"volume_ep_{'{:04d}'.format(ep)}.h5"
+            self.recon_directory, f"volume_iter_{'{:04d}'.format(ep)}.h5"
         )
         self.volume_pred.save_as_file(vol_save_path, description=my_description)
         print("Saved the final volume estimation to", vol_save_path)
