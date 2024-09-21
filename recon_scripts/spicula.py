@@ -13,8 +13,10 @@ from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructo
 from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
 from utils.polscope import prepare_ret_azim_images
+from utils.logging import redirect_output_to_log, restore_output
 
 BACKEND = BackEnds.PYTORCH
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # DEVICE = "cpu"
 
@@ -73,6 +75,8 @@ def recon_spicula(
     initial_volume.to(DEVICE)
 
     recon_directory = create_unique_directory(parent_dir, postfix=recon_postfix)
+    log_file_path = os.path.join(recon_directory, "output_log.txt")
+    log_file = redirect_output_to_log(log_file_path)
     recon_config = ReconstructionConfig(
         optical_info,
         ret_image_meas,
@@ -93,7 +97,7 @@ def recon_spicula(
     reconstructor.to_device(DEVICE)
     reconstructor.rays.verbose = False
     reconstructor.reconstruct(plot_live=True)
-    reconstructor.rays.print_timing_info()
+    restore_output(log_file)
     # visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
 
 if __name__ == "__main__":
