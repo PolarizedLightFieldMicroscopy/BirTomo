@@ -129,10 +129,8 @@ def recon_spicule(
 
 if __name__ == "__main__":
     init_vol_path = None
-    plot_only = False
-    if not plot_only:
-        recon_spicule(
-            init_vol_path,
-            "debug",
-            load_rays=True
-        )
+    recon_spicule(
+        init_vol_path,
+        "debug",
+        load_rays=True
+    )
