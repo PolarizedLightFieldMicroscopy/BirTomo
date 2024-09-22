@@ -753,7 +753,7 @@ class BirefringentVolume(BirefringentElement):
         # removal_amount = vol_shape[0] + int(radius[0] // 2)
         # removal_amount = 0
         removal_amount = int((vol_shape[0]-shell_height)//2)
-        
+
         # set all voxels to zero that are below the 
         # removal_amount hight on the optical axis
         self.voxel_parameters[0, ...][
@@ -877,9 +877,9 @@ class BirefringentVolume(BirefringentElement):
             indexing="ij",
         )
         # shift to center
-        kk = floor(center[0] * volume_shape[0]) - kk.astype(float)
-        jj = floor(center[1] * volume_shape[1]) - jj.astype(float)
-        ii = floor(center[2] * volume_shape[2]) - ii.astype(float)
+        kk = floor(center[0] * (volume_shape[0]-1)) - kk.astype(float)
+        jj = floor(center[1] * (volume_shape[1]-1)) - jj.astype(float)
+        ii = floor(center[2] * (volume_shape[2]-1)) - ii.astype(float)
 
         # DEBUG: checking the indices
         # np.argwhere(ellipsoid_border == np.min(ellipsoid_border))
