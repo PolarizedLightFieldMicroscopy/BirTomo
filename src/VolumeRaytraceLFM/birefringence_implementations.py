@@ -741,7 +741,8 @@ class BirefringentVolume(BirefringentElement):
         )
         self.Delta_n = volume_ref.Delta_n
         self.optic_axis = volume_ref.optic_axis
-        del self.voxel_parameters
+        if 'voxel_parameters' in self.__dict__:
+            self.__dict__.pop('voxel_parameters')
 
     @staticmethod
     def generate_single_voxel_volume(
