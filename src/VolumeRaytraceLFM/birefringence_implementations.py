@@ -737,8 +737,11 @@ class BirefringentVolume(BirefringentElement):
         
         if init_mode == "shell":
             shell_height = int(radius[0]//2)
+            # max index is the highest position on the optical axis
+            max_index = volume_shape[0]-1
             # flip = True
-            center = [1/2*(shell_height/volume_shape[0]+1)-radius[0]/volume_shape[0], center[1], center[2]]
+            # adjust the center of the elipse so the shell is centered at max_index/2
+            center = [1/2*(shell_height/max_index+1)-radius[0]/max_index, center[1], center[2]]
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
@@ -752,7 +755,7 @@ class BirefringentVolume(BirefringentElement):
         vol_shape = self.optical_info["volume_shape"]
         # removal_amount = vol_shape[0] + int(radius[0] // 2)
         # removal_amount = 0
-        removal_amount = int((vol_shape[0]-shell_height)//2)
+        removal_amount = int((vol_shape[0]-1-shell_height)//2)
 
         # set all voxels to zero that are below the 
         # removal_amount hight on the optical axis
