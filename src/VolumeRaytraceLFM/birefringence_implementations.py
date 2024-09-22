@@ -746,29 +746,33 @@ class BirefringentVolume(BirefringentElement):
             # self.voxel_parameters = self.generate_ellipsoid_volume(
             #     expanded_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             # )
-            self._apply_shell_modification(radius)
+            self._apply_shell_modification(radius, shell_height)
 
-    def _apply_shell_modification(self, radius):
+    def _apply_shell_modification(self, radius, shell_height):
         vol_shape = self.optical_info["volume_shape"]
-        removal_amount = vol_shape[0] + int(radius[0] // 2)
-        removal_amount = 0
+        # removal_amount = vol_shape[0] + int(radius[0] // 2)
+        # removal_amount = 0
+        removal_amount = int((vol_shape[0]-shell_height)//2)
+        
+        # set all voxels to zero that are below the 
+        # removal_amount hight on the optical axis
         self.voxel_parameters[0, ...][
             : removal_amount, ...
             ] = 0
         # Shift the nonzero contents along the z-axis
         # shift = - vol_shape[0] // 4 - int(radius[0] // 2)
-        shift = - round((radius[0] + radius[0] / 2) / 2)
-        shifted_voxel_parameters = np.roll(self.voxel_parameters, shift=shift, axis=1)
-        self.voxel_parameters = shifted_voxel_parameters
-        # volume_shape = self.optical_info["volume_shape"]
-        # z_center = volume_shape[0] // 2
+        # shift = - round((radius[0] + radius[0] / 2) / 2)
+        # shifted_voxel_parameters = np.roll(self.voxel_parameters, shift=shift, axis=1)
+        # self.voxel_parameters = shifted_voxel_parameters
+        # # volume_shape = self.optical_info["volume_shape"]
+        # # z_center = volume_shape[0] // 2
         
-        # # Ensure the shift does not go out of bounds
-        # z_start = max(0, z_center - volume_shape[0] // 2)
-        # z_end = min(volume_shape[0], z_center + volume_shape[0] // 2 + 1)
-        start_z = vol_shape[0] // 2
-        end_z = start_z + vol_shape[0]
-        self.voxel_parameters = self.voxel_parameters[:, start_z:end_z, ...]
+        # # # Ensure the shift does not go out of bounds
+        # # z_start = max(0, z_center - volume_shape[0] // 2)
+        # # z_end = min(volume_shape[0], z_center + volume_shape[0] // 2 + 1)
+        # start_z = vol_shape[0] // 2
+        # end_z = start_z + vol_shape[0]
+        # self.voxel_parameters = self.voxel_parameters[:, start_z:end_z, ...]
 
     def _set_volume_ref(self):
         volume_ref = BirefringentVolume(
