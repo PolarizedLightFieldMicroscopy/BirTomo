@@ -308,6 +308,7 @@ class Reconstructor:
         self.rays = self.setup_raytracer(
             image=image_for_rays, filepath=saved_ray_path, device=device
         )
+        self.rays.verbose = False
         self.nerf_mode = self.iteration_params.get("nerf_mode", False)
         self.initialize_nerf_mode(use_nerf=self.nerf_mode)
         self.from_simulation = self.iteration_params.get("from_simulation", False)
