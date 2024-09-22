@@ -754,7 +754,7 @@ class BirefringentVolume(BirefringentElement):
             
             # flip = True
             # adjust the center of the elipse so the shell is centered at max_index/2
-            center = [(shell_tallness-1+shell_highness-radius[0])/(volume_shape[0]-1), center[1], center[2]]
+            center = [(shell_tallness-1+shell_highness-radius[0])/(volume_shape[0]-1)+10*np.finfo(float).eps, center[1], center[2]]  # add some epsilons to encourage the tip of the elipse to show up
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
@@ -916,9 +916,9 @@ class BirefringentVolume(BirefringentElement):
                 + (jj**2) / (inner_radius[1] ** 2)
                 + (ii**2) / (inner_radius[2] ** 2)
             )
-            inner_mask = np.abs(inner_ellipsoid_border) <= 1
+            inner_mask = np.abs(inner_ellipsoid_border) < 1  # this one is less than so the inverse is >=
         else:
-            ellipsoid_border_mask = np.abs(ellipsoid_border - alpha) <= 1
+            ellipsoid_border_mask = np.abs(ellipsoid_border - alpha) <= 1 # this line feels wierd and maybe should not have the -alpha
 
         vol[0, ...] = ellipsoid_border_mask.astype(float)
         # Compute normals
