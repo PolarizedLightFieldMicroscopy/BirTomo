@@ -744,16 +744,17 @@ class BirefringentVolume(BirefringentElement):
         )
         
         if init_mode == "shell":
-            # how tall is the shell top to botom?
+            # how tall is the shell top to botom? 
+            # the tallness is size like? and must have a -1 when doing index maths
             shell_tallness = int(radius[0]//2) # a good tallness
-            shell_tallness = 3
+            shell_tallness = 4
             # how high is the shell flying above the bottom of the volume
-            shell_highness = int((volume_shape[0]-1-shell_tallness)//2) # centered in the volume.
-            shell_highness = 2
+            shell_highness = int((volume_shape[0]-shell_tallness)//2) # centered in the volume.
+            #shell_highness = 0
             
             # flip = True
             # adjust the center of the elipse so the shell is centered at max_index/2
-            center = [(shell_tallness+shell_highness-radius[0])/(volume_shape[0]-1), center[1], center[2]]
+            center = [(shell_tallness-1+shell_highness-radius[0])/(volume_shape[0]-1), center[1], center[2]]
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
