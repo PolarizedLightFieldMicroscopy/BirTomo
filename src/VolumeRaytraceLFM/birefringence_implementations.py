@@ -27,6 +27,7 @@ from VolumeRaytraceLFM.volumes.generation import (
 from VolumeRaytraceLFM.volumes.optic_axis import (
     spherical_to_unit_vector_torch,
     unit_vector_to_spherical,
+    fill_vector_based_on_nonaxial,
 )
 from VolumeRaytraceLFM.jones.jones_calculus import (
     JonesMatrixGenerators,
@@ -717,20 +718,49 @@ class BirefringentVolume(BirefringentElement):
         )
 
     def _init_ellipsoid_or_shell(self, volume_shape, init_mode, init_args):
+        """Initialize the volume with an ellipsoid or shell shape.
+        Args:
+            volume_shape (list): Shape of the volume.
+            init_mode (str): Initialization mode, either 'ellipsoid' or 'shell'.
+            init_args (dict): Arguments for initialization, including
+                radius, center, delta_n, and border_thickness.
+        """
         radius = init_args.get("radius", [5.5, 5.5, 3.5])
         center = init_args.get("center", [0.5, 0.5, 0.5])
         delta_n = init_args.get("delta_n", 0.01)
         alpha = init_args.get("border_thickness", 1)
+        
         self.voxel_parameters = self.generate_ellipsoid_volume(
             volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
         )
+        
         if init_mode == "shell":
-            self._apply_shell_modification()
+            expanded_shape = [2 * volume_shape[0], volume_shape[1], volume_shape[2]]
+            self.voxel_parameters = self.generate_ellipsoid_volume(
+                expanded_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+            )
+            self._apply_shell_modification(radius)
 
-    def _apply_shell_modification(self):
+    def _apply_shell_modification(self, radius):
+        vol_shape = self.optical_info["volume_shape"]
+        removal_amount = vol_shape[0] + int(radius[0] // 2) 
         self.voxel_parameters[0, ...][
-            : self.optical_info["volume_shape"][0] // 2 + 2, ...
-        ] = 0
+            : removal_amount, ...
+            ] = 0
+        # Shift the nonzero contents along the z-axis
+        # shift = - vol_shape[0] // 4 - int(radius[0] // 2)
+        shift = - round((radius[0] + radius[0] / 2) / 2)
+        shifted_voxel_parameters = np.roll(self.voxel_parameters, shift=shift, axis=1)
+        self.voxel_parameters = shifted_voxel_parameters
+        # volume_shape = self.optical_info["volume_shape"]
+        # z_center = volume_shape[0] // 2
+        
+        # # Ensure the shift does not go out of bounds
+        # z_start = max(0, z_center - volume_shape[0] // 2)
+        # z_end = min(volume_shape[0], z_center + volume_shape[0] // 2 + 1)
+        start_z = vol_shape[0] // 2
+        end_z = start_z + vol_shape[0]
+        self.voxel_parameters = self.voxel_parameters[:, start_z:end_z, ...]
 
     def _set_volume_ref(self):
         volume_ref = BirefringentVolume(
@@ -741,6 +771,9 @@ class BirefringentVolume(BirefringentElement):
         )
         self.Delta_n = volume_ref.Delta_n
         self.optic_axis = volume_ref.optic_axis
+        fill_vector_based_on_nonaxial(
+            self.optic_axis, self.optic_axis[1:, ...]
+        )
 
     @staticmethod
     def generate_single_voxel_volume(
