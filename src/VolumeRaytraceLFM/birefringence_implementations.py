@@ -750,11 +750,19 @@ class BirefringentVolume(BirefringentElement):
             shell_tallness = 4
             # how high is the shell flying above the bottom of the volume
             shell_highness = int((volume_shape[0]-shell_tallness)//2) # centered in the volume.
-            #shell_highness = 0
+            shell_highness = 3
             
             # flip = True
             # adjust the center of the elipse so the shell is centered at max_index/2
-            center = [(shell_tallness-1+shell_highness-radius[0])/(volume_shape[0]-1)+10*np.finfo(float).eps, center[1], center[2]]  # add some epsilons to encourage the tip of the elipse to show up
+            center = [(shell_tallness-1+shell_highness-radius[0])/(volume_shape[0]-1), center[1], center[2]]  # calculate center so that the elipse is in the right spot
+            if radius[0]**2-.5 >=0: # protect against the imaginary men
+                center = [center[0]+(radius[0]-np.sqrt(radius[0]**2-.5))/(volume_shape[0]-1), center[1], center[2]] # add a small shift so that the tip of the elipse always hits a grid point
+                # for larger radius shells, this shift will get smaller
+            else: 
+                center = [center[0]+1/(volume_shape[0]-1)-np.finfo(float).eps] # if your radius is this small im not sure even this will help
+
+
+            
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
