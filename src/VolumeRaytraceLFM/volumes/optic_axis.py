@@ -19,14 +19,22 @@ def fill_vector_based_on_nonaxial(axis_full, axis_nonaxial):
     """Function to fill the axial component of the optic axis
     with the square root of the remaining components.
     Args:
-        axis_full (torch.Tensor): The optic axis tensor to be updated.
-        optic_axis_nonaxial (torch.Tensor): The nonaxial components of the optic axis.
+        axis_full (torch.Tensor or np.ndarray): The optic axis tensor to be updated.
+        axis_nonaxial (torch.Tensor or np.ndarray): The nonaxial components of the optic axis.
     """
-    with torch.no_grad():
+    if isinstance(axis_full, torch.Tensor) and isinstance(axis_nonaxial, torch.Tensor):
+        with torch.no_grad():
+            axis_full[1:, :] = axis_nonaxial
+            square_sum = torch.sum(axis_full[1:, :] ** 2, dim=0)
+            axis_full[0, :] = torch.sqrt(1 - square_sum)
+            axis_full[0, torch.isnan(axis_full[0, :])] = 0
+    elif isinstance(axis_full, np.ndarray) and isinstance(axis_nonaxial, np.ndarray):
         axis_full[1:, :] = axis_nonaxial
-        square_sum = torch.sum(axis_full[1:, :] ** 2, dim=0)
-        axis_full[0, :] = torch.sqrt(1 - square_sum)
-        axis_full[0, torch.isnan(axis_full[0, :])] = 0
+        square_sum = np.sum(axis_full[1:, :] ** 2, axis=0)
+        axis_full[0, :] = np.sqrt(1 - square_sum)
+        axis_full[0, np.isnan(axis_full[0, :])] = 0
+    else:
+        raise TypeError("Input arrays must be both torch.Tensor or both np.ndarray")
     return axis_full
 
 
