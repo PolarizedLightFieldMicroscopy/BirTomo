@@ -16,45 +16,70 @@ from utils.polscope import prepare_ret_azim_images
 from utils.logging import redirect_output_to_log, restore_output
 
 BACKEND = BackEnds.PYTORCH
-
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # DEVICE = "cpu"
 
-def recon_spicule(
-    init_vol_path, recon_postfix, mla=86, ss_factor=1, volume_shape=[20, 80, 80]
-):
-    optical_info = setup_optical_parameters("config/spicule/optical_config.json")
-    optical_info["volume_shape"] = volume_shape
-
+def define_spicule_image_paths(mla):
     ret_image_path = os.path.join(
-        "data", "spicule", f"mla{mla}", "retardance_zeroed_low_nbrs_radio10.tif")
+        "data", "spicule", f"mla{mla}", "retardance_zeroed.tif")
     azim_image_path = os.path.join(
         "data", "spicule", f"mla{mla}", "azimuth.tif")
     radiometry_path = os.path.join(
-        "data", "spicule", f"mla{mla}", "radiometry_10.tif")
+        "data", "spicule", f"mla{mla}", "radiometry.tif")
+    return ret_image_path, azim_image_path, radiometry_path
 
-    optical_info["n_micro_lenses"] = mla
 
-    v0, v1, v2 = volume_shape
-    parent_dir = os.path.join(
-        "reconstructions", f"spicule_mla{mla}", f"ss{ss_factor}", f"{v0}_{v1}_{v2}"
-    )
-    optical_info["n_voxels_per_ml"] = ss_factor
+def setup_spicule_iteration_params(init_vol_path, ret_image_path, 
+    azim_image_path, radiometry_path, volume_shape, mla,
+    load_rays=False):
+    """Setup the iteration parameters for the spicule reconstruction."""
     iteration_params = setup_iteration_parameters(
         "config/spicule/iter_config.json"
     )
-    # iteration_params["saved_ray_path"] = os.path.join(
-    #     "config", "rays", "water", f"mla{mla}_vol{v0}_{v1}_{v2}.pkl"
-    # )
-    print(f"Volume shape: {volume_shape} using supersampling of {ss_factor}")
+    iteration_params.update({
+        "initial volume path": init_vol_path,
+        "ret image path": ret_image_path,
+        "azim image path": azim_image_path,
+        "radiometry_path": radiometry_path
+    })
+    if load_rays:
+        v0, v1, v2 = volume_shape
+        iteration_params["saved_ray_path"] = os.path.join(
+            "config", "spicule", "rays", f"mla{mla}_vol{v0}_{v1}_{v2}.pkl"
+        )
+    return iteration_params
 
-    iteration_params["ret image path"] = ret_image_path
-    iteration_params["azim image path"] = azim_image_path
-    iteration_params["initial volume path"] = init_vol_path
-    iteration_params["radiometry_path"] = radiometry_path
 
+def recon_spicule(
+    init_vol_path, recon_postfix, mla=None, ss_factor=None, volume_shape=None, load_rays=False
+):
+    # Setup optical parameters
+    optical_info = setup_optical_parameters("config/spicule/optical_config.json")
+    if volume_shape is not None:
+        optical_info["volume_shape"] = volume_shape
+    if mla is not None:
+        optical_info["n_micro_lenses"] = mla
+    if ss_factor is not None:
+        optical_info["n_voxels_per_ml"] = ss_factor
+
+    print(f"Volume shape: {optical_info['volume_shape']} using supersampling of {optical_info['n_voxels_per_ml']}")
+
+    # Define paths to the images
+    ret_image_path, azim_image_path, radiometry_path = define_spicule_image_paths(optical_info["n_micro_lenses"])
+
+    # Setup iteration parameters
+    iteration_params = setup_spicule_iteration_params(
+        init_vol_path,
+        ret_image_path,
+        azim_image_path,
+        radiometry_path,
+        optical_info["volume_shape"],
+        optical_info["n_micro_lenses"],
+        load_rays=load_rays
+    )
+
+    # Prepare the retardance and azimuth images
     ret_image_meas, azim_image_meas = prepare_ret_azim_images(
-
         ret_image_path, azim_image_path, 120, optical_info["wavelength"]
     )
 
@@ -62,7 +87,7 @@ def recon_spicule(
         initial_volume = BirefringentVolume(
             backend=BackEnds.PYTORCH,
             optical_info=optical_info,
-            volume_creation_args=volume_args.random_args1,
+            volume_creation_args=volume_args.random_neg_args1,
         )
         fill_vector_based_on_nonaxial(
             initial_volume.optic_axis, initial_volume.optic_axis[1:, ...]
@@ -74,6 +99,11 @@ def recon_spicule(
 
     initial_volume.to(DEVICE)
 
+    # Create reconstruction directory and log file
+    v0, v1, v2 = optical_info["volume_shape"]
+    parent_dir = os.path.join(
+        "reconstructions", f"spicule_mla{mla}", f"ss{ss_factor}", f"{v0}_{v1}_{v2}"
+    )
     recon_directory = create_unique_directory(parent_dir, postfix=recon_postfix)
     log_file_path = os.path.join(recon_directory, "output_log.txt")
     log_file = redirect_output_to_log(log_file_path)
@@ -91,14 +121,12 @@ def recon_spicule(
         output_dir=recon_directory,
         device=DEVICE,
         omit_rays_based_on_pixels=True,
-        apply_volume_mask=False,
     )
-
-    reconstructor.to_device(DEVICE)
-    reconstructor.rays.verbose = False
     reconstructor.reconstruct(plot_live=True)
+
+    # Restore output
     restore_output(log_file)
-    # visualize_volume(reconstructor.volume_pred, reconstructor.optical_info)
+
 
 if __name__ == "__main__":
     init_vol_path = None
@@ -107,7 +135,8 @@ if __name__ == "__main__":
         recon_spicule(
             init_vol_path,
             "debug",
-            mla=88,
-            volume_shape=[30, 100, 100],
-            ss_factor=1,
+            # mla=94,
+            # volume_shape=[31, 110, 110],
+            # ss_factor=1,
+            load_rays=True
         )

@@ -393,6 +393,8 @@ class Reconstructor:
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
         self.adjusted_lrs_list = []
+
+        self.to_device(device)
         end_time = time.perf_counter()
         print(f"Reconstructor initialized in {end_time - start_time:.2f} seconds\n")
 
@@ -415,9 +417,7 @@ class Reconstructor:
             raise TypeError("Image must be a PyTorch Tensor or a numpy array")
 
     def to_device(self, device):
-        """
-        Move all tensors to the specified device.
-        """
+        """Move all tensors to the specified device."""
         self.ret_img_meas = torch.from_numpy(self.ret_img_meas).to(device)
         self.azim_img_meas = torch.from_numpy(self.azim_img_meas).to(device)
         # self.volume_initial_guess = self.volume_initial_guess.to(device)
