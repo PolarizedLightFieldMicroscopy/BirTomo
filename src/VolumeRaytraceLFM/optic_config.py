@@ -26,7 +26,7 @@ class OpticBlock(nn.Module):
         super().__init__()
         self.optic_config = optic_config
         self.members_to_learn = [] if members_to_learn is None else members_to_learn
-        self.device_dummy = nn.Parameter(torch.tensor([1.0]))
+        self.device_dummy = nn.Parameter(torch.tensor([1.0], requires_grad=False))
 
     def get_trainable_variables(self):
         """

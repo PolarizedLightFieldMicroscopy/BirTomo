@@ -727,10 +727,13 @@ class Reconstructor:
         regularization_term = params["regularization_weight"] * reg_loss
         self.reg_term_values = [reg.item() for reg in reg_term_values]
 
-        # Total loss
+        # Total loss (which has gradients enabled)
         loss = data_term + regularization_term
 
-        return loss, data_term, regularization_term
+        data_term_no_grad = data_term.detach()
+        regularization_term_no_grad = regularization_term.detach()
+
+        return loss, data_term_no_grad, regularization_term_no_grad
 
     def keep_optic_axis_on_sphere(self, volume):
         """Method to keep the optic axis on the unit sphere."""
