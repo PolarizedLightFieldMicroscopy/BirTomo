@@ -736,15 +736,22 @@ class BirefringentVolume(BirefringentElement):
         )
         
         if init_mode == "shell":
-            expanded_shape = [2 * volume_shape[0], volume_shape[1], volume_shape[2]]
+            shell_height = int(radius[0]//2)
+            # flip = True
+            center = [1/2*(shell_height/volume_shape[0]+1)-radius[0]/volume_shape[0], center[1], center[2]]
             self.voxel_parameters = self.generate_ellipsoid_volume(
-                expanded_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+                volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
+            # expanded_shape = [2 * volume_shape[0], volume_shape[1], volume_shape[2]]
+            # self.voxel_parameters = self.generate_ellipsoid_volume(
+            #     expanded_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+            # )
             self._apply_shell_modification(radius)
 
     def _apply_shell_modification(self, radius):
         vol_shape = self.optical_info["volume_shape"]
-        removal_amount = vol_shape[0] + int(radius[0] // 2) 
+        removal_amount = vol_shape[0] + int(radius[0] // 2)
+        removal_amount = 0
         self.voxel_parameters[0, ...][
             : removal_amount, ...
             ] = 0
