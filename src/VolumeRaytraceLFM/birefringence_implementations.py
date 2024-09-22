@@ -332,13 +332,18 @@ class BirefringentVolume(BirefringentElement):
             for i in range(3)
         ]
         [dz, dxy, dxy] = optical_info["voxel_size_um"]
+        use_microns = False
+        if use_microns:
+            volume_size = volume_size_um
+        else:
+            volume_size = optical_info["volume_shape"]
 
         # Sometimes the volume_shape is causing an error when being used as the nticks parameter
         if use_ticks:
             scene_dict = dict(
-                xaxis={"nticks": volume_shape[0], "range": [0, volume_size_um[0]]},
-                yaxis={"nticks": volume_shape[1], "range": [0, volume_size_um[1]]},
-                zaxis={"nticks": volume_shape[2], "range": [0, volume_size_um[2]]},
+                xaxis={"nticks": volume_shape[0], "range": [0, volume_size[0]]},
+                yaxis={"nticks": volume_shape[1], "range": [0, volume_size[1]]},
+                zaxis={"nticks": volume_shape[2], "range": [0, volume_size[2]]},
                 xaxis_title="Axial dimension",
                 aspectratio={
                     "x": volume_size_um[0],
@@ -360,13 +365,16 @@ class BirefringentVolume(BirefringentElement):
 
         # Define grid
         coords = np.indices(np.array(delta_n.shape)).astype(float)
-
+        if use_microns:
+            voxel_length = optical_info["voxel_size_um"]
+        else:
+            voxel_length = [1, 1, 1]
         coords_base = [
-            (coords[i] + 0.5) * optical_info["voxel_size_um"][i] for i in range(3)
+            (coords[i] + 0.5) * voxel_length[i] for i in range(3)
         ]
         coords_tip = [
             (coords[i] + 0.5 + optic_axis[i, ...] * delta_n * 0.75)
-            * optical_info["voxel_size_um"][i]
+            * voxel_length[i]
             for i in range(3)
         ]
 
@@ -741,7 +749,7 @@ class BirefringentVolume(BirefringentElement):
             shell_tallness = 3
             # how high is the shell flying above the bottom of the volume
             shell_highness = int((volume_shape[0]-1-shell_tallness)//2) # centered in the volume.
-            shell_highness = 6
+            shell_highness = 2
             
             # flip = True
             # adjust the center of the elipse so the shell is centered at max_index/2
