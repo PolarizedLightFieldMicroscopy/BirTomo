@@ -1,6 +1,5 @@
 import os
 import torch
-import numpy as np
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
 from VolumeRaytraceLFM.volumes import volume_args
@@ -10,14 +9,14 @@ from VolumeRaytraceLFM.setup_parameters import (
     setup_iteration_parameters,
 )
 from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructor
-from VolumeRaytraceLFM.visualization.plotting_volume import visualize_volume
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
 from utils.polscope import prepare_ret_azim_images
 from utils.logging import redirect_output_to_log, restore_output
 
+
 BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# DEVICE = "cpu"
+
 
 def define_spicule_image_paths(mla):
     ret_image_path = os.path.join(
@@ -61,11 +60,13 @@ def recon_spicule(
         optical_info["n_micro_lenses"] = mla
     if ss_factor is not None:
         optical_info["n_voxels_per_ml"] = ss_factor
-
-    print(f"Volume shape: {optical_info['volume_shape']} using supersampling of {optical_info['n_voxels_per_ml']}")
+    volume_shape = optical_info["volume_shape"]
+    mla = optical_info["n_micro_lenses"]
+    ss_factor = optical_info["n_voxels_per_ml"]
+    print(f"Volume shape: {volume_shape} using supersampling of {ss_factor}")
 
     # Define paths to the images
-    ret_image_path, azim_image_path, radiometry_path = define_spicule_image_paths(optical_info["n_micro_lenses"])
+    ret_image_path, azim_image_path, radiometry_path = define_spicule_image_paths(mla)
 
     # Setup iteration parameters
     iteration_params = setup_spicule_iteration_params(
@@ -73,14 +74,14 @@ def recon_spicule(
         ret_image_path,
         azim_image_path,
         radiometry_path,
-        optical_info["volume_shape"],
-        optical_info["n_micro_lenses"],
+        volume_shape,
+        mla,
         load_rays=load_rays
     )
 
     # Prepare the retardance and azimuth images
     ret_image_meas, azim_image_meas = prepare_ret_azim_images(
-        ret_image_path, azim_image_path, 120, optical_info["wavelength"]
+        ret_image_path, azim_image_path, 150, optical_info["wavelength"]
     )
 
     if init_vol_path is None:
@@ -89,6 +90,7 @@ def recon_spicule(
             optical_info=optical_info,
             volume_creation_args=volume_args.random_neg_args1,
         )
+        # Remove after optic axis function (neg -> pos) is incorporated
         fill_vector_based_on_nonaxial(
             initial_volume.optic_axis, initial_volume.optic_axis[1:, ...]
         )
@@ -97,10 +99,8 @@ def recon_spicule(
             init_vol_path, BackEnds.PYTORCH, optical_info
         )
 
-    initial_volume.to(DEVICE)
-
     # Create reconstruction directory and log file
-    v0, v1, v2 = optical_info["volume_shape"]
+    v0, v1, v2 = volume_shape
     parent_dir = os.path.join(
         "reconstructions", f"spicule_mla{mla}", f"ss{ss_factor}", f"{v0}_{v1}_{v2}"
     )
@@ -113,7 +113,6 @@ def recon_spicule(
         azim_image_meas,
         initial_volume,
         iteration_params,
-        gt_vol=initial_volume,
     )
     recon_config.save(recon_directory)
     reconstructor = Reconstructor(
@@ -135,8 +134,5 @@ if __name__ == "__main__":
         recon_spicule(
             init_vol_path,
             "debug",
-            # mla=94,
-            # volume_shape=[31, 110, 110],
-            # ss_factor=1,
             load_rays=True
         )
