@@ -20,28 +20,28 @@ BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # DEVICE = "cpu"
 
-def recon_spicula(
+def recon_spicule(
     init_vol_path, recon_postfix, mla=86, ss_factor=1, volume_shape=[20, 80, 80]
 ):
-    optical_info = setup_optical_parameters("config/spicula/optical_config.json")
+    optical_info = setup_optical_parameters("config/spicule/optical_config.json")
     optical_info["volume_shape"] = volume_shape
 
     ret_image_path = os.path.join(
-        "data", "spicula", f"mla{mla}", "retardance_zeroed_low_nbrs_radio10.tif")
+        "data", "spicule", f"mla{mla}", "retardance_zeroed_low_nbrs_radio10.tif")
     azim_image_path = os.path.join(
-        "data", "spicula", f"mla{mla}", "azimuth.tif")
+        "data", "spicule", f"mla{mla}", "azimuth.tif")
     radiometry_path = os.path.join(
-        "data", "spicula", f"mla{mla}", "radiometry_10.tif")
+        "data", "spicule", f"mla{mla}", "radiometry_10.tif")
 
     optical_info["n_micro_lenses"] = mla
 
     v0, v1, v2 = volume_shape
     parent_dir = os.path.join(
-        "reconstructions", f"spicula_mla{mla}", f"ss{ss_factor}", f"{v0}_{v1}_{v2}"
+        "reconstructions", f"spicule_mla{mla}", f"ss{ss_factor}", f"{v0}_{v1}_{v2}"
     )
     optical_info["n_voxels_per_ml"] = ss_factor
     iteration_params = setup_iteration_parameters(
-        "config/spicula/iter_config.json"
+        "config/spicule/iter_config.json"
     )
     # iteration_params["saved_ray_path"] = os.path.join(
     #     "config", "rays", "water", f"mla{mla}_vol{v0}_{v1}_{v2}.pkl"
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     init_vol_path = None
     plot_only = False
     if not plot_only:
-        recon_spicula(
+        recon_spicule(
             init_vol_path,
             "debug",
             mla=88,
