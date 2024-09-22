@@ -738,10 +738,10 @@ class BirefringentVolume(BirefringentElement):
         if init_mode == "shell":
             # how tall is the shell top to botom?
             shell_tallness = int(radius[0]//2) # a good tallness
-            shell_tallness = 2
+            shell_tallness = 3
             # how high is the shell flying above the bottom of the volume
             shell_highness = int((volume_shape[0]-1-shell_tallness)//2) # centered in the volume.
-            shell_highness = 1
+            shell_highness = 6
             
             # flip = True
             # adjust the center of the elipse so the shell is centered at max_index/2
@@ -884,9 +884,9 @@ class BirefringentVolume(BirefringentElement):
             indexing="ij",
         )
         # shift to center
-        kk = floor(center[0] * (volume_shape[0]-1)) - kk.astype(float)
-        jj = floor(center[1] * (volume_shape[1]-1)) - jj.astype(float)
-        ii = floor(center[2] * (volume_shape[2]-1)) - ii.astype(float)
+        kk = (center[0] * (volume_shape[0]-1)) - kk.astype(float)
+        jj = (center[1] * (volume_shape[1]-1)) - jj.astype(float)
+        ii = (center[2] * (volume_shape[2]-1)) - ii.astype(float)
 
         # DEBUG: checking the indices
         # np.argwhere(ellipsoid_border == np.min(ellipsoid_border))
