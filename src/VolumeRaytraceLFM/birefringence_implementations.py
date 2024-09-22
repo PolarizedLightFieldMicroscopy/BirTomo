@@ -28,6 +28,7 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
     spherical_to_unit_vector_torch,
     unit_vector_to_spherical,
     fill_vector_based_on_nonaxial,
+    adjust_optic_axis_positive_axial,
 )
 from VolumeRaytraceLFM.jones.jones_calculus import (
     JonesMatrixGenerators,
@@ -771,9 +772,7 @@ class BirefringentVolume(BirefringentElement):
         )
         self.Delta_n = volume_ref.Delta_n
         self.optic_axis = volume_ref.optic_axis
-        fill_vector_based_on_nonaxial(
-            self.optic_axis, self.optic_axis[1:, ...]
-        )
+        self.optic_axis = adjust_optic_axis_positive_axial(self.optic_axis)
 
     @staticmethod
     def generate_single_voxel_volume(

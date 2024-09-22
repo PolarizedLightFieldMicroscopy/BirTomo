@@ -38,6 +38,29 @@ def fill_vector_based_on_nonaxial(axis_full, axis_nonaxial):
     return axis_full
 
 
+def adjust_optic_axis_positive_axial(optic_axis):
+    """Adjust the 3D optic axis components so that all have a positive axial component.
+    Args:
+        optic_axis (np.ndarray or torch.Tensor): A 3D array or tensor of
+            shape (3, ...) where optic_axis[0] is the axial (Z) component.
+    Returns:
+        np.ndarray or torch.Tensor: The adjusted optic axis where all
+            axial components (Z) are positive.
+    """
+    if isinstance(optic_axis, torch.Tensor):
+        with torch.no_grad():
+            axial_component = optic_axis[0]
+            negative_mask = axial_component < 0
+            optic_axis[:, negative_mask] *= -1
+    elif isinstance(optic_axis, np.ndarray):
+        axial_component = optic_axis[0]
+        negative_mask = axial_component < 0
+        optic_axis[:, negative_mask] *= -1
+    else:
+        raise TypeError("Input must be either a NumPy array or a PyTorch tensor.")
+    return optic_axis
+
+
 def spherical_to_unit_vector_np(theta, phi):
     """Convert spherical angles to a unit vector.
     Args:
