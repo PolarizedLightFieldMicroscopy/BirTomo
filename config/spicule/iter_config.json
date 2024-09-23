@@ -10,7 +10,7 @@
     "datafidelity": "euler",
     "regularization_fcns": [
         ["birefringence active L2", 10000],
-        ["birefringence active negative penalty", 1000]
+        ["birefringence active positive penalty", 100000]
     ],
     "nerf_mode": false,
     "from_simulation": false,

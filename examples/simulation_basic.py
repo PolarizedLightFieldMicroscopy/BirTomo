@@ -22,18 +22,18 @@ volume = BirefringentVolume(
 plotly_figure = volume.plot_lines_plotly(draw_spheres=True)
 plotly_figure.show()
 
-# # %% Image the volume
-# simulator = ForwardModel(optical_system, backend=BACKEND)
-# simulator.rays.prepare_for_all_rays_at_once()
-# start_time = time.perf_counter()
-# simulator.rays.reset_timing_info()
-# simulator.forward_model(volume, all_lenslets=True)
-# end_time = time.perf_counter()
-# print(f"Forward pass took {end_time - start_time:.2f} seconds to image the volume.")
+# %% Image the volume
+simulator = ForwardModel(optical_system, backend=BACKEND)
+simulator.rays.prepare_for_all_rays_at_once()
+start_time = time.perf_counter()
+simulator.rays.reset_timing_info()
+simulator.forward_model(volume, all_lenslets=True)
+end_time = time.perf_counter()
+print(f"Forward pass took {end_time - start_time:.2f} seconds to image the volume.")
 
-# # %% View timing information
-# simulator.rays.print_timing_info()
+# %% View timing information
+simulator.rays.print_timing_info()
 
-# # %% View the images
-# simulator.view_images()
-# images = simulator.ret_img, simulator.azim_img
+# %% View the images
+simulator.view_images()
+images = simulator.ret_img, simulator.azim_img

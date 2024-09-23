@@ -1,6 +1,6 @@
 {
-    "volume_shape"      : [3, 9, 9],
-    "axial_voxel_size_um"     : 1.0,
+    "volume_shape"      : [21, 31, 31],
+    "axial_voxel_size_um"     : 2.0,
     "cube_voxels"       : true,
     "pixels_per_ml"     : 16,
     "n_micro_lenses"    : 5,
