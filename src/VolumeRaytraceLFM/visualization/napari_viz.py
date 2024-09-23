@@ -161,10 +161,12 @@ def plot_all_vectors(birefringence, optic_axis, viewer = None, colorlims = None,
         # if it is not a vispy colormap, because napari uses vispy colormaps
         vs_cmap = colormap
 
-    if len(um_per_pix) == 3:
+    if isinstance(um_per_pix, (tuple)) and len(um_per_pix) == 3:
         scale3 = um_per_pix
-    else:
+    elif isinstance(um_per_pix, (float,int)):
         scale3 = (um_per_pix,um_per_pix,um_per_pix)
+    else:
+        raise TypeError(f"um_per_pix is niether a tuple with len 3 or a float or int. It is a {type(um_per_pix)} and I'm not sure what to do with this")
 
     all_vectors =  viewer.add_vectors(all_vects,features=all_vects_bir,edge_color='bir',vector_style='line',scale=scale3, edge_contrast_limits=colorlims, edge_colormap=vs_cmap, edge_width=.3,length=75,opacity=.75,blending='opaque')
     return all_vectors
@@ -177,6 +179,7 @@ if __name__ == '__main__':
     print(optic_axis.shape)
     optic_axis = bir_threshold(optic_axis,birefringence)
     plot = plot_all_vectors(birefringence, optic_axis)
+    napari.run()
 
 
 
