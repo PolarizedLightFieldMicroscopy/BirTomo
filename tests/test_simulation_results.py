@@ -40,15 +40,16 @@ def run_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
         vol_args = volume_args.shell_small_args
     else:
         vol_args = volume_args.random_args
-    volume = BirefringentVolume(
-        backend=BACKEND,
-        optical_info=optical_info,
-        volume_creation_args=vol_args,
-    )
-    simulator.rays.prepare_for_all_rays_at_once()
-    simulator.forward_model(volume, all_lenslets=True)
-    # simulator.view_images()
-    images = simulator.ret_img, simulator.azim_img
+    with torch.no_grad():
+        volume = BirefringentVolume(
+            backend=BACKEND,
+            optical_info=optical_info,
+            volume_creation_args=vol_args,
+        )
+        simulator.rays.prepare_for_all_rays_at_once()
+        simulator.forward_model(volume, all_lenslets=True)
+        # simulator.view_images()
+        images = simulator.ret_img, simulator.azim_img
     return images
 
 
@@ -95,3 +96,9 @@ def test_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
     except Exception as e:
         print(f"Failed to compare images: {e}")
         raise
+
+if __name__ == "__main__":
+    from fixtures_optical_info import set_optical_info
+    images = run_simulation("shell_small", [7, 18, 18], 16, 9)
+    filename = generate_filename("shell_small", [7, 18, 18], 16, 9)
+    save_images(images, filename)

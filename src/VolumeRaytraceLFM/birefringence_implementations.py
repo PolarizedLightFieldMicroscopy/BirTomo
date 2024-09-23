@@ -27,6 +27,8 @@ from VolumeRaytraceLFM.volumes.generation import (
 from VolumeRaytraceLFM.volumes.optic_axis import (
     spherical_to_unit_vector_torch,
     unit_vector_to_spherical,
+    fill_vector_based_on_nonaxial,
+    adjust_optic_axis_positive_axial,
 )
 from VolumeRaytraceLFM.jones.jones_calculus import (
     JonesMatrixGenerators,
@@ -330,13 +332,18 @@ class BirefringentVolume(BirefringentElement):
             for i in range(3)
         ]
         [dz, dxy, dxy] = optical_info["voxel_size_um"]
+        use_microns = False
+        if use_microns:
+            volume_size = volume_size_um
+        else:
+            volume_size = optical_info["volume_shape"]
 
         # Sometimes the volume_shape is causing an error when being used as the nticks parameter
         if use_ticks:
             scene_dict = dict(
-                xaxis={"nticks": volume_shape[0], "range": [0, volume_size_um[0]]},
-                yaxis={"nticks": volume_shape[1], "range": [0, volume_size_um[1]]},
-                zaxis={"nticks": volume_shape[2], "range": [0, volume_size_um[2]]},
+                xaxis={"nticks": volume_shape[0], "range": [0, volume_size[0]]},
+                yaxis={"nticks": volume_shape[1], "range": [0, volume_size[1]]},
+                zaxis={"nticks": volume_shape[2], "range": [0, volume_size[2]]},
                 xaxis_title="Axial dimension",
                 aspectratio={
                     "x": volume_size_um[0],
@@ -358,13 +365,16 @@ class BirefringentVolume(BirefringentElement):
 
         # Define grid
         coords = np.indices(np.array(delta_n.shape)).astype(float)
-
+        if use_microns:
+            voxel_length = optical_info["voxel_size_um"]
+        else:
+            voxel_length = [1, 1, 1]
         coords_base = [
-            (coords[i] + 0.5) * optical_info["voxel_size_um"][i] for i in range(3)
+            (coords[i] + 0.5) * voxel_length[i] for i in range(3)
         ]
         coords_tip = [
             (coords[i] + 0.5 + optic_axis[i, ...] * delta_n * 0.75)
-            * optical_info["voxel_size_um"][i]
+            * voxel_length[i]
             for i in range(3)
         ]
 
@@ -717,20 +727,76 @@ class BirefringentVolume(BirefringentElement):
         )
 
     def _init_ellipsoid_or_shell(self, volume_shape, init_mode, init_args):
+        """Initialize the volume with an ellipsoid or shell shape.
+        Args:
+            volume_shape (list): Shape of the volume as [z, y, x] dimensions.
+            init_mode (str): Initialization mode, either ellipsoid or shell.
+            init_args (dict): Arguments for initialization:
+
+        Common to both ellipsoid and shell:
+        - radius (list, optional): Radius in each dimension. 
+          Defaults to [5.5, 5.5, 3.5].
+        - center (list, optional): Center coordinates as fractions of 
+          volume dimensions. Defaults to [0.5, 0.5, 0.5].
+        - delta_n (float, optional): Birefringence value. Defaults to 0.01.
+        - border_thickness (float, optional): Thickness of the border. 
+          Defaults to 1.
+
+        Shell-specific parameters:
+        - tallness (int, optional): Height of the shell along the z-axis (number of voxels). 
+          Defaults to half of radius[0], which is the ellipsoid's z-radius.
+        - highness (int, optional): Height at which the shell is positioned above the 
+          bottom of the volume (in voxels). Defaults to center the shell vertically within the volume.
+        - flip (bool, optional): Whether to flip the shell along the z-axis. When True, 
+          the shell is mirrored vertically. Defaults to False.
+        """
         radius = init_args.get("radius", [5.5, 5.5, 3.5])
         center = init_args.get("center", [0.5, 0.5, 0.5])
         delta_n = init_args.get("delta_n", 0.01)
         alpha = init_args.get("border_thickness", 1)
-        self.voxel_parameters = self.generate_ellipsoid_volume(
-            volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
-        )
-        if init_mode == "shell":
-            self._apply_shell_modification()
 
-    def _apply_shell_modification(self):
-        self.voxel_parameters[0, ...][
-            : self.optical_info["volume_shape"][0] // 2 + 2, ...
-        ] = 0
+        if init_mode == "shell":
+            # How tall is the shell top to bottom?
+            # The tallness is size-like and gets a -1 when doing index math
+            shell_tallness = init_args.get("tallness", int(radius[0] // 2))
+
+            # How high is the shell flying above the bottom of the volume?
+            shell_highness = init_args.get("highness", int((volume_shape[0] - shell_tallness) // 2))
+
+            # Should we flip the shell over?
+            flip = init_args.get("flip", False)
+            if flip:
+                # Change the shell_highness so it is now the distance from top of volume to top of shell.
+                # This way after we flip, it's back to being the distance from the shell to the bottome of the volume
+                shell_highness = volume_shape[0] - shell_tallness - shell_highness
+
+            # Adjust the center position of the ellipse so the shell is eventually centered at max_index/2.
+            center[0] = (shell_tallness - 1 + shell_highness - radius[0]) / (volume_shape[0] - 1)  # calculate center so that the ellipse is in the right spot
+            geo_mean_radius = np.exp(np.mean(np.log(radius))) # take the geometric mean of the radii
+            if geo_mean_radius**2 - 0.5 >= 0:  # protect against the imaginary men
+                center[0] += (geo_mean_radius - np.sqrt(geo_mean_radius**2 - .5)) / (volume_shape[0] - 1)  # add a small shift so that the tip of the ellipse always hits a grid point
+            # Add a small shift so that the tip of the ellipse always hits a grid point
+            #   for larger radius shells, this shift will get smaller
+            else:
+                # If your radius is this small, this adjustment may not help
+                center[0] += 1 / (volume_shape[0] - 1) - np.finfo(float).eps
+
+            # Make the ellipse
+            self.voxel_parameters = self.generate_ellipsoid_volume(
+                volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+            )
+            # Set all voxels that are below the shell_highness to zero birfringence
+            self.voxel_parameters[0, ...][:shell_highness, ...] = 0
+
+            if flip:
+                # Flip the shell along the axial direction
+                self.voxel_parameters = np.flip(self.voxel_parameters, axis=1).copy()
+                # Flip the sign of the x and y components of the optic axis
+                self.voxel_parameters[2:4, ...] = -self.voxel_parameters[2:4, ...]
+        else:
+            self.voxel_parameters = self.generate_ellipsoid_volume(
+                volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+            )
 
     def _set_volume_ref(self):
         volume_ref = BirefringentVolume(
@@ -741,6 +807,7 @@ class BirefringentVolume(BirefringentElement):
         )
         self.Delta_n = volume_ref.Delta_n
         self.optic_axis = volume_ref.optic_axis
+        self.optic_axis = adjust_optic_axis_positive_axial(self.optic_axis)
         if 'voxel_parameters' in self.__dict__:
             self.__dict__.pop('voxel_parameters')
 
@@ -836,9 +903,9 @@ class BirefringentVolume(BirefringentElement):
             indexing="ij",
         )
         # shift to center
-        kk = floor(center[0] * volume_shape[0]) - kk.astype(float)
-        jj = floor(center[1] * volume_shape[1]) - jj.astype(float)
-        ii = floor(center[2] * volume_shape[2]) - ii.astype(float)
+        kk = (center[0] * (volume_shape[0]-1)) - kk.astype(float)
+        jj = (center[1] * (volume_shape[1]-1)) - jj.astype(float)
+        ii = (center[2] * (volume_shape[2]-1)) - ii.astype(float)
 
         # DEBUG: checking the indices
         # np.argwhere(ellipsoid_border == np.min(ellipsoid_border))
@@ -859,9 +926,9 @@ class BirefringentVolume(BirefringentElement):
                 + (jj**2) / (inner_radius[1] ** 2)
                 + (ii**2) / (inner_radius[2] ** 2)
             )
-            inner_mask = np.abs(inner_ellipsoid_border) <= 1
+            inner_mask = np.abs(inner_ellipsoid_border) < 1  # this one is less than so the inverse is >=
         else:
-            ellipsoid_border_mask = np.abs(ellipsoid_border - alpha) <= 1
+            ellipsoid_border_mask = np.abs(ellipsoid_border - alpha) <= 1 # this line feels wierd and maybe should not have the -alpha
 
         vol[0, ...] = ellipsoid_border_mask.astype(float)
         # Compute normals

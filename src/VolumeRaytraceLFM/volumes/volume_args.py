@@ -224,6 +224,22 @@ shell_small_args = {
         "center": [0.5, 0.5, 0.5],
         "delta_n": -0.01,
         "border_thickness": 1,
+        "tallness": 3,
+        "highness": 3,
+        "flip": True,
+    },
+}
+
+shell_big_args = {
+    "init_mode": "shell",
+    "init_args": {
+        "radius": [32, 40, 24],
+        "center": [0.5, 0.5, 0.5],
+        "delta_n": -0.01,
+        "border_thickness": 1,
+        "tallness": 6,
+        # "highness": 8,
+        # "flip": False,
     },
 }
 

@@ -19,15 +19,46 @@ def fill_vector_based_on_nonaxial(axis_full, axis_nonaxial):
     """Function to fill the axial component of the optic axis
     with the square root of the remaining components.
     Args:
-        axis_full (torch.Tensor): The optic axis tensor to be updated.
-        optic_axis_nonaxial (torch.Tensor): The nonaxial components of the optic axis.
+        axis_full (torch.Tensor or np.ndarray): The optic axis tensor to be updated.
+        axis_nonaxial (torch.Tensor or np.ndarray): The nonaxial components of the optic axis.
     """
-    with torch.no_grad():
+    if isinstance(axis_full, torch.Tensor) and isinstance(axis_nonaxial, torch.Tensor):
+        with torch.no_grad():
+            axis_full[1:, :] = axis_nonaxial
+            square_sum = torch.sum(axis_full[1:, :] ** 2, dim=0)
+            axis_full[0, :] = torch.sqrt(1 - square_sum)
+            axis_full[0, torch.isnan(axis_full[0, :])] = 0
+    elif isinstance(axis_full, np.ndarray) and isinstance(axis_nonaxial, np.ndarray):
         axis_full[1:, :] = axis_nonaxial
-        square_sum = torch.sum(axis_full[1:, :] ** 2, dim=0)
-        axis_full[0, :] = torch.sqrt(1 - square_sum)
-        axis_full[0, torch.isnan(axis_full[0, :])] = 0
+        square_sum = np.sum(axis_full[1:, :] ** 2, axis=0)
+        axis_full[0, :] = np.sqrt(1 - square_sum)
+        axis_full[0, np.isnan(axis_full[0, :])] = 0
+    else:
+        raise TypeError("Input arrays must be both torch.Tensor or both np.ndarray")
     return axis_full
+
+
+def adjust_optic_axis_positive_axial(optic_axis):
+    """Adjust the 3D optic axis components so that all have a positive axial component.
+    Args:
+        optic_axis (np.ndarray or torch.Tensor): A 3D array or tensor of
+            shape (3, ...) where optic_axis[0] is the axial (Z) component.
+    Returns:
+        np.ndarray or torch.Tensor: The adjusted optic axis where all
+            axial components (Z) are positive.
+    """
+    if isinstance(optic_axis, torch.Tensor):
+        with torch.no_grad():
+            axial_component = optic_axis[0]
+            negative_mask = axial_component < 0
+            optic_axis[:, negative_mask] *= -1
+    elif isinstance(optic_axis, np.ndarray):
+        axial_component = optic_axis[0]
+        negative_mask = axial_component < 0
+        optic_axis[:, negative_mask] *= -1
+    else:
+        raise TypeError("Input must be either a NumPy array or a PyTorch tensor.")
+    return optic_axis
 
 
 def spherical_to_unit_vector_np(theta, phi):
