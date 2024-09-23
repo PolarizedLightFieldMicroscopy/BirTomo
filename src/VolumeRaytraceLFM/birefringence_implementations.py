@@ -729,10 +729,26 @@ class BirefringentVolume(BirefringentElement):
     def _init_ellipsoid_or_shell(self, volume_shape, init_mode, init_args):
         """Initialize the volume with an ellipsoid or shell shape.
         Args:
-            volume_shape (list): Shape of the volume.
-            init_mode (str): Initialization mode, either 'ellipsoid' or 'shell'.
-            init_args (dict): Arguments for initialization, including
-                radius, center, delta_n, and border_thickness.
+            volume_shape (list): Shape of the volume as [z, y, x] dimensions.
+            init_mode (str): Initialization mode, either ellipsoid or shell.
+            init_args (dict): Arguments for initialization:
+
+        Common to both ellipsoid and shell:
+        - radius (list, optional): Radius in each dimension. 
+          Defaults to [5.5, 5.5, 3.5].
+        - center (list, optional): Center coordinates as fractions of 
+          volume dimensions. Defaults to [0.5, 0.5, 0.5].
+        - delta_n (float, optional): Birefringence value. Defaults to 0.01.
+        - border_thickness (float, optional): Thickness of the border. 
+          Defaults to 1.
+
+        Shell-specific parameters:
+        - tallness (int, optional): Height of the shell along the z-axis (number of voxels). 
+          Defaults to half of radius[0], which is the ellipsoid's z-radius.
+        - highness (int, optional): Height at which the shell is positioned above the 
+          bottom of the volume (in voxels). Defaults to center the shell vertically within the volume.
+        - flip (bool, optional): Whether to flip the shell along the z-axis. When True, 
+          the shell is mirrored vertically. Defaults to False.
         """
         radius = init_args.get("radius", [5.5, 5.5, 3.5])
         center = init_args.get("center", [0.5, 0.5, 0.5])
@@ -742,10 +758,10 @@ class BirefringentVolume(BirefringentElement):
         if init_mode == "shell":
             # How tall is the shell top to bottom?
             # The tallness is size-like and gets a -1 when doing index math
-            shell_tallness = init_args.get("tallness", int(radius[0] // 2))  # A good tallness
+            shell_tallness = init_args.get("tallness", int(radius[0] // 2))
 
-            # How high is the shell flying above the bottom of the volume
-            shell_highness = init_args.get("highness", int((volume_shape[0] - shell_tallness) // 2))  # Centered in the volume.
+            # How high is the shell flying above the bottom of the volume?
+            shell_highness = init_args.get("highness", int((volume_shape[0] - shell_tallness) // 2))
 
             # Should we flip the shell over?
             flip = init_args.get("flip", False)
@@ -754,27 +770,28 @@ class BirefringentVolume(BirefringentElement):
                 # This way after we flip, it's back to being the distance from the shell to the bottome of the volume
                 shell_highness = volume_shape[0] - shell_tallness - shell_highness
 
-            # Adjust the center of the ellipse so the shell is centered at max_index/2
-            center[0] = (shell_tallness - 1 + shell_highness - radius[0]) / (volume_shape[0] - 1)  # calculate center so that the ellipse is in the right spot
+            # Adjust the center position of the ellipse so the shell is eventually centered at max_index/2.
+            center[0] = (shell_tallness - 1 + shell_highness - radius[0]) / (volume_shape[0] - 1)
             if radius[0]**2 - 0.5 >= 0:  # protect against the imaginary men
-                center[0] += (radius[0] - np.sqrt(radius[0]**2 - 0.5)) / (volume_shape[0] - 1)  # add a small shift so that the tip of the ellipse always hits a grid point
-                # for larger radius shells, this shift will get smaller
+                # Add a small shift so that the tip of the ellipse always hits a grid point
+                #   for larger radius shells, this shift will get smaller
+                center[0] += (radius[0] - np.sqrt(radius[0]**2 - 0.5)) / (volume_shape[0] - 1)
             else:
-                center[0] += 1 / (volume_shape[0] - 1) - np.finfo(float).eps  # if your radius is this small, I'm not sure even this will help
+                # If your radius is this small, this adjustment may not help
+                center[0] += 1 / (volume_shape[0] - 1) - np.finfo(float).eps
 
             # Make the elipse
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
-            # set all voxels that are below the shell_highness to zero birfringence
-            self.voxel_parameters[0, ...][
-                : shell_highness, ...
-                ] = 0
+            # Set all voxels that are below the shell_highness to zero birfringence
+            self.voxel_parameters[0, ...][:shell_highness, ...] = 0
 
-            # Flip the shell if needed
             if flip:
-                self.voxel_parameters = np.flip(self.voxel_parameters,axis=1).copy() # flip the z axis
-                self.voxel_parameters[(2,3),...] = -self.voxel_parameters[(2,3),...] # flip the sign of the x and y componets
+                # Flip the shell along the axial direction
+                self.voxel_parameters = np.flip(self.voxel_parameters, axis=1).copy()
+                # Flip the sign of the x and y components of the optic axis
+                self.voxel_parameters[2:4, ...] = -self.voxel_parameters[2:4, ...]
         else:
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
