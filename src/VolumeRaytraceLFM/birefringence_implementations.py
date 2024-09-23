@@ -738,33 +738,29 @@ class BirefringentVolume(BirefringentElement):
         center = init_args.get("center", [0.5, 0.5, 0.5])
         delta_n = init_args.get("delta_n", 0.01)
         alpha = init_args.get("border_thickness", 1)
-        
-        self.voxel_parameters = self.generate_ellipsoid_volume(
-            volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
-        )
-        
+
         if init_mode == "shell":
-            # how tall is the shell top to botom? 
-            # the tallness is size like and gets a -1 when doing index maths
-            shell_tallness = init_args.get("tallness", int(radius[0]//2)) # a good tallness
-            
-            # how high is the shell flying above the bottom of the volume
-            shell_highness = init_args.get("highness",int((volume_shape[0]-shell_tallness)//2)) # centered in the volume.
-            
-            # should we flip the shell over?
+            # How tall is the shell top to bottom?
+            # The tallness is size-like and gets a -1 when doing index math
+            shell_tallness = init_args.get("tallness", int(radius[0] // 2))  # A good tallness
+
+            # How high is the shell flying above the bottom of the volume
+            shell_highness = init_args.get("highness", int((volume_shape[0] - shell_tallness) // 2))  # Centered in the volume.
+
+            # Should we flip the shell over?
             flip = init_args.get("flip", False)
             if flip:
-                # change the shell_highness so it is now the distance from top of volume to top of shell.
-                # that way after we flip, its back to being the distance from the shell to the bottome of the volume
+                # Change the shell_highness so it is now the distance from top of volume to top of shell.
+                # This way after we flip, it's back to being the distance from the shell to the bottome of the volume
                 shell_highness = volume_shape[0] - shell_tallness - shell_highness
 
-            # adjust the center of the elipse so the shell is centered at max_index/2
-            center = [(shell_tallness-1+shell_highness-radius[0])/(volume_shape[0]-1), center[1], center[2]]  # calculate center so that the elipse is in the right spot
-            if radius[0]**2-.5 >=0: # protect against the imaginary men
-                center = [center[0]+(radius[0]-np.sqrt(radius[0]**2-.5))/(volume_shape[0]-1), center[1], center[2]] # add a small shift so that the tip of the elipse always hits a grid point
+            # Adjust the center of the ellipse so the shell is centered at max_index/2
+            center[0] = (shell_tallness - 1 + shell_highness - radius[0]) / (volume_shape[0] - 1)  # calculate center so that the ellipse is in the right spot
+            if radius[0]**2 - 0.5 >= 0:  # protect against the imaginary men
+                center[0] += (radius[0] - np.sqrt(radius[0]**2 - 0.5)) / (volume_shape[0] - 1)  # add a small shift so that the tip of the ellipse always hits a grid point
                 # for larger radius shells, this shift will get smaller
-            else: 
-                center = [center[0]+1/(volume_shape[0]-1)-np.finfo(float).eps] # if your radius is this small im not sure even this will help
+            else:
+                center[0] += 1 / (volume_shape[0] - 1) - np.finfo(float).eps  # if your radius is this small, I'm not sure even this will help
 
             # Make the elipse
             self.voxel_parameters = self.generate_ellipsoid_volume(
@@ -772,46 +768,17 @@ class BirefringentVolume(BirefringentElement):
             )
             # set all voxels that are below the shell_highness to zero birfringence
             self.voxel_parameters[0, ...][
-            : shell_highness, ...
-            ] = 0
+                : shell_highness, ...
+                ] = 0
 
+            # Flip the shell if needed
             if flip:
                 self.voxel_parameters = np.flip(self.voxel_parameters,axis=1).copy() # flip the z axis
                 self.voxel_parameters[(2,3),...] = -self.voxel_parameters[(2,3),...] # flip the sign of the x and y componets
-
-
-            # expanded_shape = [2 * volume_shape[0], volume_shape[1], volume_shape[2]]
-            # self.voxel_parameters = self.generate_ellipsoid_volume(
-            #     expanded_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
-            # )
-            
-            # self._apply_shell_modification(radius, shell_highness)
-
-    # def _apply_shell_modification(self, radius, shell_highness):
-    #     vol_shape = self.optical_info["volume_shape"]
-    #     # removal_amount = vol_shape[0] + int(radius[0] // 2)
-    #     # removal_amount = 0
-    #     removal_amount = shell_highness
-
-    #     # set all voxels to zero that are below the 
-    #     # removal_amount hight on the optical axis
-    #     self.voxel_parameters[0, ...][
-    #         : removal_amount, ...
-    #         ] = 0
-        # Shift the nonzero contents along the z-axis
-        # shift = - vol_shape[0] // 4 - int(radius[0] // 2)
-        # shift = - round((radius[0] + radius[0] / 2) / 2)
-        # shifted_voxel_parameters = np.roll(self.voxel_parameters, shift=shift, axis=1)
-        # self.voxel_parameters = shifted_voxel_parameters
-        # # volume_shape = self.optical_info["volume_shape"]
-        # # z_center = volume_shape[0] // 2
-        
-        # # # Ensure the shift does not go out of bounds
-        # # z_start = max(0, z_center - volume_shape[0] // 2)
-        # # z_end = min(volume_shape[0], z_center + volume_shape[0] // 2 + 1)
-        # start_z = vol_shape[0] // 2
-        # end_z = start_z + vol_shape[0]
-        # self.voxel_parameters = self.voxel_parameters[:, start_z:end_z, ...]
+        else:
+            self.voxel_parameters = self.generate_ellipsoid_volume(
+                volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+            )
 
     def _set_volume_ref(self):
         volume_ref = BirefringentVolume(
