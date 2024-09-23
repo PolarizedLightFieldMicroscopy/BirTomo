@@ -746,14 +746,13 @@ class BirefringentVolume(BirefringentElement):
         if init_mode == "shell":
             # how tall is the shell top to botom? 
             # the tallness is size like and gets a -1 when doing index maths
-            shell_tallness = int(radius[0]//2) # a good tallness
-            shell_tallness = 4
+            shell_tallness = init_args.get("tallness", int(radius[0]//2)) # a good tallness
+            
             # how high is the shell flying above the bottom of the volume
-            shell_highness = int((volume_shape[0]-shell_tallness)//2) # centered in the volume.
-            shell_highness = 3
+            shell_highness = init_args.get("highness",int((volume_shape[0]-shell_tallness)//2)) # centered in the volume.
             
             # should we flip the shell over?
-            flip = True
+            flip = init_args.get("flip", False)
             if flip:
                 # change the shell_highness so it is now the distance from top of volume to top of shell.
                 # that way after we flip, its back to being the distance from the shell to the bottome of the volume
@@ -767,20 +766,16 @@ class BirefringentVolume(BirefringentElement):
             else: 
                 center = [center[0]+1/(volume_shape[0]-1)-np.finfo(float).eps] # if your radius is this small im not sure even this will help
 
-
-            
+            # Make the elipse
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
-            # set all voxels to zero that are below the 
-            # shell_highness
+            # set all voxels that are below the shell_highness to zero birfringence
             self.voxel_parameters[0, ...][
             : shell_highness, ...
             ] = 0
-            # print(self.voxel_parameters.shape)
 
             if flip:
-                # self.voxel_parameters[0, ...] = self.voxel_parameters[0, ...][::-1, ...]
                 self.voxel_parameters = np.flip(self.voxel_parameters,axis=1).copy() # flip the z axis
                 self.voxel_parameters[(2,3),...] = -self.voxel_parameters[(2,3),...] # flip the sign of the x and y componets
 
