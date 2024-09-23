@@ -23,8 +23,6 @@ def bir_threshold(optic_axis,birefringence, threshold = .001):
 def move_comps_to_end(optic_axis):
     return np.moveaxis(optic_axis, 0, -1)
     
-    
-
 def to_Nx2xD(img_like_vect, birefringence = None, omit_zeros = False):
     dims = np.array(img_like_vect.shape)
     N = np.prod(dims[:-1])
@@ -168,9 +166,42 @@ def plot_all_vectors(birefringence, optic_axis, viewer = None, colorlims = None,
     else:
         raise TypeError(f"um_per_pix is niether a tuple with len 3 or a float or int. It is a {type(um_per_pix)} and I'm not sure what to do with this")
 
-    all_vectors =  viewer.add_vectors(all_vects,features=all_vects_bir,edge_color='bir',vector_style='line',scale=scale3, edge_contrast_limits=colorlims, edge_colormap=vs_cmap, edge_width=.3,length=75,opacity=.75,blending='opaque')
+    all_vectors =  viewer.add_vectors(all_vects,features=all_vects_bir,edge_color='bir',vector_style='line',scale=scale3, edge_contrast_limits=colorlims, edge_colormap=vs_cmap, edge_width=.3,length=1,opacity=.75,blending='opaque')
     return all_vectors
 
+
+def plot_sliced_vectors(birefringence, optic_axis, viewer = None, colorlims = None, colormap = 'viridis_r', um_per_pix = 1.7333):
+        
+    # reshape the image like numpy arrays into a list of vectors and positions that napari wants
+    sliced_vects , sliced_bir= to_Nx2xD_z_slice(optic_axis, birefringence=birefringence, omit_zeros=True)
+    
+    # open up a new viewer if we dont have a current viewer
+    if viewer is None:
+        viewer = open_viewer()
+    
+    # set the
+    if colorlims is None:
+        colorlims = (.000,np.max(birefringence))
+
+    if type(colormap) is str:
+        # treat colormap as the name of the colormap
+        # and load it as a vispy colormap
+        vs_cmap = vs.color.colormap.MatplotlibColormap(colormap)
+    else:
+        # try treating the colormap as an existing colormap 
+        # and send it to napari as is. This likly will not work 
+        # if it is not a vispy colormap, because napari uses vispy colormaps
+        vs_cmap = colormap
+
+    if isinstance(um_per_pix, (tuple)) and len(um_per_pix) == 3:
+        scale4 = (um_per_pix[0],)+um_per_pix
+    elif isinstance(um_per_pix, (float,int)):
+        scale4 = (um_per_pix,um_per_pix,um_per_pix,um_per_pix)
+    else:
+        raise TypeError(f"um_per_pix is niether a tuple with len 3 or a float or int. It is a {type(um_per_pix)} and I'm not sure what to do with this")
+
+    sliced_vectors = viewer.add_vectors(sliced_vects,features=sliced_bir,edge_color='bir',vector_style='line',scale=scale4, edge_contrast_limits=colorlims, edge_colormap=vs_cmap, edge_width=.3,length=1,opacity=1,blending='opaque')
+    return sliced_vectors
 
 
 if __name__ == '__main__':
@@ -178,7 +209,7 @@ if __name__ == '__main__':
     print(birefringence.shape)
     print(optic_axis.shape)
     optic_axis = bir_threshold(optic_axis,birefringence)
-    plot = plot_all_vectors(birefringence, optic_axis)
+    plot = plot_sliced_vectors(birefringence, optic_axis)
     napari.run()
 
 
