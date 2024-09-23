@@ -96,3 +96,9 @@ def test_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
     except Exception as e:
         print(f"Failed to compare images: {e}")
         raise
+
+if __name__ == "__main__":
+    from fixtures_optical_info import set_optical_info
+    images = run_simulation("shell_small", [7, 18, 18], 16, 9)
+    filename = generate_filename("shell_small", [7, 18, 18], 16, 9)
+    save_images(images, filename)
