@@ -1184,12 +1184,12 @@ class Reconstructor:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode="min",
-            factor=0.5,
+            factor=0.2,
             patience=10,
             threshold=1e-4,
             threshold_mode="rel",
             cooldown=0,
-            min_lr=1e-6,
+            min_lr=1e-8,
             eps=1e-8,
         )
         figure = setup_visualization(
