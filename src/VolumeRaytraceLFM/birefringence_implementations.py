@@ -771,16 +771,17 @@ class BirefringentVolume(BirefringentElement):
                 shell_highness = volume_shape[0] - shell_tallness - shell_highness
 
             # Adjust the center position of the ellipse so the shell is eventually centered at max_index/2.
-            center[0] = (shell_tallness - 1 + shell_highness - radius[0]) / (volume_shape[0] - 1)
-            if radius[0]**2 - 0.5 >= 0:  # protect against the imaginary men
-                # Add a small shift so that the tip of the ellipse always hits a grid point
-                #   for larger radius shells, this shift will get smaller
-                center[0] += (radius[0] - np.sqrt(radius[0]**2 - 0.5)) / (volume_shape[0] - 1)
+            center[0] = (shell_tallness - 1 + shell_highness - radius[0]) / (volume_shape[0] - 1)  # calculate center so that the ellipse is in the right spot
+            geo_mean_radius = np.exp(np.mean(np.log(radius))) # take the geometric mean of the radii
+            if geo_mean_radius**2 - 0.5 >= 0:  # protect against the imaginary men
+                center[0] += (geo_mean_radius - np.sqrt(geo_mean_radius**2 - .5)) / (volume_shape[0] - 1)  # add a small shift so that the tip of the ellipse always hits a grid point
+            # Add a small shift so that the tip of the ellipse always hits a grid point
+            #   for larger radius shells, this shift will get smaller
             else:
                 # If your radius is this small, this adjustment may not help
                 center[0] += 1 / (volume_shape[0] - 1) - np.finfo(float).eps
 
-            # Make the elipse
+            # Make the ellipse
             self.voxel_parameters = self.generate_ellipsoid_volume(
                 volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
             )
