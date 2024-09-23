@@ -393,6 +393,8 @@ class Reconstructor:
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
         self.adjusted_lrs_list = []
+
+        self.to_device(device)
         end_time = time.perf_counter()
         print(f"Reconstructor initialized in {end_time - start_time:.2f} seconds\n")
 
@@ -415,9 +417,7 @@ class Reconstructor:
             raise TypeError("Image must be a PyTorch Tensor or a numpy array")
 
     def to_device(self, device):
-        """
-        Move all tensors to the specified device.
-        """
+        """Move all tensors to the specified device."""
         self.ret_img_meas = torch.from_numpy(self.ret_img_meas).to(device)
         self.azim_img_meas = torch.from_numpy(self.azim_img_meas).to(device)
         # self.volume_initial_guess = self.volume_initial_guess.to(device)
@@ -726,10 +726,13 @@ class Reconstructor:
         regularization_term = params["regularization_weight"] * reg_loss
         self.reg_term_values = [reg.item() for reg in reg_term_values]
 
-        # Total loss
+        # Total loss (which has gradients enabled)
         loss = data_term + regularization_term
 
-        return loss, data_term, regularization_term
+        data_term_no_grad = data_term.detach()
+        regularization_term_no_grad = regularization_term.detach()
+
+        return loss, data_term_no_grad, regularization_term_no_grad
 
     def keep_optic_axis_on_sphere(self, volume):
         """Method to keep the optic axis on the unit sphere."""
@@ -947,8 +950,12 @@ class Reconstructor:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             else:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
-            mip_image = convert_volume_to_2d_mip(Delta_n)
-            mip_image_np = prepare_plot_mip(mip_image, plot=False)
+            vol_size_um = self.optical_info["voxel_size_um"]
+            rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
+            mip_image = convert_volume_to_2d_mip(
+                Delta_n, scaling_factors=(1, 1, rel_scaling_factor)
+            )
+            mip_image_np = prepare_plot_mip(mip_image, plot=True)
             plot_iteration_update_gridspec(
                 self.birefringence_mip_sim,
                 self.ret_img_meas,
@@ -967,7 +974,7 @@ class Reconstructor:
             self.save_loss_lists_to_csv()
             self._save_regularization_terms_to_csv(ep)
             if ep % save_freq == 0:
-                filename = f"optim_ep_{'{:04d}'.format(ep)}.pdf"
+                filename = f"optim_iter_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
             time.sleep(0.1)
         if ep % save_freq == 0:
@@ -996,7 +1003,7 @@ class Reconstructor:
                         ] = volume_estimation.optic_axis_active
             my_description = "Volume estimation after " + str(ep) + " iterations."
             volume_estimation.save_as_file(
-                os.path.join(output_dir, f"volume_ep_{'{:04d}'.format(ep)}.h5"),
+                os.path.join(output_dir, f"volume_iter_{'{:04d}'.format(ep)}.h5"),
                 description=my_description,
             )
             if self.remove_large_arrs:
@@ -1144,6 +1151,7 @@ class Reconstructor:
         print(f"Beginning reconstruction iterations...")
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
+        self.rays.verbose = False
 
         # Specify variables to learn
         if all_prop_elements:
@@ -1176,12 +1184,12 @@ class Reconstructor:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode="min",
-            factor=0.5,
+            factor=0.2,
             patience=10,
             threshold=1e-4,
             threshold_mode="rel",
             cooldown=0,
-            min_lr=1e-6,
+            min_lr=1e-8,
             eps=1e-8,
         )
         figure = setup_visualization(
@@ -1285,7 +1293,7 @@ class Reconstructor:
 
         my_description = "Volume estimation after " + str(ep) + " iterations."
         vol_save_path = os.path.join(
-            self.recon_directory, f"volume_ep_{'{:04d}'.format(ep)}.h5"
+            self.recon_directory, f"volume_iter_{'{:04d}'.format(ep)}.h5"
         )
         self.volume_pred.save_as_file(vol_save_path, description=my_description)
         print("Saved the final volume estimation to", vol_save_path)

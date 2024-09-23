@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import time
 
 
 def vox_ray_ret_azim_numpy(bir, optic_axis, rayDir, ell, wavelength):
