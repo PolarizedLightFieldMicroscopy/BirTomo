@@ -2,17 +2,28 @@ import napari
 # from napari_animation import Animation
 import numpy as np
 import matplotlib as mpl
-# import vispy as vs
+import vispy as vs
 
 
-def load_from_numpy(file)
-filename_npz = r"samples\celery_30_60_140_from2024-05-15_17-40-05_random1.npz"
+def load_from_numpy(file_path):
+    '''Load the birfingence and optic axis data from a npz file'''
+    # file_path = r"samples\celery_30_60_140_from2024-05-15_17-40-05_random1.npz"
+    npz = np.load(file_path)
+    birefringence = npz['birefringence']
+    optic_axis = move_comps_to_end(npz['optic_axis'])
+    return birefringence, optic_axis
 
-npz = np.load(filename_npz)
-birefringence = npz['birefringence']
-print(birefringence.shape)
-optic_axis = npz['optic_axis']
-print(optic_axis.shape)
+def bir_threshold(optic_axis,birefringence, threshold = .001):
+    ## make adjust data for ploting in napari
+    # no_birefringence = np.abs(birefringence)<=np.percentile(np.abs(birefringence),95)
+    no_birefringence = np.abs(birefringence)<= threshold
+    optic_axis[no_birefringence] = 0
+    return optic_axis
+
+def move_comps_to_end(optic_axis):
+    return np.moveaxis(optic_axis, 0, -1)
+    
+    
 
 def to_Nx2xD(img_like_vect, birefringence = None, omit_zeros = False):
     dims = np.array(img_like_vect.shape)
@@ -117,62 +128,71 @@ def to_Nx2xD_z_slice(img_like_vect,birefringence = None, omit_zeros = False):
 
 
 
-## make adjust data for ploting in napari
-# no_birefringence = np.abs(birefringence)<=np.percentile(np.abs(birefringence),95)
-no_birefringence = np.abs(birefringence)<=.004
-# optic_axis[:,no_birefringence] = 0
-# optic_axis = optic_axis[(1,0,2),...]
-
- 
-scaled_optic_axis = np.moveaxis(optic_axis, 0, -1)/50
-#scaled_optic_axis = optic_axis*birefringence[...,None]
-cropped_optic_axis = scaled_optic_axis.copy()
-cropped_optic_axis[no_birefringence] = 0
-print(optic_axis.shape)
 
 
-try:
-    viewer.close()
-except:
-    pass
-viewer = napari.Viewer(ndisplay = 3)
-viewer.scale_bar.visible = True
-viewer.scale_bar.unit = 'um'
-viewer.axes.visible = True
-viewer.axes.colored = False
+def open_viewer():
+    viewer = napari.Viewer(ndisplay = 3)
+    viewer.scale_bar.visible = True
+    viewer.scale_bar.unit = 'um'
+    viewer.axes.visible = True
+    viewer.axes.colored = False
+    return viewer
 
-# viewer.camera.center = (6.010516271530067, 24.03894291060031, 24.387673477990198)
-# viewer.camera.zoom =18.459796839714024
-# viewer.perspective = 0
+def plot_all_vectors(birefringence, optic_axis, viewer = None, colorlims = None, colormap = 'viridis_r', um_per_pix = 1.7333):
+        
+    # reshape the image like numpy arrays into a list of vectors and positions that napari wants
+    all_vects , all_vects_bir= to_Nx2xD(optic_axis, birefringence=birefringence, omit_zeros=True)
+    
+    # open up a new viewer if we dont have a current viewer
+    if viewer is None:
+        viewer = open_viewer()
+    
+    # set the
+    if colorlims is None:
+        colorlims = (.000,np.max(birefringence))
 
-viewer.axes
+    if type(colormap) is str:
+        # treat colormap as the name of the colormap
+        # and load it as a vispy colormap
+        vs_cmap = vs.color.colormap.MatplotlibColormap(colormap)
+    else:
+        # try treating the colormap as an existing colormap 
+        # and send it to napari as is. This likly will not work 
+        # if it is not a vispy colormap, because napari uses vispy colormaps
+        vs_cmap = colormap
 
-# viewer.dims.ndisplay = 3
+    if len(um_per_pix) == 3:
+        scale3 = um_per_pix
+    else:
+        scale3 = (um_per_pix,um_per_pix,um_per_pix)
+
+    all_vectors =  viewer.add_vectors(all_vects,features=all_vects_bir,edge_color='bir',vector_style='line',scale=scale3, edge_contrast_limits=colorlims, edge_colormap=vs_cmap, edge_width=.3,length=75,opacity=.75,blending='opaque')
+    return all_vectors
 
 
 
+if __name__ == '__main__':
+    birefringence, optic_axis = load_from_numpy(r"C:\Users\trevo\Desktop\celery_30_60_140_from2024-05-15_17-40-05_random1.npz")
+    print(birefringence.shape)
+    print(optic_axis.shape)
+    optic_axis = bir_threshold(optic_axis,birefringence)
+    plot = plot_all_vectors(birefringence, optic_axis)
 
-all_vects , all_vects_bir= to_Nx2xD(cropped_optic_axis, birefringence=birefringence, omit_zeros=True)
+
+
 # sliced_vects , sliced_vects_bir= to_Nx2xD_z_slice(cropped_optic_axis,birefringence=birefringence, omit_zeros=True)
 
-colorlims = (.000,np.max(birefringence))
-colormap_name = 'viridis_r'
-vs_cmap = vs.color.colormap.MatplotlibColormap(colormap_name)
-# print(colormap.shape())
 
-um_per_pix = 1.7333333333
-scale3 = (um_per_pix,um_per_pix,um_per_pix)
-scale4 = (1,um_per_pix,um_per_pix,um_per_pix)
 
 # sliced_vs = viewer.add_vectors(sliced_vects,features=sliced_vects_bir,edge_color='bir',vector_style='line', scale=scale4, edge_width=.1,length=50,opacity=1,blending='additive')
 # all_vs = viewer.add_vectors(all_vects,features=all_vects_bir,edge_color='bir',vector_style='line',scale=scale3, edge_width=.1,length=50,opacity=.1,blending='additive')
-all_vs = viewer.add_vectors(all_vects,features=all_vects_bir,edge_color='bir',vector_style='line',scale=scale3, edge_contrast_limits=colorlims, edge_colormap=vs_cmap, edge_width=.3,length=75,opacity=.75,blending='opaque')
 
 
-viewer.camera.angles = (13.407327806969164, -34.44222242422218, 160.20054598704667)
+
+# viewer.camera.angles = (13.407327806969164, -34.44222242422218, 160.20054598704667)
 
 # napari.utils.colormaps.colorbar()
-
+'''
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
@@ -193,3 +213,4 @@ fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=mpl_cmap),
 ticks = np.linspace(0,.016,5)
 tick_labels = [f'{tick}' for tick in ticks]
 ax.set_xticks(ticks,tick_labels)
+'''
