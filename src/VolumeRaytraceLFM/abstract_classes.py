@@ -477,8 +477,8 @@ class RayTraceLFM(OpticalElement):
                                     pixel behind each lenslet
             naObj (float): numerical aperture of the objective lens
             nMedium (float): refractive index of the volume
-            volume_ctr_um (np.array): 3D vector containing the coordinates of the center of the
-                                volume in volume space units (um)
+            volume_ctr_um (np.array): 3D vector containing the coordinates of the center
+                                        of the volume in volume space units (um)
         Returns:
             ray_enter (np.array): (3, X, X) array where (3, i, j) gives the coordinates
                                     within the volume ray entrance plane for which the
@@ -909,8 +909,7 @@ class RayTraceLFM(OpticalElement):
                 )
 
     def compute_ray_collisions(self, ray_enter, ray_exit, voxel_size_um, vol_shape):
-        """
-        Computes parameters for collisions of rays with voxels.
+        """Computes parameters for collisions of rays with voxels.
         For each ray defined by start (ray_enter) and end (ray_exit) points,
         calculates the intersected voxels and lengths of intersections within
         a volume of given shape (vol_shape) and voxel size (voxel_size_um).
