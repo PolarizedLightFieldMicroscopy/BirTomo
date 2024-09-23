@@ -1,5 +1,5 @@
 {
-    "n_epochs": 10,
+    "n_epochs": 100,
     "regularization_weight": 0.5,
     "lr": 1e-3,
     "lr_birefringence": 1e-3,
@@ -10,7 +10,7 @@
     "datafidelity": "euler",
     "regularization_fcns": [
         ["birefringence active L2", 10000],
-        ["birefringence active negative penalty", 1000000]
+        ["birefringence active negative penalty", 1000]
     ],
     "nerf_mode": false,
     "from_simulation": false,
