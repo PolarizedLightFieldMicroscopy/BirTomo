@@ -131,6 +131,6 @@ if __name__ == "__main__":
     init_vol_path = None
     recon_spicule(
         init_vol_path,
-        "debug",
+        "axial_voxels",
         load_rays=True
     )
