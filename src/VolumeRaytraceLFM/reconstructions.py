@@ -277,20 +277,26 @@ class Reconstructor:
         self.intensity_imgs_meas = recon_info.intensity_img_list
         self.recon_directory = recon_info.recon_directory
         if self.volume_ground_truth is not None:
-            self.birefringence_simulated = (
+            birefringence_simulated = (
                 self.volume_ground_truth.get_delta_n().detach()
-            )
+            )   
+            vol_size_um = self.volume_ground_truth.optical_info["voxel_size_um"]
+            rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
-                self.birefringence_simulated.unsqueeze(0)
+                birefringence_simulated.unsqueeze(0),
+                scaling_factors=(1, 1, rel_scaling_factor)
             )
             self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
         else:
             # Use the initial volume as a placeholder for plotting purposes
-            self.birefringence_simulated = (
+            birefringence_initial = (
                 self.volume_initial_guess.get_delta_n().detach()
             )
+            vol_size_um = self.volume_initial_guess.optical_info["voxel_size_um"]
+            rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
-                self.birefringence_simulated.unsqueeze(0)
+                birefringence_initial.unsqueeze(0),
+                scaling_factors=(1, 1, rel_scaling_factor)
             )
             self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
         if self.intensity_imgs_meas:
@@ -376,7 +382,7 @@ class Reconstructor:
         self.apply_mask_to_volume(self.volume_pred)
 
         if self.remove_large_arrs:
-            del self.birefringence_simulated
+            pass
             gc.collect()
 
         datafidelity_method = self.iteration_params.get("datafidelity", "vector")
@@ -1184,7 +1190,7 @@ class Reconstructor:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode="min",
-            factor=0.2,
+            factor=0.8,
             patience=10,
             threshold=1e-4,
             threshold_mode="rel",
