@@ -48,7 +48,15 @@ from VolumeRaytraceLFM.combine_lenslets import (
     calculate_offsets_vectorized,
 )
 from VolumeRaytraceLFM.utils.mask_utils import get_bool_mask_for_ray_indices
-
+from VolumeRaytraceLFM.visualization.prep_plotly import (
+    initialize_figure,
+    get_vol_shape_and_size,
+    prepare_scene,
+    get_base_tip_coordinates,
+    get_coords,
+    apply_mask_and_nan,
+    check_non_zero_values,
+)
 
 DEBUG = False
 if DEBUG:
@@ -310,86 +318,27 @@ class BirefringentVolume(BirefringentElement):
         delta_n = self.get_delta_n() * 1
         optic_axis = self.get_optic_axis() * 1
         optical_info = self.optical_info
-        # Check if this is a torch tensor
         if not isinstance(delta_n, np.ndarray):
-            try:
-                delta_n = delta_n.cpu().detach().numpy()
-                optic_axis = optic_axis.cpu().detach().numpy()
-            except:
-                pass
+            delta_n = delta_n.cpu().detach().numpy()
+            optic_axis = optic_axis.cpu().detach().numpy()
         delta_n /= np.max(np.abs(delta_n))
         delta_n[np.abs(delta_n) < delta_n_ths] = 0
 
-        import plotly.graph_objects as go
+        volume_shape, volume_size, voxel_size_um = get_vol_shape_and_size(optical_info, use_microns)
 
-        volume_shape = optical_info["volume_shape"]
-        if "voxel_size_um" not in optical_info:
-            optical_info["voxel_size_um"] = [1, 1, 1]
-            print(
-                "Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned."
-            )
-        volume_size_um = [
-            optical_info["voxel_size_um"][i] * optical_info["volume_shape"][i]
-            for i in range(3)
-        ]
-        [dz, dxy, dxy] = optical_info["voxel_size_um"]
-        if use_microns:
-            volume_size = volume_size_um
-        else:
-            volume_size = optical_info["volume_shape"]
-
-        # Sometimes the volume_shape is causing an error when being used as the nticks parameter
-        if use_ticks:
-            scene_dict = dict(
-                xaxis={"nticks": volume_shape[0], "range": [0, volume_size[0]]},
-                yaxis={"nticks": volume_shape[1], "range": [0, volume_size[1]]},
-                zaxis={"nticks": volume_shape[2], "range": [0, volume_size[2]]},
-                xaxis_title="Axial dimension",
-                aspectratio={
-                    "x": volume_size[0],
-                    "y": volume_size[1],
-                    "z": volume_size[2],
-                },
-                aspectmode="manual",
-            )
-        else:
-            scene_dict = dict(
-                xaxis_title="Axial dimension",
-                aspectratio={
-                    "x": volume_size[0],
-                    "y": volume_size[1],
-                    "z": volume_size[2],
-                },
-                aspectmode="manual",
-            )
+        scene_dict = prepare_scene(volume_shape, volume_size, use_ticks)
 
         # Define grid
-        coords = np.indices(np.array(delta_n.shape)).astype(float)
-        if use_microns:
-            voxel_length = optical_info["voxel_size_um"]
-        else:
-            voxel_length = [1, 1, 1]
-        coords_base = [
-            (coords[i] + 0.5) * voxel_length[i] for i in range(3)
-        ]
-        coords_tip = [
-            (coords[i] + 0.5 + optic_axis[i, ...] * delta_n * 0.75)
-            * voxel_length[i]
-            for i in range(3)
-        ]
+        coords_base, coords_tip = get_base_tip_coordinates(optic_axis, delta_n, volume_shape, voxel_size_um)
 
         # Plot single line per voxel, where it's length is delta_n
         z_base, y_base, x_base = coords_base
         z_tip, y_tip, x_tip = coords_tip
 
         # Don't plot zero values
-        mask = delta_n == 0
-        x_base[mask] = np.nan
-        y_base[mask] = np.nan
-        z_base[mask] = np.nan
-        x_tip[mask] = np.nan
-        y_tip[mask] = np.nan
-        z_tip[mask] = np.nan
+        coords_base, coords_tip = apply_mask_and_nan(coords_base, coords_tip, delta_n)
+        z_base, y_base, x_base = coords_base
+        z_tip, y_tip, x_tip = coords_tip
 
         # Gather all rays in single arrays, to plot them all at once, placing NAN in between them
         array_size = 3 * len(x_base.flatten())
@@ -406,7 +355,8 @@ class BirefringentVolume(BirefringentElement):
         all_z[::3] = z_base.flatten()
         all_z[1::3] = z_tip.flatten()
         all_z[2::3] = np.nan
-        # Compute colors
+
+        # Prepare line color
         all_color = np.empty((array_size))
         all_color[::3] = (
             (x_base - x_tip).flatten() ** 2
@@ -423,14 +373,13 @@ class BirefringentVolume(BirefringentElement):
             + "BirefringentVolume was cropped to fit into a region, the non-zero values "
             + "may no longer be included."
         )
-        assert any(all_color != 0), err
+        check_non_zero_values(all_color, err)
 
         all_color[all_color != 0] -= all_color[all_color != 0].min()
         all_color += 0.5
         all_color /= all_color.max()
 
-        if fig is None:
-            fig = go.Figure()
+        fig = initialize_figure(fig)
         fig.add_scatter3d(
             z=all_x,
             y=all_y,
@@ -476,43 +425,20 @@ class BirefringentVolume(BirefringentElement):
         voxels = voxels_in * 1.0
         # Check if this is a torch tensor
         if not isinstance(voxels_in, np.ndarray):
-            try:
-                voxels = voxels.detach()
-                voxels = voxels.cpu().abs().numpy()
-            except:
-                pass
+            voxels = voxels.detach().cpu().numpy()
         voxels = np.abs(voxels)
         err = (
             "The set of voxels are expected to have non-zeros values. If the "
             + "BirefringentVolume was cropped to fit into a region, the non-zero values "
             + "may no longer be included."
         )
-        assert voxels.any(), err
+        check_non_zero_values(voxels, err)
 
-        import plotly.graph_objects as go
+        volume_shape, volume_size, voxel_size_um = get_vol_shape_and_size(optical_info, use_microns)
 
-        volume_shape = optical_info["volume_shape"]
-        if "voxel_size_um" not in optical_info:
-            optical_info["voxel_size_um"] = [1, 1, 1]
-            print(
-                "Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned."
-            )
-        volume_size_um = [
-            optical_info["voxel_size_um"][i] * optical_info["volume_shape"][i]
-            for i in range(3)
-        ]
-        if use_microns:
-            volume_size = volume_size_um
-        else:
-            volume_size = optical_info["volume_shape"]
         # Define grid
-        coords = np.indices(np.array(voxels.shape)).astype(float)
-        # Shift by half a voxel and multiply by voxel size
-        coords = [
-            (coords[i] + 0.5) * optical_info["voxel_size_um"][i] for i in range(3)
-        ]
-        if fig is None:
-            fig = go.Figure()
+        coords = get_coords(voxels.shape, voxel_size_um, use_microns)
+        fig = initialize_figure(fig)
         fig.add_volume(
             x=coords[0].flatten(),
             y=coords[1].flatten(),
@@ -524,20 +450,10 @@ class BirefringentVolume(BirefringentElement):
             surface_count=20,  # needs to be a large number for good volume rendering
             colorscale=colormap,
         )
+        scene_dict = prepare_scene(volume_shape, volume_size, use_ticks=True)
         camera = {"eye": {"x": 50, "y": 0, "z": 0}}
         fig.update_layout(
-            scene=dict(
-                xaxis={"nticks": volume_shape[0], "range": [0, volume_size[0]]},
-                yaxis={"nticks": volume_shape[1], "range": [0, volume_size[1]]},
-                zaxis={"nticks": volume_shape[2], "range": [0, volume_size[2]]},
-                xaxis_title="Axial dimension",
-                aspectratio={
-                    "x": volume_size[0],
-                    "y": volume_size[1],
-                    "z": volume_size[2],
-                },
-                aspectmode="manual",
-            ),
+            scene=scene_dict,
             scene_camera=camera,
             margin={"r": 0, "l": 0, "b": 0, "t": 0},
             autosize=True,
