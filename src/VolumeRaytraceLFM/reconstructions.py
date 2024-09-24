@@ -698,7 +698,7 @@ class Reconstructor:
             loss (torch.Tensor): The total loss.
 
         Note: If ep is a class attibrute, then the loss function can
-        depend on the current epoch.
+        depend on the current iteration.
         """
         vol_pred = self.volume_pred
         params = self.iteration_params
@@ -939,7 +939,7 @@ class Reconstructor:
                 )
 
         save_freq = self.iteration_params.get("save_freq", 5)
-        # TODO: only update every 1 epoch if plotting is live
+        # TODO: only update every 1 iteration if plotting is live
         if ep % 1 == 0:
             # plt.clf()
             if self.nerf_mode:
@@ -1021,11 +1021,11 @@ class Reconstructor:
         return
 
     def __visualize_and_update_streamlit(
-        self, progress_bar, ep, n_epochs, recon_img_plot, my_loss
+        self, progress_bar, ep, n_iterations, recon_img_plot, my_loss
     ):
         import pandas as pd
 
-        percent_complete = int(ep / n_epochs * 100)
+        percent_complete = int(ep / n_iterations * 100)
         progress_bar.progress(percent_complete + 1)
         if ep % 2 == 0:
             plt.close()
@@ -1111,7 +1111,7 @@ class Reconstructor:
             total_norm = total_norm**0.5
             if total_norm > max_norm:
                 print(
-                    f"Epoch {self.ep}: Gradients clipped (total_norm: {total_norm:.2f})"
+                    f"Iteration {self.ep}: Gradients clipped (total_norm: {total_norm:.2f})"
                 )
 
     def create_parameters_from_mask(self, volume, mask):
@@ -1203,11 +1203,11 @@ class Reconstructor:
         )
         self._create_regularization_terms_csv()
 
-        n_epochs = self.iteration_params["n_epochs"]
+        n_iterations = self.iteration_params["num_iterations"]
         if use_streamlit:
             import streamlit as st
 
-            st.write("Working on these ", n_epochs, "iterations...")
+            st.write("Working on these ", n_iterations, "iterations...")
             my_recon_img_plot = st.empty()
             my_loss = st.empty()
             my_plot = st.empty()  # set up a place holder for the plot
@@ -1222,20 +1222,20 @@ class Reconstructor:
             initial_lr_1 = optimizer.param_groups[1]["lr"]
         # Parameters for learning rate warmup
 
-        warmup_epochs = 10
+        warmup_iterations = 10
         warmup_start_proportion = 0.1
         # Iterations
-        for ep in tqdm(range(1, n_epochs + 1), "Minimizing"):
+        for ep in tqdm(range(1, n_iterations + 1), "Minimizing"):
             self.ep = ep
             # Learning rate warmup
-            if ep < warmup_epochs:
+            if ep < warmup_iterations:
                 lr_0 = initial_lr_0 * (
                     warmup_start_proportion
-                    + (1 - warmup_start_proportion) * (ep / warmup_epochs)
+                    + (1 - warmup_start_proportion) * (ep / warmup_iterations)
                 )
                 lr_1 = initial_lr_1 * (
                     warmup_start_proportion
-                    + (1 - warmup_start_proportion) * (ep / warmup_epochs)
+                    + (1 - warmup_start_proportion) * (ep / warmup_iterations)
                 )
                 optimizer.param_groups[0]["lr"] = lr_0
                 if not self.nerf_mode:
@@ -1250,7 +1250,7 @@ class Reconstructor:
                     print(
                         f"Learning rates at iteration {ep - 1}: {lr_0:.2e}, {lr_1:.2e}"
                     )
-                    print(f"Learning rates changed at epoch {ep}")
+                    print(f"Learning rates changed at iteration {ep}")
                     print(
                         f"Learning rates at iteration {ep}: {current_lr_0:.2e}, {current_lr_1:.2e}"
                     )
@@ -1274,7 +1274,7 @@ class Reconstructor:
             self.azim_img_pred[azim_damp_mask == 0] = 0
             if use_streamlit:
                 self.__visualize_and_update_streamlit(
-                    progress_bar, ep, n_epochs, my_recon_img_plot, my_loss
+                    progress_bar, ep, n_iterations, my_recon_img_plot, my_loss
                 )
             self.visualize_and_save(ep, figure, self.recon_directory)
 

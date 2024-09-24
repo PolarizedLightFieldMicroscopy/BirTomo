@@ -19,7 +19,7 @@ def setup_iteration_parameters(config_file=None):
             iteration_params = json.load(f)
     else:
         iteration_params = {
-            "n_epochs": 201,
+            "num_iterations": 201,
             "azimuth_weight": 0.5,
             "regularization_weight": 0.1,
             "lr": 1e-3,

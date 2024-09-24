@@ -1,5 +1,5 @@
 {
-    "n_epochs": 100,
+    "num_iterations": 100,
     "regularization_weight": 0.5,
     "lr": 1e-3,
     "lr_birefringence": 1e-3,

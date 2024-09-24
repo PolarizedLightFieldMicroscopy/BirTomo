@@ -69,7 +69,7 @@ optical_info.update(values_from_df)
 
 ############## Optimization parameters ###################
 tabs[1].subheader("Iterative reconstruction parameters")
-n_epochs = tabs[1].slider("Number of iterations", min_value=1, max_value=500, value=11)
+num_iterations = tabs[1].slider("Number of iterations", min_value=1, max_value=500, value=11)
 optim_cols = tabs[1].columns(2)
 # See loss_functions.py for more details
 optim_cols[0].markdown("**Loss function**")
@@ -271,7 +271,7 @@ st.markdown("""---""")
 ##########################################################
 # filename_message = st.text_input('Message to add to the filename (not currently saving anyway..)')
 training_params = {
-    "n_epochs": n_epochs,  # How long to train for
+    "num_iterations": num_iterations,  # How long to train for
     "azimuth_weight": ret_azim_weight,  # Azimuth loss weight
     "regularization_weight": [reg_weight1, reg_weight2],  # Regularization weight
     "lr": learning_rate_delta_n,  # Learning rate for delta_n
@@ -438,9 +438,9 @@ if st.button("**Reconstruct birefringent volume!**"):
     my_plot = st.empty()  # set up a place holder for the plot
     my_3D_plot = st.empty()  # set up a place holder for the 3D plot
 
-    st.write("Working on these ", n_epochs, "iterations...")
+    st.write("Working on these ", num_iterations, "iterations...")
     my_bar = st.progress(0)
-    for ep in tqdm(range(training_params["n_epochs"]), "Minimizing"):
+    for ep in tqdm(range(training_params["num_iterations"]), "Minimizing"):
         optimizer.zero_grad()
         ret_image_current, azim_image_current = forward_one_iter(
             rays_est, volume_estimation
@@ -460,7 +460,7 @@ if st.button("**Reconstruct birefringent volume!**"):
         azim_image_out = azim_image_current.detach()
         azim_image_out[azimuth_damp_mask == 0] = 0
 
-        percent_complete = int(ep / training_params["n_epochs"] * 100)
+        percent_complete = int(ep / training_params["num_iterations"] * 100)
         my_bar.progress(percent_complete + 1)
 
         if ep % 2 == 0:
