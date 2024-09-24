@@ -961,7 +961,7 @@ class Reconstructor:
             mip_image = convert_volume_to_2d_mip(
                 Delta_n, scaling_factors=(1, 1, rel_scaling_factor)
             )
-            mip_image_np = prepare_plot_mip(mip_image, plot=True)
+            mip_image_np = prepare_plot_mip(mip_image, plot=False)
             plot_iteration_update_gridspec(
                 self.birefringence_mip_sim,
                 self.ret_img_meas,
