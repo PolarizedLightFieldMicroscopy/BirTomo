@@ -298,6 +298,7 @@ class BirefringentVolume(BirefringentElement):
         draw_spheres=True,
         delta_n_ths=0.5,
         use_ticks=False,
+        use_microns=True
     ):
         """Plots the optic axis as lines and the birefringence as sphere
         at the ends of the lines. Other parameters could be opacity=0.5 or mode='lines'
@@ -332,7 +333,6 @@ class BirefringentVolume(BirefringentElement):
             for i in range(3)
         ]
         [dz, dxy, dxy] = optical_info["voxel_size_um"]
-        use_microns = False
         if use_microns:
             volume_size = volume_size_um
         else:
@@ -470,7 +470,7 @@ class BirefringentVolume(BirefringentElement):
 
     @staticmethod
     def plot_volume_plotly(
-        optical_info, voxels_in=None, opacity=0.5, colormap="gray", fig=None
+        optical_info, voxels_in=None, opacity=0.5, colormap="gray", fig=None, use_microns=True
     ):
         """Plots a 3D array with the non-zero voxels shaded."""
         voxels = voxels_in * 1.0
@@ -501,6 +501,10 @@ class BirefringentVolume(BirefringentElement):
             optical_info["voxel_size_um"][i] * optical_info["volume_shape"][i]
             for i in range(3)
         ]
+        if use_microns:
+            volume_size = volume_size_um
+        else:
+            volume_size = optical_info["volume_shape"]
         # Define grid
         coords = np.indices(np.array(voxels.shape)).astype(float)
         # Shift by half a voxel and multiply by voxel size
@@ -523,14 +527,14 @@ class BirefringentVolume(BirefringentElement):
         camera = {"eye": {"x": 50, "y": 0, "z": 0}}
         fig.update_layout(
             scene=dict(
-                xaxis={"nticks": volume_shape[0], "range": [0, volume_size_um[0]]},
-                yaxis={"nticks": volume_shape[1], "range": [0, volume_size_um[1]]},
-                zaxis={"nticks": volume_shape[2], "range": [0, volume_size_um[2]]},
+                xaxis={"nticks": volume_shape[0], "range": [0, volume_size[0]]},
+                yaxis={"nticks": volume_shape[1], "range": [0, volume_size[1]]},
+                zaxis={"nticks": volume_shape[2], "range": [0, volume_size[2]]},
                 xaxis_title="Axial dimension",
                 aspectratio={
-                    "x": volume_size_um[0],
-                    "y": volume_size_um[1],
-                    "z": volume_size_um[2],
+                    "x": volume_size[0],
+                    "y": volume_size[1],
+                    "z": volume_size[2],
                 },
                 aspectmode="manual",
             ),
