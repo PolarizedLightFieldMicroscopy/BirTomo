@@ -1740,7 +1740,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         #   so we mask the rays valid with rays_with_voxels.
 
         alt_props = False
-        if volume_in.module.indices_active is not None:
+        if isinstance(volume_in, torch.nn.DataParallel):
+            active_indices = volume_in.module.indices_active
+        else:
+            active_indices = volume_in.indices_active
+        if active_indices is not None:
             alt_props = True
         try:
             start_time_gather_params = time.perf_counter()
