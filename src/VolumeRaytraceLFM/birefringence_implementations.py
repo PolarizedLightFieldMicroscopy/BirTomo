@@ -1361,7 +1361,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         start_time_raytrace = time.perf_counter()
         # volume_shape defines the size of the workspace
         # the number of microlenses defines the valid volume inside the workspace
-        volume_shape = volume_in.optical_info["volume_shape"]
+        # volume_shape = volume_in.optical_info["volume_shape"]
+        volume_shape = self.optical_info["volume_shape"]
         n_micro_lenses = self.optical_info["n_micro_lenses"]
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
         n_ml_half = floor(n_micro_lenses / 2.0)
@@ -1739,7 +1740,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         #   so we mask the rays valid with rays_with_voxels.
 
         alt_props = False
-        if volume_in.indices_active is not None:
+        if volume_in.module.indices_active is not None:
             alt_props = True
         try:
             start_time_gather_params = time.perf_counter()
@@ -1789,6 +1790,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             raise type(e)(
                 f"{type(e).__name__} in cumulative Jones Matrix computation: {e}"
             )
+        except AttributeError as e:
+            raise AttributeError(f"Cumulative Jones Matrix computation failed: {e}")
         except Exception as e:
             raise Exception(f"Cumulative Jones Matrix computation failed: {e}")
         end_time_mloop = time.perf_counter()
@@ -1805,6 +1808,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """Retrieves the birefringence and optic axis from the volume based on the
         provided voxel indices. This function is used to retrieve the properties
         of the voxels that each ray segment interacts with."""
+        if isinstance(volume, torch.nn.DataParallel):
+            volume = volume.module
         if active_props_only:
             device = volume.birefringence_active.device
             idx_tensor = volume.active_idx2spatial_idx_tensor  # .to(device)

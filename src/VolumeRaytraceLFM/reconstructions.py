@@ -728,6 +728,8 @@ class Reconstructor:
         # Compute regularization term
         if isinstance(params["regularization_weight"], list):
             params["regularization_weight"] = params["regularization_weight"][0]
+        if isinstance(self.volume_pred, torch.nn.DataParallel):
+            vol_pred = vol_pred.module
         reg_loss, reg_term_values = LossFcn.compute_regularization_term(vol_pred)
         regularization_term = params["regularization_weight"] * reg_loss
         self.reg_term_values = [reg.item() for reg in reg_term_values]
@@ -742,6 +744,8 @@ class Reconstructor:
 
     def keep_optic_axis_on_sphere(self, volume):
         """Method to keep the optic axis on the unit sphere."""
+        if isinstance(volume, torch.nn.DataParallel):
+            volume = volume.module
         if volume.indices_active is not None:
             optic_axis = volume.optic_axis_active
         else:
@@ -755,6 +759,8 @@ class Reconstructor:
 
         Also, here the updated optic axis is stored in the volume object.
         """
+        if isinstance(volume, torch.nn.DataParallel):
+            volume = volume.module
         fill_vector_based_on_nonaxial(
             volume.optic_axis_active, volume.optic_axis_planar
         )
@@ -762,6 +768,13 @@ class Reconstructor:
 
     # @profile # to see the memory breakdown of the function
     def one_iteration(self, optimizer, volume_estimation, scheduler=None):
+        # Wrap volume_estimation with DataParallel if multiple GPUs are available
+        if torch.cuda.device_count() >= 1 and not isinstance(volume_estimation, torch.nn.DataParallel):
+            print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
+            volume_estimation = torch.nn.DataParallel(volume_estimation)
+        else:
+            print("Not using DataParallel")
+
         if not self.apply_volume_mask:
             optimizer.zero_grad()
         else:
@@ -932,7 +945,9 @@ class Reconstructor:
             volume_estimation.Delta_n = torch.nn.Parameter(
                 temp_bir, requires_grad=False
             ).to(device)
-        if self.volume_pred.indices_active is not None:
+        if isinstance(volume_estimation, torch.nn.DataParallel):
+            volume_estimation = volume_estimation.module
+        if volume_estimation.indices_active is not None:
             with torch.no_grad():
                 volume_estimation.Delta_n[volume_estimation.indices_active] = (
                     volume_estimation.birefringence_active
@@ -1143,6 +1158,7 @@ class Reconstructor:
         self.keep_optic_axis_on_sphere(volume)
         check_for_inf_or_nan(volume.birefringence_active)
         check_for_inf_or_nan(volume.optic_axis_active)
+        # volume = torch.nn.DataParallel(volume)
 
     def reconstruct(
         self,
@@ -1301,6 +1317,8 @@ class Reconstructor:
         vol_save_path = os.path.join(
             self.recon_directory, f"volume_iter_{'{:04d}'.format(ep)}.h5"
         )
+        if isinstance(self.volume_pred, torch.nn.DataParallel):
+            self.volume_pred = self.volume_pred.module
         self.volume_pred.save_as_file(vol_save_path, description=my_description)
         print("Saved the final volume estimation to", vol_save_path)
         plt.savefig(os.path.join(self.recon_directory, "optim_final.pdf"))
