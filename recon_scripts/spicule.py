@@ -12,6 +12,9 @@ from VolumeRaytraceLFM.reconstructions import ReconstructionConfig, Reconstructo
 from VolumeRaytraceLFM.utils.file_utils import create_unique_directory
 from utils.polscope import prepare_ret_azim_images
 from utils.logging import redirect_output_to_log, restore_output
+from VolumeRaytraceLFM.utils.dimensions_utils import extend_image_with_borders
+from VolumeRaytraceLFM.utils.lightfield_utils import average_intensity_per_lenslet
+from VolumeRaytraceLFM.volumes.modification import scale_birefringence_z_projection_center
 
 
 BACKEND = BackEnds.PYTORCH
@@ -49,8 +52,25 @@ def setup_spicule_iteration_params(init_vol_path, ret_image_path,
     return iteration_params
 
 
+def adjust_birefringence_distribution_from_retardance(initial_volume, ret_image_meas, optical_info):
+    # Adjust the initial volume to match the retardance image
+    ret_avg = average_intensity_per_lenslet(ret_image_meas, optical_info["pixels_per_ml"]).T
+    vol_shape = optical_info["volume_shape"]
+    ret_avg = extend_image_with_borders(ret_avg, (vol_shape[1], vol_shape[2]))
+    initial_birefringence = initial_volume.get_delta_n().detach().numpy()
+    scaled_birefringence = scale_birefringence_z_projection_center(initial_birefringence, ret_avg)
+    initial_volume = BirefringentVolume(
+        backend=BACKEND,
+        optical_info=optical_info,
+        Delta_n=scaled_birefringence,
+        optic_axis=initial_volume.get_optic_axis(),
+    )
+    return initial_volume
+
+
 def recon_spicule(
-    init_vol_path, recon_postfix, mla=None, ss_factor=None, volume_shape=None, load_rays=False
+    init_vol_path, recon_postfix, mla=None, ss_factor=None,
+    volume_shape=None, load_rays=False, vol_adjust_from_ret=True
 ):
     # Setup optical parameters
     optical_info = setup_optical_parameters("config/spicule/optical_config.json")
@@ -98,6 +118,10 @@ def recon_spicule(
         initial_volume = BirefringentVolume.init_from_file(
             init_vol_path, BackEnds.PYTORCH, optical_info
         )
+    if vol_adjust_from_ret:
+        initial_volume = adjust_birefringence_distribution_from_retardance(
+            initial_volume, ret_image_meas, optical_info
+    )
 
     # Create reconstruction directory and log file
     v0, v1, v2 = volume_shape
@@ -131,6 +155,7 @@ if __name__ == "__main__":
     init_vol_path = None
     recon_spicule(
         init_vol_path,
-        "axial",
-        load_rays=False
+        "debug",
+        load_rays=False,
+        vol_adjust_from_ret=True
     )
