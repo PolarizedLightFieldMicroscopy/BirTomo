@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import copy
-from math import floor
 
 
 def get_region_of_ones_shape(mask):
@@ -228,9 +227,3 @@ def extend_image_with_borders(image, target_shape):
     extended_image = np.pad(image, ((pad_y_top, pad_y_bottom), (pad_x_left, pad_x_right)), mode='edge')
 
     return extended_image
-
-# Example usage
-image_13x13 = np.random.rand(13, 13)  # Example 13x13 image
-image_24x24 = extend_image_with_borders(image_13x13, (24, 24))
-
-print(image_24x24.shape)  # Output should be (24, 24)
