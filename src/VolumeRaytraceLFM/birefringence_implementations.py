@@ -1721,10 +1721,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         end_time_prep = time.perf_counter()
         self.times["prep_for_cummulative_jones"] += end_time_prep - start_time_prep
 
-        voxels_of_segs_tensor = voxels_of_segs
+        device = ell_in_voxels.device
+        voxels_of_segs_tensor = voxels_of_segs.to(device)
         if voxels_of_segs_tensor.numel() == 0:
             print("The tensor is empty.")
-            valid_voxels_count = torch.tensor([], dtype=torch.int)
+            valid_voxels_count = torch.tensor([], dtype=torch.int, device=device)
         else:
             valid_voxels_mask = voxels_of_segs_tensor != -1
             valid_voxels_count = valid_voxels_mask.sum(dim=1)
