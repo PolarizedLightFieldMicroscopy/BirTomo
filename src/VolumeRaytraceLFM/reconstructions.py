@@ -45,7 +45,12 @@ from VolumeRaytraceLFM.utils.error_handling import (
 )
 from VolumeRaytraceLFM.utils.json_utils import ComplexArrayEncoder
 from VolumeRaytraceLFM.metrics.metric import PolarimetricLossFunction
-from VolumeRaytraceLFM.utils.optimizer_utils import calculate_adjusted_lr, print_moments
+from VolumeRaytraceLFM.utils.optimizer_utils import (
+    print_moments,
+    get_scheduler_configs,
+    create_scheduler,
+    step_scheduler,
+)
 from VolumeRaytraceLFM.volumes.optic_axis import (
     fill_vector_based_on_nonaxial,
     stay_on_sphere,
@@ -314,6 +319,7 @@ class Reconstructor:
         self.rays = self.setup_raytracer(
             image=image_for_rays, filepath=saved_ray_path, device=device
         )
+        self.rays.verbose = False
         self.nerf_mode = self.iteration_params.get("nerf_mode", False)
         self.initialize_nerf_mode(use_nerf=self.nerf_mode)
         self.from_simulation = self.iteration_params.get("from_simulation", False)
@@ -549,33 +555,9 @@ class Reconstructor:
             if var not in volume.members_to_learn:
                 volume.members_to_learn.append(var)
 
-    def optimizer_setup(self, volume_estimation, training_params):
+    def optimizer_setup(self, parameters, training_params):
         """Setup optimizer."""
-        trainable_parameters = volume_estimation.get_trainable_variables()
-        trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
         optimizer_type = training_params.get("optimizer", "Nadam")
-        if optimizer_type == "LBFGS":
-            parameters = trainable_parameters
-        else:
-            assert (
-                len(trainable_parameters[0].shape) == 2
-            ), "1st parameter should be the optic axis"
-            assert (
-                len(trainable_parameters[1].shape) == 1
-            ), "2nd parameter should be the birefringence."
-            # The learning rates specified are starting points for the optimizer.
-            parameters = [
-                {
-                    "params": trainable_parameters[0],
-                    "lr": training_params["lr_optic_axis"],
-                    "name": trainable_vars_names[0],
-                },
-                {
-                    "params": trainable_parameters[1],
-                    "lr": training_params["lr_birefringence"],
-                    "name": trainable_vars_names[1],
-                },
-            ]
         optimizers = {
             "Adam": lambda params: torch.optim.Adam(params),
             "SGD": lambda params: torch.optim.SGD(params, nesterov=True, momentum=0.7),
@@ -589,11 +571,11 @@ class Reconstructor:
         print(f"Using optimizer: {optimizer_type}")
         if optimizer_type == "LBFGS":
             raise ValueError(
-                "LBFGS optimizer is not supported yet," + "because a closure is needed."
+                "LBFGS optimizer is not supported yet, because a closure is needed."
             )
         elif optimizer_type not in optimizers:
             raise ValueError(
-                f"Unsupported optimizer type: {optimizer_type}."
+                f"Unsupported optimizer type: {optimizer_type}. "
                 + f"Please choose from {list(optimizers.keys())}."
             )
         optimizer = optimizers[optimizer_type](parameters)
@@ -761,12 +743,23 @@ class Reconstructor:
         return
 
     # @profile # to see the memory breakdown of the function
-    def one_iteration(self, optimizer, volume_estimation, scheduler=None):
+    def one_iteration(self, volume_estimation, optimizers, schedulers):
+        """Performs one iteration of the reconstruction process.
+        Args:
+            volume_estimation (BirefringentVolume): The current estimation of the volume.
+            optimizers (tuple): A tuple of optimizers for the volume parameters.
+            schedulers (tuple): A tuple of schedulers for the optimizers.
+        """
+        optimizer, optimizer_opticaxis, optimizer_birefringence = optimizers
         if not self.apply_volume_mask:
-            optimizer.zero_grad()
+            for optimizer in optimizers:
+                if optimizer is not None:
+                    optimizer.zero_grad()
         else:
-            # improving memory usage by setting gradients to None
-            optimizer.zero_grad(set_to_none=True)
+            # Improving memory usage by setting gradients to None
+            for optimizer in optimizers:
+                if optimizer is not None:
+                    optimizer.zero_grad(set_to_none=True)
         # Apply forward model and compute loss
         img_list = self.rays.ray_trace_through_volume(
             volume_estimation,
@@ -810,20 +803,25 @@ class Reconstructor:
             self.print_grad_info(volume_estimation)
 
         if CLIP_GRADIENT_NORM:
-            self.clip_gradient_norms(optimizer, volume_estimation)
+            self.clip_gradient_norms(volume_estimation)
 
         # Apply voxel-specific mask
         if self.apply_volume_mask:
             with torch.no_grad():
                 self.volume_pred.Delta_n.grad *= self.mask
 
-        optimizer.step()
-        scheduler.step(loss)
-        adj_lrs_dict = calculate_adjusted_lr(optimizer)
+        for optimizer in optimizers:
+            if optimizer is not None:
+                optimizer.step()
+        for scheduler in schedulers:
+            if scheduler is not None:
+                step_scheduler(scheduler, loss)
+
+        adj_lrs_dict = {"optic_axis": optimizer_opticaxis.param_groups[0]["lr"], "birefringence": optimizer_birefringence.param_groups[0]["lr"]}
         if self.nerf_mode:
             adjusted_lrs = [0]
         else:
-            adjusted_lrs = [val.item() for val in adj_lrs_dict.values()]
+            adjusted_lrs = [adj_lrs_dict["optic_axis"], adj_lrs_dict["birefringence"]]
 
         if PRINT_GRADIENTS:
             print_moments(optimizer)
@@ -956,6 +954,8 @@ class Reconstructor:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             else:
                 Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
+                if False:
+                    tqdm.write(f"{[round(val.item(), 4) for val in Delta_n[Delta_n != 0]]}")
             vol_size_um = self.optical_info["voxel_size_um"]
             rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
@@ -1157,7 +1157,6 @@ class Reconstructor:
         print(f"Beginning reconstruction iterations...")
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
-        self.rays.verbose = False
 
         # Specify variables to learn
         if all_prop_elements:
@@ -1181,23 +1180,37 @@ class Reconstructor:
 
         if self.nerf_mode:
             optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
+            scheduler_nerf = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
+            optimizer_opticaxis, optimizer_birefringence = None, None
+            scheduler_opticaxis, scheduler_birefringence = None, None
+            initial_lr_0 = initial_lr_1 = optimizer.param_groups[0]["lr"]
         else:
-            optimizer = self.optimizer_setup(self.volume_pred, self.iteration_params)
-            optax_betas = self.iteration_params.get("optax_betas", (0.9, 0.999))
-            bir_betas = self.iteration_params.get("bir_betas", (0.9, 0.999))
-            optimizer.param_groups[0]["betas"] = tuple(optax_betas)
-            optimizer.param_groups[1]["betas"] = tuple(bir_betas)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            mode="min",
-            factor=0.8,
-            patience=10,
-            threshold=1e-4,
-            threshold_mode="rel",
-            cooldown=0,
-            min_lr=1e-8,
-            eps=1e-8,
-        )
+            training_params = self.iteration_params
+            volume_estimation = self.volume_pred
+            trainable_parameters = volume_estimation.get_trainable_variables()
+            trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
+            parameters_optic_axis = [{
+                "params": trainable_parameters[0],
+                "lr": training_params["lr_optic_axis"],
+                "name": trainable_vars_names[0],
+            }]
+            optimizer_opticaxis = self.optimizer_setup(parameters_optic_axis, training_params)
+            parameters_birefringence = [{
+                "params": trainable_parameters[1],
+                "lr": training_params["lr_birefringence"],
+                "name": trainable_vars_names[1],
+            }]
+            optimizer_birefringence = self.optimizer_setup(parameters_birefringence, training_params)
+
+            # Separate schedulers for each optimizer
+            sched_opticaxis_config, sched_bir_config = get_scheduler_configs(self.iteration_params)
+            scheduler_opticaxis = create_scheduler(optimizer_opticaxis, sched_opticaxis_config)
+            scheduler_birefringence = create_scheduler(optimizer_birefringence, sched_bir_config)
+            optimizer = None
+            scheduler_nerf = None
+            initial_lr_0 = optimizer_opticaxis.param_groups[0]["lr"]
+            initial_lr_1 = optimizer_birefringence.param_groups[0]["lr"]
+
         figure = setup_visualization(
             window_title=self.recon_directory, plot_live=plot_live
         )
@@ -1215,50 +1228,39 @@ class Reconstructor:
             progress_bar = st.progress(0)
 
         self.prepare_volume_for_recon(self.volume_pred)
-        initial_lr_0 = optimizer.param_groups[0]["lr"]
-        if self.nerf_mode:
-            initial_lr_1 = optimizer.param_groups[0]["lr"]
-        else:
-            initial_lr_1 = optimizer.param_groups[1]["lr"]
-        # Parameters for learning rate warmup
 
+        # Parameters for learning rate warmup
         warmup_iterations = 10
         warmup_start_proportion = 0.1
+
         # Iterations
         for ep in tqdm(range(1, n_iterations + 1), "Minimizing"):
             self.ep = ep
             # Learning rate warmup
-            if ep < warmup_iterations:
-                lr_0 = initial_lr_0 * (
-                    warmup_start_proportion
-                    + (1 - warmup_start_proportion) * (ep / warmup_iterations)
-                )
-                lr_1 = initial_lr_1 * (
-                    warmup_start_proportion
-                    + (1 - warmup_start_proportion) * (ep / warmup_iterations)
-                )
-                optimizer.param_groups[0]["lr"] = lr_0
-                if not self.nerf_mode:
-                    optimizer.param_groups[1]["lr"] = lr_1
-            else:
-                current_lr_0 = scheduler.optimizer.param_groups[0]["lr"]
+            if ep <= warmup_iterations:
+                warmup_factor = warmup_start_proportion + (1 - warmup_start_proportion) * (ep / warmup_iterations)
+                lr_0 = initial_lr_0 * warmup_factor
+                lr_1 = initial_lr_1 * warmup_factor
                 if self.nerf_mode:
-                    current_lr_1 = lr_0
+                    scheduler_nerf.optimizer.param_groups[0]["lr"] = lr_0
                 else:
-                    current_lr_1 = scheduler.optimizer.param_groups[1]["lr"]
+                    scheduler_opticaxis.optimizer.param_groups[0]["lr"] = lr_0
+                    scheduler_birefringence.optimizer.param_groups[0]["lr"] = lr_1
+            else:
+                # Retrieve current learning rates
+                if self.nerf_mode:
+                    current_lr_0 = current_lr_1 = scheduler_nerf.optimizer.param_groups[0]["lr"]
+                else:
+                    current_lr_0 = scheduler_opticaxis.optimizer.param_groups[0]["lr"]
+                    current_lr_1 = scheduler_birefringence.optimizer.param_groups[0]["lr"]
                 if lr_0 != current_lr_0 or lr_1 != current_lr_1:
-                    print(
-                        f"Learning rates at iteration {ep - 1}: {lr_0:.2e}, {lr_1:.2e}"
-                    )
-                    print(f"Learning rates changed at iteration {ep}")
-                    print(
-                        f"Learning rates at iteration {ep}: {current_lr_0:.2e}, {current_lr_1:.2e}"
-                    )
-                else:
-                    pass
-                lr_0 = current_lr_0
-                lr_1 = current_lr_1
-            self.one_iteration(optimizer, self.volume_pred, scheduler=scheduler)
+                    print(f"Learning rates changed at iteration {ep}:")
+                    print(f"Iteration {ep - 1}: {lr_0:.2e}, {lr_1:.2e} -> Iteration {ep}: {current_lr_0:.2e}, {current_lr_1:.2e}")
+                lr_0, lr_1 = current_lr_0, current_lr_1
+            optimizers = (optimizer, optimizer_opticaxis, optimizer_birefringence)
+            schedulers = (scheduler_nerf, scheduler_birefringence, scheduler_opticaxis)
+            self.one_iteration(self.volume_pred, optimizers, schedulers)
+
             if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()
             if ep % 20 == 0 and self.intensity_bool:

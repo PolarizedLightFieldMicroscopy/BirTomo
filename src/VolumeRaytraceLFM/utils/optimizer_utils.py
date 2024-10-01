@@ -1,12 +1,12 @@
 """Utility functions for optimizers."""
 
+import torch
 from tqdm import tqdm
 
 
 def calculate_adjusted_lr(optimizer):
-    """
-    Calculate adjusted learning rates for each parameter managed by the optimizer.
-
+    """Calculate adjusted learning rates for each parameter managed by the optimizer.
+    Note: This function is no longer used in the codebase. -Geneva
     Args:
         optimizer (torch.optim.Optimizer): The optimizer to calculate rates for.
 
@@ -89,3 +89,40 @@ def print_moments(optimizer):
                 exp_avg_sq_beg = exp_avg_sq[:, :5] if p.dim() > 1 else exp_avg_sq[:5]
                 tqdm.write(f"exp_avg (m) [at most 5 values]: {exp_avg_beg}")
                 tqdm.write(f"exp_avg_sq (v) [at most 5 values]: {exp_avg_sq_beg}")
+
+
+def get_scheduler_configs(iteration_params):
+    """Get the schedulers for the optimizer."""
+    schedulers = iteration_params.get("schedulers", {})
+    default_sched_config = {
+        "type": "ReduceLROnPlateau",
+        "params": {
+            "mode": "min",
+            "factor": 0.8,
+            "patience": 10,
+            "threshold": 1e-5,
+            "min_lr": 1e-6,
+            "eps": 1e-8
+        }
+    }
+    scheduler_opticaxis_config = schedulers.get("opticaxis", default_sched_config)
+    scheduler_birefringence_config = schedulers.get("birefringence", default_sched_config)
+    return scheduler_opticaxis_config, scheduler_birefringence_config
+
+
+def create_scheduler(optimizer, scheduler_config):
+    if scheduler_config['type'] == 'ReduceLROnPlateau':
+        return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **scheduler_config['params'])
+    elif scheduler_config['type'] == 'CosineAnnealingWarmRestarts':
+        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **scheduler_config['params'])
+    return None
+
+
+def step_scheduler(scheduler, loss=None):
+    """Generalized function to step the scheduler, with or without a metric."""
+    if scheduler is not None:
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            if loss is not None:
+                scheduler.step(loss)
+        else:
+            scheduler.step()
