@@ -101,7 +101,7 @@ def get_scheduler_configs(iteration_params):
             "factor": 0.8,
             "patience": 10,
             "threshold": 1e-5,
-            "min_lr": 1e-6,
+            "min_lr": 1e-8,
             "eps": 1e-8
         }
     }
@@ -110,11 +110,31 @@ def get_scheduler_configs(iteration_params):
     return scheduler_opticaxis_config, scheduler_birefringence_config
 
 
+def get_scheduler_configs_nerf(iteration_params):
+    """Get the schedulers for the optimizer."""
+    schedulers = iteration_params.get("schedulers", {})
+    default_sched_config = {
+        "type": "ReduceLROnPlateau",
+        "params": {
+            "mode": "min",
+            "factor": 0.8,
+            "patience": 10,
+            "threshold": 1e-5,
+            "min_lr": 1e-8,
+            "eps": 1e-8
+        }
+    }
+    scheduler_nerf_config = schedulers.get("nerf", default_sched_config)
+    return scheduler_nerf_config
+
+
 def create_scheduler(optimizer, scheduler_config):
     if scheduler_config['type'] == 'ReduceLROnPlateau':
         return torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **scheduler_config['params'])
     elif scheduler_config['type'] == 'CosineAnnealingWarmRestarts':
         return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **scheduler_config['params'])
+    elif scheduler_config['type'] == 'CosineAnnealingLR':
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, **scheduler_config['params'])
     return None
 
 

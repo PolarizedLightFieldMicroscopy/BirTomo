@@ -998,14 +998,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """
         self.use_nerf = use_nerf
         if self.use_nerf:
-            self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
+            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
             self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 256, 256])
             self.inr_model = torch.nn.DataParallel(self.inr_model)
             print("NeRF mode initialized.")
         else:
             self.inr_model = None
-            print("NeRF mode is disabled.")
 
     def save_nerf_model(self, filepath):
         """Save the NeRF model to a file."""
@@ -1146,6 +1145,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.ray_direction_basis = self.ray_direction_basis.to(device)
         self.ray_vol_colli_lengths = self.ray_vol_colli_lengths.to(device)
         if self.use_nerf:
+            self.mask = self.mask.to(device)
             self.inr_model = self.inr_model.to(device)
 
     def get_volume_reachable_region(self):

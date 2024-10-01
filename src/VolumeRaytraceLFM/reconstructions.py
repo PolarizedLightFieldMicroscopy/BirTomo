@@ -50,6 +50,7 @@ from VolumeRaytraceLFM.utils.optimizer_utils import (
     get_scheduler_configs,
     create_scheduler,
     step_scheduler,
+    get_scheduler_configs_nerf,
 )
 from VolumeRaytraceLFM.volumes.optic_axis import (
     fill_vector_based_on_nonaxial,
@@ -750,7 +751,7 @@ class Reconstructor:
             optimizers (tuple): A tuple of optimizers for the volume parameters.
             schedulers (tuple): A tuple of schedulers for the optimizers.
         """
-        optimizer, optimizer_opticaxis, optimizer_birefringence = optimizers
+        optimizer_nerf, optimizer_opticaxis, optimizer_birefringence = optimizers
         if not self.apply_volume_mask:
             for optimizer in optimizers:
                 if optimizer is not None:
@@ -817,11 +818,10 @@ class Reconstructor:
             if scheduler is not None:
                 step_scheduler(scheduler, loss)
 
-        adj_lrs_dict = {"optic_axis": optimizer_opticaxis.param_groups[0]["lr"], "birefringence": optimizer_birefringence.param_groups[0]["lr"]}
         if self.nerf_mode:
-            adjusted_lrs = [0]
+            adjusted_lrs = optimizer_nerf.param_groups[0]["lr"]
         else:
-            adjusted_lrs = [adj_lrs_dict["optic_axis"], adj_lrs_dict["birefringence"]]
+            adjusted_lrs = optimizer_opticaxis.param_groups[0]["lr"], optimizer_birefringence.param_groups[0]["lr"]
 
         if PRINT_GRADIENTS:
             print_moments(optimizer)
@@ -1180,7 +1180,8 @@ class Reconstructor:
 
         if self.nerf_mode:
             optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
-            scheduler_nerf = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
+            scheduler_nerf_config = get_scheduler_configs_nerf(self.iteration_params)
+            scheduler_nerf = create_scheduler(optimizer, scheduler_nerf_config)
             optimizer_opticaxis, optimizer_birefringence = None, None
             scheduler_opticaxis, scheduler_birefringence = None, None
             initial_lr_0 = initial_lr_1 = optimizer.param_groups[0]["lr"]
