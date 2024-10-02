@@ -25,7 +25,7 @@ def recon_info():
         },
     )
     iteration_params = {
-        "n_epochs": 31,
+        "num_iterations": 31,
         "azimuth_weight": 0.5,
         "regularization_weight": 0.1,
         "lr": 1e-3,

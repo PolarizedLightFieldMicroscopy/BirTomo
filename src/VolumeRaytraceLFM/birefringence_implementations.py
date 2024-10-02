@@ -27,6 +27,8 @@ from VolumeRaytraceLFM.volumes.generation import (
 from VolumeRaytraceLFM.volumes.optic_axis import (
     spherical_to_unit_vector_torch,
     unit_vector_to_spherical,
+    fill_vector_based_on_nonaxial,
+    adjust_optic_axis_positive_axial,
 )
 from VolumeRaytraceLFM.jones.jones_calculus import (
     JonesMatrixGenerators,
@@ -46,7 +48,15 @@ from VolumeRaytraceLFM.combine_lenslets import (
     calculate_offsets_vectorized,
 )
 from VolumeRaytraceLFM.utils.mask_utils import get_bool_mask_for_ray_indices
-
+from VolumeRaytraceLFM.visualization.prep_plotly import (
+    initialize_figure,
+    get_vol_shape_and_size,
+    prepare_scene,
+    get_base_tip_coordinates,
+    get_coords,
+    apply_mask_and_nan,
+    check_non_zero_values,
+)
 
 DEBUG = False
 if DEBUG:
@@ -296,6 +306,7 @@ class BirefringentVolume(BirefringentElement):
         draw_spheres=True,
         delta_n_ths=0.5,
         use_ticks=False,
+        use_microns=True
     ):
         """Plots the optic axis as lines and the birefringence as sphere
         at the ends of the lines. Other parameters could be opacity=0.5 or mode='lines'
@@ -307,79 +318,27 @@ class BirefringentVolume(BirefringentElement):
         delta_n = self.get_delta_n() * 1
         optic_axis = self.get_optic_axis() * 1
         optical_info = self.optical_info
-        # Check if this is a torch tensor
         if not isinstance(delta_n, np.ndarray):
-            try:
-                delta_n = delta_n.cpu().detach().numpy()
-                optic_axis = optic_axis.cpu().detach().numpy()
-            except:
-                pass
+            delta_n = delta_n.cpu().detach().numpy()
+            optic_axis = optic_axis.cpu().detach().numpy()
         delta_n /= np.max(np.abs(delta_n))
         delta_n[np.abs(delta_n) < delta_n_ths] = 0
 
-        import plotly.graph_objects as go
+        volume_shape, volume_size, voxel_size_um = get_vol_shape_and_size(optical_info, use_microns)
 
-        volume_shape = optical_info["volume_shape"]
-        if "voxel_size_um" not in optical_info:
-            optical_info["voxel_size_um"] = [1, 1, 1]
-            print(
-                "Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned."
-            )
-        volume_size_um = [
-            optical_info["voxel_size_um"][i] * optical_info["volume_shape"][i]
-            for i in range(3)
-        ]
-        [dz, dxy, dxy] = optical_info["voxel_size_um"]
-
-        # Sometimes the volume_shape is causing an error when being used as the nticks parameter
-        if use_ticks:
-            scene_dict = dict(
-                xaxis={"nticks": volume_shape[0], "range": [0, volume_size_um[0]]},
-                yaxis={"nticks": volume_shape[1], "range": [0, volume_size_um[1]]},
-                zaxis={"nticks": volume_shape[2], "range": [0, volume_size_um[2]]},
-                xaxis_title="Axial dimension",
-                aspectratio={
-                    "x": volume_size_um[0],
-                    "y": volume_size_um[1],
-                    "z": volume_size_um[2],
-                },
-                aspectmode="manual",
-            )
-        else:
-            scene_dict = dict(
-                xaxis_title="Axial dimension",
-                aspectratio={
-                    "x": volume_size_um[0],
-                    "y": volume_size_um[1],
-                    "z": volume_size_um[2],
-                },
-                aspectmode="manual",
-            )
+        scene_dict = prepare_scene(volume_shape, volume_size, use_ticks)
 
         # Define grid
-        coords = np.indices(np.array(delta_n.shape)).astype(float)
-
-        coords_base = [
-            (coords[i] + 0.5) * optical_info["voxel_size_um"][i] for i in range(3)
-        ]
-        coords_tip = [
-            (coords[i] + 0.5 + optic_axis[i, ...] * delta_n * 0.75)
-            * optical_info["voxel_size_um"][i]
-            for i in range(3)
-        ]
+        coords_base, coords_tip = get_base_tip_coordinates(optic_axis, delta_n, volume_shape, voxel_size_um)
 
         # Plot single line per voxel, where it's length is delta_n
         z_base, y_base, x_base = coords_base
         z_tip, y_tip, x_tip = coords_tip
 
         # Don't plot zero values
-        mask = delta_n == 0
-        x_base[mask] = np.nan
-        y_base[mask] = np.nan
-        z_base[mask] = np.nan
-        x_tip[mask] = np.nan
-        y_tip[mask] = np.nan
-        z_tip[mask] = np.nan
+        coords_base, coords_tip = apply_mask_and_nan(coords_base, coords_tip, delta_n)
+        z_base, y_base, x_base = coords_base
+        z_tip, y_tip, x_tip = coords_tip
 
         # Gather all rays in single arrays, to plot them all at once, placing NAN in between them
         array_size = 3 * len(x_base.flatten())
@@ -396,7 +355,8 @@ class BirefringentVolume(BirefringentElement):
         all_z[::3] = z_base.flatten()
         all_z[1::3] = z_tip.flatten()
         all_z[2::3] = np.nan
-        # Compute colors
+
+        # Prepare line color
         all_color = np.empty((array_size))
         all_color[::3] = (
             (x_base - x_tip).flatten() ** 2
@@ -413,14 +373,13 @@ class BirefringentVolume(BirefringentElement):
             + "BirefringentVolume was cropped to fit into a region, the non-zero values "
             + "may no longer be included."
         )
-        assert any(all_color != 0), err
+        check_non_zero_values(all_color, err)
 
         all_color[all_color != 0] -= all_color[all_color != 0].min()
         all_color += 0.5
         all_color /= all_color.max()
 
-        if fig is None:
-            fig = go.Figure()
+        fig = initialize_figure(fig)
         fig.add_scatter3d(
             z=all_x,
             y=all_y,
@@ -460,45 +419,26 @@ class BirefringentVolume(BirefringentElement):
 
     @staticmethod
     def plot_volume_plotly(
-        optical_info, voxels_in=None, opacity=0.5, colormap="gray", fig=None
+        optical_info, voxels_in=None, opacity=0.5, colormap="gray", fig=None, use_microns=True
     ):
         """Plots a 3D array with the non-zero voxels shaded."""
         voxels = voxels_in * 1.0
         # Check if this is a torch tensor
         if not isinstance(voxels_in, np.ndarray):
-            try:
-                voxels = voxels.detach()
-                voxels = voxels.cpu().abs().numpy()
-            except:
-                pass
+            voxels = voxels.detach().cpu().numpy()
         voxels = np.abs(voxels)
         err = (
             "The set of voxels are expected to have non-zeros values. If the "
             + "BirefringentVolume was cropped to fit into a region, the non-zero values "
             + "may no longer be included."
         )
-        assert voxels.any(), err
+        check_non_zero_values(voxels, err)
 
-        import plotly.graph_objects as go
+        volume_shape, volume_size, voxel_size_um = get_vol_shape_and_size(optical_info, use_microns)
 
-        volume_shape = optical_info["volume_shape"]
-        if "voxel_size_um" not in optical_info:
-            optical_info["voxel_size_um"] = [1, 1, 1]
-            print(
-                "Notice: 'voxel_size_um' was not found in optical_info. Size of [1, 1, 1] assigned."
-            )
-        volume_size_um = [
-            optical_info["voxel_size_um"][i] * optical_info["volume_shape"][i]
-            for i in range(3)
-        ]
         # Define grid
-        coords = np.indices(np.array(voxels.shape)).astype(float)
-        # Shift by half a voxel and multiply by voxel size
-        coords = [
-            (coords[i] + 0.5) * optical_info["voxel_size_um"][i] for i in range(3)
-        ]
-        if fig is None:
-            fig = go.Figure()
+        coords = get_coords(voxels.shape, voxel_size_um, use_microns)
+        fig = initialize_figure(fig)
         fig.add_volume(
             x=coords[0].flatten(),
             y=coords[1].flatten(),
@@ -510,20 +450,10 @@ class BirefringentVolume(BirefringentElement):
             surface_count=20,  # needs to be a large number for good volume rendering
             colorscale=colormap,
         )
+        scene_dict = prepare_scene(volume_shape, volume_size, use_ticks=True)
         camera = {"eye": {"x": 50, "y": 0, "z": 0}}
         fig.update_layout(
-            scene=dict(
-                xaxis={"nticks": volume_shape[0], "range": [0, volume_size_um[0]]},
-                yaxis={"nticks": volume_shape[1], "range": [0, volume_size_um[1]]},
-                zaxis={"nticks": volume_shape[2], "range": [0, volume_size_um[2]]},
-                xaxis_title="Axial dimension",
-                aspectratio={
-                    "x": volume_size_um[0],
-                    "y": volume_size_um[1],
-                    "z": volume_size_um[2],
-                },
-                aspectmode="manual",
-            ),
+            scene=scene_dict,
             scene_camera=camera,
             margin={"r": 0, "l": 0, "b": 0, "t": 0},
             autosize=True,
@@ -696,7 +626,7 @@ class BirefringentVolume(BirefringentElement):
         delta_n = init_args.get("delta_n", 0.01)
         optic_axis = init_args.get("optic_axis", [1, 0, 0])
         offset = init_args.get("offset", [0, 0, 0])
-        self.voxel_parameters = self.generate_single_voxel_volume(
+        self.voxel_parameters = generate_single_voxel_volume(
             volume_shape, delta_n, optic_axis, offset
         )
 
@@ -704,7 +634,7 @@ class BirefringentVolume(BirefringentElement):
         my_init_args = (
             init_args if init_args else {"Delta_n_range": [0, 1], "axes_range": [-1, 1]}
         )
-        self.voxel_parameters = self.generate_random_volume(
+        self.voxel_parameters = generate_random_volume(
             volume_shape, init_args=my_init_args
         )
 
@@ -712,25 +642,81 @@ class BirefringentVolume(BirefringentElement):
         n_planes = int(init_mode[0])
         z_offset = init_args.get("z_offset", 0)
         delta_n = init_args.get("delta_n", 0.01)
-        self.voxel_parameters = self.generate_planes_volume(
+        self.voxel_parameters = generate_planes_volume(
             volume_shape, n_planes, z_offset=z_offset, delta_n=delta_n
         )
 
     def _init_ellipsoid_or_shell(self, volume_shape, init_mode, init_args):
+        """Initialize the volume with an ellipsoid or shell shape.
+        Args:
+            volume_shape (list): Shape of the volume as [z, y, x] dimensions.
+            init_mode (str): Initialization mode, either ellipsoid or shell.
+            init_args (dict): Arguments for initialization:
+
+        Common to both ellipsoid and shell:
+        - radius (list, optional): Radius in each dimension. 
+          Defaults to [5.5, 5.5, 3.5].
+        - center (list, optional): Center coordinates as fractions of 
+          volume dimensions. Defaults to [0.5, 0.5, 0.5].
+        - delta_n (float, optional): Birefringence value. Defaults to 0.01.
+        - border_thickness (float, optional): Thickness of the border. 
+          Defaults to 1.
+
+        Shell-specific parameters:
+        - tallness (int, optional): Height of the shell along the z-axis (number of voxels). 
+          Defaults to half of radius[0], which is the ellipsoid's z-radius.
+        - highness (int, optional): Height at which the shell is positioned above the 
+          bottom of the volume (in voxels). Defaults to center the shell vertically within the volume.
+        - flip (bool, optional): Whether to flip the shell along the z-axis. When True, 
+          the shell is mirrored vertically. Defaults to False.
+        """
         radius = init_args.get("radius", [5.5, 5.5, 3.5])
         center = init_args.get("center", [0.5, 0.5, 0.5])
         delta_n = init_args.get("delta_n", 0.01)
         alpha = init_args.get("border_thickness", 1)
-        self.voxel_parameters = self.generate_ellipsoid_volume(
-            volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
-        )
-        if init_mode == "shell":
-            self._apply_shell_modification()
 
-    def _apply_shell_modification(self):
-        self.voxel_parameters[0, ...][
-            : self.optical_info["volume_shape"][0] // 2 + 2, ...
-        ] = 0
+        if init_mode == "shell":
+            # How tall is the shell top to bottom?
+            # The tallness is size-like and gets a -1 when doing index math
+            shell_tallness = init_args.get("tallness", int(radius[0] // 2))
+
+            # How high is the shell flying above the bottom of the volume?
+            shell_highness = init_args.get("highness", int((volume_shape[0] - shell_tallness) // 2))
+
+            # Should we flip the shell over?
+            flip = init_args.get("flip", False)
+            if flip:
+                # Change the shell_highness so it is now the distance from top of volume to top of shell.
+                # This way after we flip, it's back to being the distance from the shell to the bottome of the volume
+                shell_highness = volume_shape[0] - shell_tallness - shell_highness
+
+            # Adjust the center position of the ellipse so the shell is eventually centered at max_index/2.
+            center[0] = (shell_tallness - 1 + shell_highness - radius[0]) / (volume_shape[0] - 1)  # calculate center so that the ellipse is in the right spot
+            geo_mean_radius = np.exp(np.mean(np.log(radius))) # take the geometric mean of the radii
+            if geo_mean_radius**2 - 0.5 >= 0:  # protect against the imaginary men
+                center[0] += (geo_mean_radius - np.sqrt(geo_mean_radius**2 - .5)) / (volume_shape[0] - 1)  # add a small shift so that the tip of the ellipse always hits a grid point
+            # Add a small shift so that the tip of the ellipse always hits a grid point
+            #   for larger radius shells, this shift will get smaller
+            else:
+                # If your radius is this small, this adjustment may not help
+                center[0] += 1 / (volume_shape[0] - 1) - np.finfo(float).eps
+
+            # Make the ellipse
+            self.voxel_parameters = generate_ellipsoid_volume(
+                volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+            )
+            # Set all voxels that are below the shell_highness to zero birfringence
+            self.voxel_parameters[0, ...][:shell_highness, ...] = 0
+
+            if flip:
+                # Flip the shell along the axial direction
+                self.voxel_parameters = np.flip(self.voxel_parameters, axis=1).copy()
+                # Flip the sign of the x and y components of the optic axis
+                self.voxel_parameters[2:4, ...] = -self.voxel_parameters[2:4, ...]
+        else:
+            self.voxel_parameters = generate_ellipsoid_volume(
+                volume_shape, center=center, radius=radius, alpha=alpha, delta_n=delta_n
+            )
 
     def _set_volume_ref(self):
         volume_ref = BirefringentVolume(
@@ -741,144 +727,9 @@ class BirefringentVolume(BirefringentElement):
         )
         self.Delta_n = volume_ref.Delta_n
         self.optic_axis = volume_ref.optic_axis
-
-    @staticmethod
-    def generate_single_voxel_volume(
-        volume_shape: list[int, int, int],
-        delta_n: float = 0.01,
-        optic_axis: list = [1, 0, 0],
-        offset: list[int, int, int] = [0, 0, 0],
-    ):
-        """Generates a single voxel volume."""
-        # Identity the center of the volume after the shifts
-        vox_idx = [s // 2 + o for s, o in zip(volume_shape, offset)]
-        # Create a volume of all zeros.
-        vol = np.zeros((4,) + tuple(volume_shape))
-        # Set the birefringence and optic axis
-        vol[0, vox_idx[0], vox_idx[1], vox_idx[2]] = delta_n
-        vol[1:, vox_idx[0], vox_idx[1], vox_idx[2]] = np.array(optic_axis)
-        return vol
-
-    @staticmethod
-    def generate_random_volume(
-        volume_shape: list[int, int, int],
-        init_args: dict = {"Delta_n_range": [0, 1], "axes_range": [-1, 1]},
-    ):
-        """Generates a random volume."""
-        np.random.seed(42)
-        Delta_n = np.random.uniform(*init_args["Delta_n_range"], volume_shape)
-        axes = [
-            np.random.uniform(*init_args["axes_range"], volume_shape) for _ in range(3)
-        ]
-        norm_A = np.linalg.norm(axes, axis=0)
-        return np.concatenate(
-            [np.expand_dims(Delta_n, axis=0)]
-            + [np.expand_dims(a / norm_A, axis=0) for a in axes],
-            axis=0,
-        )
-
-    @staticmethod
-    def generate_planes_volume(
-        volume_shape: list[int, int, int],
-        n_planes: int = 1,
-        z_offset: int = 0,
-        delta_n: float = 0.01,
-    ):
-        """Generates a volume with planes."""
-        vol = np.zeros((4,) + tuple(volume_shape))
-        z_size = volume_shape[0]
-        z_ranges = np.linspace(0, z_size - 1, n_planes * 2).astype(int)
-        optic_axis = np.random.uniform(-1, 1, (3, *volume_shape))
-        vol[1:, ...] = optic_axis / np.linalg.norm(optic_axis, axis=0)
-
-        if n_planes == 1:
-            # Birefringence
-            vol[0, z_size // 2 + z_offset, :, :] = delta_n
-            # Axis
-            vol[1, z_size // 2 + z_offset, :, :] = 1
-            vol[2, z_size // 2 + z_offset, :, :] = 0
-            vol[3, z_size // 2 + z_offset, :, :] = 0
-            return vol
-
-        random_data = BirefringentVolume.generate_random_volume([n_planes])
-        for z_ix in range(n_planes):
-            slice_range = z_ranges[z_ix * 2 : z_ix * 2 + 1]
-            expanded_data = np.expand_dims(random_data[:, z_ix], axis=(1, 2, 3))
-            vol[:, slice_range] = expanded_data.repeat(volume_shape[1], axis=2).repeat(
-                volume_shape[2], axis=3
-            )
-        return vol
-
-    @staticmethod
-    def generate_ellipsoid_volume(
-        volume_shape, center=[0.5, 0.5, 0.5], radius=[10, 10, 10], alpha=1, delta_n=0.01
-    ):
-        """Creates an ellipsoid with optical axis normal to the ellipsoid surface.
-        Args:
-            center [3]: [cz,cy,cx] from 0 to 1 where 0.5 is the center of the volume_shape.
-            radius [3]: in voxels, the radius in z,y,x for this ellipsoid.
-            alpha (float): Border thickness.
-            delta_n (float): Delta_n value of birefringence in the volume
-        Returns:
-            vol (np.array): 4D array where the first dimension represents the
-                birefringence and optic axis properties, and the last three
-                dims represents the 3D spatial locations.
-        """
-        # Originally grabbed from https://math.stackexchange.com/questions/2931909/normal-of-a-point-on-the-surface-of-an-ellipsoid,
-        #   then modified to do the subtraction of two ellipsoids instead.
-        vol = np.zeros((4,) + tuple(volume_shape))
-        kk, jj, ii = np.meshgrid(
-            np.arange(volume_shape[0]),
-            np.arange(volume_shape[1]),
-            np.arange(volume_shape[2]),
-            indexing="ij",
-        )
-        # shift to center
-        kk = floor(center[0] * volume_shape[0]) - kk.astype(float)
-        jj = floor(center[1] * volume_shape[1]) - jj.astype(float)
-        ii = floor(center[2] * volume_shape[2]) - ii.astype(float)
-
-        # DEBUG: checking the indices
-        # np.argwhere(ellipsoid_border == np.min(ellipsoid_border))
-        # plt.imshow(ellipsoid_border_mask[int(volume_shape[0] / 2),:,:])
-        ellipsoid_border = (
-            (kk**2) / (radius[0] ** 2)
-            + (jj**2) / (radius[1] ** 2)
-            + (ii**2) / (radius[2] ** 2)
-        )
-        hollow_inner = True
-        if hollow_inner:
-            ellipsoid_border_mask = np.abs(ellipsoid_border) <= 1
-            # The inner radius could also be defined as a scaled version of the outer radius.
-            # inner_radius = [0.9 * r for r in radius]
-            inner_radius = [r - alpha for r in radius]
-            inner_ellipsoid_border = (
-                (kk**2) / (inner_radius[0] ** 2)
-                + (jj**2) / (inner_radius[1] ** 2)
-                + (ii**2) / (inner_radius[2] ** 2)
-            )
-            inner_mask = np.abs(inner_ellipsoid_border) <= 1
-        else:
-            ellipsoid_border_mask = np.abs(ellipsoid_border - alpha) <= 1
-
-        vol[0, ...] = ellipsoid_border_mask.astype(float)
-        # Compute normals
-        kk_normal = 2 * kk / radius[0]
-        jj_normal = 2 * jj / radius[1]
-        ii_normal = 2 * ii / radius[2]
-        norm_factor = np.sqrt(kk_normal**2 + jj_normal**2 + ii_normal**2)
-        # Avoid division by zero
-        norm_factor[norm_factor == 0] = 1
-        vol[1, ...] = (kk_normal / norm_factor) * vol[0, ...]
-        vol[2, ...] = (jj_normal / norm_factor) * vol[0, ...]
-        vol[3, ...] = (ii_normal / norm_factor) * vol[0, ...]
-        vol[0, ...] *= delta_n
-        # vol = vol.permute(0,2,1,3)
-        if hollow_inner:
-            # Hollowing out the ellipsoid
-            combined_mask = np.logical_and(ellipsoid_border_mask, ~inner_mask)
-            vol[0, ...] = vol[0, ...] * combined_mask.astype(float)
-        return vol
+        self.optic_axis = adjust_optic_axis_positive_axial(self.optic_axis)
+        if 'voxel_parameters' in self.__dict__:
+            self.__dict__.pop('voxel_parameters')
 
     @staticmethod
     def create_dummy_volume(
@@ -907,7 +758,7 @@ class BirefringentVolume(BirefringentElement):
                     + "zeros volume method implemented. Use PYTORCH instead."
                 )
             voxel_delta_n = 0.01 if vol_type == "single_voxel" else 0
-            return BirefringentVolume.generate_single_voxel_volume(
+            return generate_single_voxel_volume(
                 volume_shape,
                 delta_n=voxel_delta_n,
                 optic_axis=[1, 0, 0],
@@ -1147,14 +998,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """
         self.use_nerf = use_nerf
         if self.use_nerf:
-            self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
+            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
             self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 256, 256])
             self.inr_model = torch.nn.DataParallel(self.inr_model)
             print("NeRF mode initialized.")
         else:
             self.inr_model = None
-            print("NeRF mode is disabled.")
 
     def save_nerf_model(self, filepath):
         """Save the NeRF model to a file."""
@@ -1295,6 +1145,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.ray_direction_basis = self.ray_direction_basis.to(device)
         self.ray_vol_colli_lengths = self.ray_vol_colli_lengths.to(device)
         if self.use_nerf:
+            self.mask = self.mask.to(device)
             self.inr_model = self.inr_model.to(device)
 
     def get_volume_reachable_region(self):
@@ -1870,10 +1721,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         end_time_prep = time.perf_counter()
         self.times["prep_for_cummulative_jones"] += end_time_prep - start_time_prep
 
-        voxels_of_segs_tensor = voxels_of_segs
+        device = ell_in_voxels.device
+        voxels_of_segs_tensor = voxels_of_segs.to(device)
         if voxels_of_segs_tensor.numel() == 0:
             print("The tensor is empty.")
-            valid_voxels_count = torch.tensor([], dtype=torch.int)
+            valid_voxels_count = torch.tensor([], dtype=torch.int, device=device)
         else:
             valid_voxels_mask = voxels_of_segs_tensor != -1
             valid_voxels_count = valid_voxels_mask.sum(dim=1)

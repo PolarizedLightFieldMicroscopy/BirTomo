@@ -1,5 +1,5 @@
 {
-    "n_epochs": 200,
+    "num_iterations": 200,
     "regularization_weight": 0.5,
     "lr": 1e-3,
     "lr_birefringence": 1e-3,
@@ -13,11 +13,12 @@
         ["birefringence active negative penalty", 1000],
         ["birefringence mask", 0]
     ],
+    "nerf_mode": false,
     "from_simulation": true,
     "vox_indices_by_mla_idx_path": "",
     "mla_rays_at_once": true,
     "two_optic_axis_components": true,
-    "free_memory_by_del_large_arrays": true,
+    "free_memory_by_del_large_arrays": false,
     "save_rays": false,
     "save_freq": 20,
     "output_posfix": "",

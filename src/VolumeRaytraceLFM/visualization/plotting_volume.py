@@ -68,14 +68,15 @@ def volume_2_projections(
     return out_img
 
 
-def visualize_volume(volume: BirefringentVolume, optical_info: dict):
+def visualize_volume(volume: BirefringentVolume, optical_info: dict, use_microns=True):
     with torch.no_grad():
-        plotly_figure = volume.plot_lines_plotly()
+        plotly_figure = volume.plot_lines_plotly(use_microns=use_microns)
         plotly_figure = volume.plot_volume_plotly(
             optical_info,
             voxels_in=volume.get_delta_n(),
             opacity=0.01,
             fig=plotly_figure,
+            use_microns=use_microns,
         )
         plotly_figure.show()
     return

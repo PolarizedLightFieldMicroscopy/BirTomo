@@ -9,6 +9,7 @@ from tests.fixtures_backend import backend_fixture
 from tests.fixtures_optical_info import optical_info_vol11
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import BirefringentVolume
+from VolumeRaytraceLFM.volumes import volume_args
 from VolumeRaytraceLFM.volumes.modification import (
     pad_to_region_shape,
     crop_to_region_shape,
@@ -192,6 +193,22 @@ def test_init_from_file(optical_info_vol11, tmp_path):
 
     assert bv.get_delta_n().shape == tuple(optical_info_vol11["volume_shape"])
     assert bv.get_optic_axis().shape == (3, *optical_info_vol11["volume_shape"])
+
+
+@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+def test_optic_axis_axial_components_positive(optical_info_vol11, backend_fixture):
+    optical_info = optical_info_vol11
+    optical_info["volume_shape"] = [32, 32, 32]
+    volume = BirefringentVolume(
+        backend=backend_fixture,
+        optical_info=optical_info,
+        volume_creation_args=volume_args.sphere_args2
+    )
+    optic_axis = volume.optic_axis
+    if backend_fixture == BackEnds.PYTORCH:
+        optic_axis = optic_axis.detach().cpu().numpy()
+
+    assert np.all(optic_axis[0] >= 0), "Not all axial components of the optic axis are positive."
 
 
 def main():

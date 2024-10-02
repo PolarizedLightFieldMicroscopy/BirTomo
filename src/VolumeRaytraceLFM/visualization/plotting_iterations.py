@@ -66,7 +66,7 @@ def plot_iteration_update(
     plt.plot(list(range(len(losses))), losses)
     plt.gca().yaxis.set_label_position("right")
     plt.gca().yaxis.tick_right()
-    plt.xlabel("Epoch")
+    plt.xlabel("Iterations")
     plt.ylabel("Total loss")
 
     if streamlit_purpose:
@@ -150,11 +150,11 @@ def plot_combined_loss_subplot(
     ax, losses, data_term_losses, regularization_term_losses, max_y_limit=None
 ):
     """Helper function to plot all losses on a given axis."""
-    epochs = list(range(len(losses)))
-    ax.plot(epochs, losses, label="total loss", color="g")
-    ax.plot(epochs, data_term_losses, label="data-fidelity term loss", color="b")
+    iterations = list(range(len(losses)))
+    ax.plot(iterations, losses, label="total loss", color="g")
+    ax.plot(iterations, data_term_losses, label="data-fidelity term loss", color="b")
     ax.plot(
-        epochs,
+        iterations,
         regularization_term_losses,
         label="regularization term loss",
         color=(1.0, 0.92, 0.23),

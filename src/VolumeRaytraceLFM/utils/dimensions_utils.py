@@ -1,6 +1,6 @@
 import torch
+import numpy as np
 import copy
-from math import floor
 
 
 def get_region_of_ones_shape(mask):
@@ -201,3 +201,29 @@ def oneD_to_light_field(light_field_1D, n_micro_lenses, pixels_per_ml):
             # Update the current position in the 1D tensor
             current_pos += num_pixels_per_ml
     return light_field
+
+
+def extend_image_with_borders(image, target_shape):
+    """Extend an image to a target shape by repeating the border values.
+    Args:
+        image (numpy.array): The input image.
+        target_shape (tuple): The desired target shape (y, x).
+    Returns:
+        numpy.array: The extended image of the target shape.
+    """
+    input_shape = image.shape
+
+    # Calculate the padding needed for each dimension
+    pad_y_total = target_shape[0] - input_shape[0]
+    pad_x_total = target_shape[1] - input_shape[1]
+    
+    # Calculate how much padding goes to each side
+    pad_y_top = pad_y_total // 2
+    pad_y_bottom = pad_y_total - pad_y_top
+    pad_x_left = pad_x_total // 2
+    pad_x_right = pad_x_total - pad_x_left
+
+    # Apply padding with 'edge' mode to repeat the border values
+    extended_image = np.pad(image, ((pad_y_top, pad_y_bottom), (pad_x_left, pad_x_right)), mode='edge')
+
+    return extended_image

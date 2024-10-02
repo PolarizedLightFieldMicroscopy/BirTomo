@@ -57,7 +57,7 @@ with columns[0]:
     ############ Reconstruction settings #################
     backend = BackEnds.PYTORCH
     st.subheader("Iterative reconstruction parameters")
-    n_epochs = st.slider("Number of iterations", min_value=1, max_value=500, value=500)
+    num_iterations = st.slider("Number of iterations", min_value=1, max_value=500, value=500)
     # See loss_functions.py for more details
     loss_function = st.selectbox(
         "Loss function", ["vonMisses", "vector", "L1_cos", "L1all"], 1
@@ -356,7 +356,7 @@ with columns[1]:
 # lr = st.slider('Learning rate', min_value=1, max_value=5, value=3)
 # filename_message = st.text_input('Message to add to the filename (not currently saving anyway..)')
 training_params = {
-    "n_epochs": n_epochs,  # How long to train for
+    "num_iterations": num_iterations,  # How long to train for
     "azimuth_weight": ret_azim_weight,  # Azimuth loss weight
     "regularization_weight": [reg_weight1, reg_weight2],  # Regularization weight
     "lr": learning_rate_delta_n,  # Learning rate for delta_n
@@ -488,9 +488,9 @@ if st.button("Reconstruct!"):
     my_plot = st.empty()  # set up a place holder for the plot
     my_3D_plot = st.empty()  # set up a place holder for the 3D plot
 
-    st.write("Working on these ", n_epochs, "iterations...")
+    st.write("Working on these ", num_iterations, "iterations...")
     my_bar = st.progress(0)
-    for ep in tqdm(range(training_params["n_epochs"]), "Minimizing"):
+    for ep in tqdm(range(training_params["num_iterations"]), "Minimizing"):
         optimizer.zero_grad()
 
         # Forward projection
@@ -537,7 +537,7 @@ if st.button("Reconstruct!"):
         azim_image_out = azim_image_current.detach()
         azim_image_out[azimuth_damp_mask == 0] = 0
 
-        percent_complete = int(ep / training_params["n_epochs"] * 100)
+        percent_complete = int(ep / training_params["num_iterations"] * 100)
         my_bar.progress(percent_complete + 1)
 
         if ep % 2 == 0:
