@@ -59,7 +59,7 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
 )
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
-
+from utils.logging import redirect_output_to_log, restore_output
 
 DEBUG = False
 PRINT_GRADIENTS = False
@@ -263,7 +263,7 @@ class Reconstructor:
         recon_info: ReconstructionConfig,
         output_dir=None,
         device="cpu",
-        omit_rays_based_on_pixels=False,
+        omit_rays_based_on_pixels=True,
         apply_volume_mask=False,
     ):
         """
@@ -1149,11 +1149,14 @@ class Reconstructor:
         use_streamlit=False,
         plot_live=False,
         all_prop_elements=False,
-        log_file=None,
     ):
+        """Method to perform the actual reconstruction based on the provided parameters.
         """
-        Method to perform the actual reconstruction based on the provided parameters.
-        """
+        log_file = True
+        log_file_path = os.path.join(self.recon_directory, "output_log.txt")
+        if log_file:
+            # Redirect output to the log file if provided
+            log_file_handle = redirect_output_to_log(log_file_path)
         print(f"Beginning reconstruction iterations...")
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
@@ -1312,3 +1315,7 @@ class Reconstructor:
         if self.nerf_mode:
             nerf_model_path = os.path.join(self.recon_directory, "nerf_model.pth")
             self.rays.save_nerf_model(nerf_model_path) 
+
+        if log_file:
+            # Restore the standard output
+            restore_output(log_file_handle)
