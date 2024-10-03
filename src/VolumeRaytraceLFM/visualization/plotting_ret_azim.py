@@ -194,6 +194,7 @@ def plot_retardance_orientation(
     plt.title("Orientation")
     plt.xticks([])
     plt.yticks([])
+    plt.clim(0, np.pi)
     # Combined retardance and orientation subplot
     ax = plt.subplot(1, 3, 3)
     if azimuth_plot_type == "lines":

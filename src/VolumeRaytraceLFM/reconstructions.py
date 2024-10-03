@@ -59,6 +59,7 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
 )
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
+from VolumeRaytraceLFM.utils.gradient_utils import monitor_gradients, clip_gradient_norms_nerf
 from utils.logging import redirect_output_to_log, restore_output
 
 DEBUG = False
@@ -266,10 +267,13 @@ class Reconstructor:
         omit_rays_based_on_pixels=True,
         apply_volume_mask=False,
     ):
-        """
-        Initialize the Reconstructor with the provided parameters.
+        """Initialize the Reconstructor with the provided parameters.
 
         recon_info (class): containing reconstruction parameters
+        output_dir (str): directory to save the reconstruction results
+        device (str): device to run the reconstruction on
+        omit_rays_based_on_pixels (bool): whether to omit rays based on pixels with zero retardance
+        apply_volume_mask (bool): whether to apply a mask to the volume
         """
         start_time = time.perf_counter()
         print(f"\nInitializing a Reconstructor, using computing device {device}")
@@ -346,6 +350,7 @@ class Reconstructor:
 
         self.mla_rays_at_once = self.iteration_params.get("mla_rays_at_once", False)
         if self.mla_rays_at_once and not self.rays.MLA_volume_geometry_ready:
+            print("Preparing rays for all rays at once...")
             self.rays.prepare_for_all_rays_at_once()
             if not self.from_simulation:
                 radiometry_path = self.iteration_params.get("radiometry_path", None)
@@ -803,6 +808,10 @@ class Reconstructor:
             print("\nAfter backward pass:")
             self.print_grad_info(volume_estimation)
 
+        if self.nerf_mode:
+            monitor_gradients(self.rays.inr_model)
+            clip_gradient_norms_nerf(self.rays.inr_model, self.ep, verbose=True)
+
         if CLIP_GRADIENT_NORM:
             self.clip_gradient_norms(volume_estimation)
 
@@ -879,7 +888,7 @@ class Reconstructor:
                 adjusted_lrs,
             )
         return
-
+                
     def print_grad_info(self, volume_estimation):
         if False:
             print(
@@ -1181,6 +1190,7 @@ class Reconstructor:
                 self.volume_pred.optic_axis.requires_grad = False
         self.specify_variables_to_learn(param_list)
 
+        print("Setting up optimizer and scheduler...")
         if self.nerf_mode:
             optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
             scheduler_nerf_config = get_scheduler_configs_nerf(self.iteration_params)
@@ -1237,6 +1247,7 @@ class Reconstructor:
         warmup_iterations = 10
         warmup_start_proportion = 0.1
 
+        print("Starting iterations...")
         # Iterations
         for ep in tqdm(range(1, n_iterations + 1), "Minimizing"):
             self.ep = ep
