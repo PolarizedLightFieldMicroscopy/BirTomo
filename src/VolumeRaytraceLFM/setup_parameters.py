@@ -19,10 +19,21 @@ def setup_iteration_parameters(config_file=None):
             iteration_params = json.load(f)
     else:
         iteration_params = {
-            "num_iterations": 201,
-            "azimuth_weight": 0.5,
-            "regularization_weight": 0.1,
-            "lr": 1e-3,
-            "output_posfix": "",
+            "general": {
+                "num_iterations": 1000,
+                "save_freq": 100
+            },
+
+            "learning_rates": {
+                "birefringence": 1e-4,
+                "optic_axis": 1e-1
+            },
+
+            "regularization": {
+                "weight": 1.0,
+                "functions": [
+                    ["birefringence active L2", 100]
+                ]
+            },
         }
     return iteration_params

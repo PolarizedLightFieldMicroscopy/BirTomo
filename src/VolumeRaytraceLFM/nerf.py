@@ -215,11 +215,22 @@ def setup_optimizer_nerf(
     """
     if isinstance(model, nn.DataParallel):
         model = model.module  # Access the actual model inside DataParallel
-    # Default learning rates
-    lr_fc1 = training_params.get("lr_fc1", 1e-2)   # Learning rate for fc1
-    lr_fc2 = training_params.get("lr_fc2", 1e-4)   # Learning rate for fc2
-    lr_fc3 = training_params.get("lr_fc3", 1e-4)   # Learning rate for fc3
-    lr_output = training_params.get("lr_output", 1e-4)  # Learning rate for the output layer
+
+    # Extract the NeRF-specific parameters
+    nerf_params = training_params.get("nerf", {})
+
+    # Extract NeRF learning rates
+    lr_fc1 = nerf_params.get("learning_rates", {}).get("fc1", 1e-2)  # Learning rate for fc1
+    lr_fc2 = nerf_params.get("learning_rates", {}).get("fc2", 1e-4)  # Learning rate for fc2
+    lr_fc3 = nerf_params.get("learning_rates", {}).get("fc3", 1e-4)  # Learning rate for fc3
+    lr_output = nerf_params.get("learning_rates", {}).get("output", 1e-4)  # Learning rate for output layer
+
+    # Extract optimizer parameters from the JSON
+    optimizer_type = nerf_params.get("optimizer", {}).get("type", "NAdam")
+    betas = tuple(nerf_params.get("optimizer", {}).get("betas", [0.9, 0.999]))  # Tuple for betas
+    eps = nerf_params.get("optimizer", {}).get("eps", 1e-8)
+    weight_decay = nerf_params.get("optimizer", {}).get("weight_decay", 1e-4)
+
     # Access layers from model (assuming it's an instance of ImplicitRepresentationMLPSpherical)
     parameters = [
         # fc1 layer
@@ -243,8 +254,13 @@ def setup_optimizer_nerf(
             "lr": lr_output,
         },
     ]
-    # You can change the optimizer type here if needed (e.g., Adam, AdamW, etc.)
-    optimizer = torch.optim.NAdam(parameters)
+    # Setup the optimizer using the NAdam parameters from the JSON
+    optimizer = torch.optim.NAdam(
+        parameters,
+        betas=betas,           # Momentum coefficients from the JSON
+        eps=eps,               # Epsilon for numerical stability
+        weight_decay=weight_decay,  # Weight decay for regularization
+    )
     return optimizer
 
 

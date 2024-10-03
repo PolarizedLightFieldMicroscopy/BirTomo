@@ -4,6 +4,9 @@ import torch
 
 def monitor_gradients(model):
     print("Monitoring layer gradients:")
+    
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module
 
     # First hidden layer (fc1)
     if model.layers[0].weight.grad is not None:

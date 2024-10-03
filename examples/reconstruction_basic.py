@@ -33,7 +33,6 @@ recon_directory = create_unique_directory(recon_output_dir, postfix=recon_output
 
 # Whether to continue a previous reconstruction
 continue_recon = False
-recon_file_path = r"to be alterned.h5"
 
 # For loading forward images that were saved in a previous reconstruction folder
 measurement_dir = os.path.join(recon_output_dir, "to be altered")
@@ -66,8 +65,9 @@ else:
 # %% Run reconstruction
 recon_optical_info = optical_info.copy()
 iteration_params = setup_iteration_parameters(iter_config_file)
+recon_init_file_path = iteration_params["file_paths"]["initial_volume"]
 if continue_recon:
-    initial_volume = BirefringentVolume.init_from_file(recon_file_path, BACKEND, recon_optical_info)
+    initial_volume = BirefringentVolume.init_from_file(recon_init_file_path, BACKEND, recon_optical_info)
 else:
     initial_volume = BirefringentVolume(
         backend=BACKEND,
