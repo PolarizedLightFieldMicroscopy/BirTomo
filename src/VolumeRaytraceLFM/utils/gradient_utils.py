@@ -30,10 +30,10 @@ def monitor_gradients(model):
         print(f"Output layer bias gradient norm: {model.layers[-1].bias.grad.norm(2).item():.4f}")
 
 
-def clip_gradient_norms_nerf(self, model, iteration_num, verbose=False):
+def clip_gradient_norms_nerf(model, iteration_num, verbose=False):
     # Gradient clipping
     max_norm = 1.0
-    total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)
+    total_norm = torch.nn.utils.clip_grad_norm_(model.module.parameters(), max_norm=max_norm)
     
     if verbose:
         print(f"Iteration {iteration_num}: Total gradient norm: {total_norm:.2f}")

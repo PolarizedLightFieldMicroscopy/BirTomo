@@ -205,7 +205,7 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
 def setup_optimizer_nerf(
     model: nn.Module, training_params: dict
 ) -> torch.optim.Optimizer:
-    """Set up the optimizer for the neural network model.
+    """Set up the optimizer for the neural network model with layer-specific learning rates.
 
     Args:
         model (nn.Module): The neural network model.
@@ -213,16 +213,38 @@ def setup_optimizer_nerf(
     Returns:
         torch.optim.Optimizer: Configured optimizer.
     """
-    inr_params = model.inr_model.parameters()
+    if isinstance(model, nn.DataParallel):
+        model = model.module  # Access the actual model inside DataParallel
+    # Default learning rates
+    lr_fc1 = training_params.get("lr_fc1", 1e-2)   # Learning rate for fc1
+    lr_fc2 = training_params.get("lr_fc2", 1e-4)   # Learning rate for fc2
+    lr_fc3 = training_params.get("lr_fc3", 1e-4)   # Learning rate for fc3
+    lr_output = training_params.get("lr_output", 1e-4)  # Learning rate for the output layer
+    # Access layers from model (assuming it's an instance of ImplicitRepresentationMLPSpherical)
     parameters = [
+        # fc1 layer
         {
-            "params": inr_params,
-            "lr": training_params.get("lr", 0.001),
-        }
+            "params": model.layers[0].parameters(),  # First Linear layer (fc1)
+            "lr": lr_fc1,
+        },
+        # fc2 layer
+        {
+            "params": model.layers[2].parameters(),  # Second Linear layer (fc2)
+            "lr": lr_fc2,
+        },
+        # fc3 layer
+        {
+            "params": model.layers[4].parameters(),  # Third Linear layer (fc3)
+            "lr": lr_fc3,
+        },
+        # Output layer
+        {
+            "params": model.layers[-1].parameters(),  # Output Linear layer
+            "lr": lr_output,
+        },
     ]
-    # optimizer_class = getattr(torch.optim, training_params.get("optimizer", "NAdam"))
-    # optimizer = optimizer_class(parameters)
-    optimizer = torch.optim.NAdam(parameters)  # , lr=0.001)
+    # You can change the optimizer type here if needed (e.g., Adam, AdamW, etc.)
+    optimizer = torch.optim.NAdam(parameters)
     return optimizer
 
 

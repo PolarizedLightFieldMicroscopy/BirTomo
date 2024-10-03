@@ -1192,7 +1192,7 @@ class Reconstructor:
 
         print("Setting up optimizer and scheduler...")
         if self.nerf_mode:
-            optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
+            optimizer = setup_optimizer_nerf(self.rays.inr_model, self.iteration_params)
             scheduler_nerf_config = get_scheduler_configs_nerf(self.iteration_params)
             scheduler_nerf = create_scheduler(optimizer, scheduler_nerf_config)
             optimizer_opticaxis, optimizer_birefringence = None, None
