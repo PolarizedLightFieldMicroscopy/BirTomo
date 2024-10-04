@@ -391,7 +391,7 @@ class RayTraceLFM(OpticalElement):
         """
         Allows to the calculations to be done in ray-space coordinates
         as oppossed to laboratory coordinates
-        Parameters:
+        Args:
             ray (np.array): normalized 3D vector giving the direction
                             of the light ray
         Returns:
@@ -399,73 +399,65 @@ class RayTraceLFM(OpticalElement):
             ray_perp1 (np.array): normalized 3D vector
             ray_perp2 (np.array): normalized 3D vector
         """
-        # in case ray is not a unit vector <- does not need to be normalized
-        # ray = ray / np.linalg.norm(ray)
         theta = np.arccos(np.dot(ray, np.array([1, 0, 0])))
         # Unit vectors that give the laboratory axes, can be changed
         scope_axis = np.array([1, 0, 0])
         scope_perp1 = np.array([0, 1, 0])
         scope_perp2 = np.array([0, 0, 1])
         theta = np.arccos(np.dot(ray, scope_axis))
-        # print(f"Rotating by {np.around(np.rad2deg(theta), decimals=0)} degrees")
+        print(f"Maximum ray angle is {np.around(np.rad2deg(theta), decimals=0)} degrees")
         normal_vec = RayTraceLFM.find_orthogonal_vec(ray, scope_axis)
         Rinv = RayTraceLFM.rotation_matrix(normal_vec, -theta)
         # Extracting basis vectors that are orthogonal to the ray and will be parallel
         # to the laboratory axes that are not the optic axis after a rotation.
         # Note: If scope_perp1 if the y-axis, then ray_perp1 if the 2nd column of Rinv.
         ray_perp1 = np.dot(Rinv, scope_perp1)
-        ray_perp2 = np.dot(Rinv, scope_perp2)
+        ray_perp2 = -np.dot(Rinv, scope_perp2)
         return [ray, ray_perp1, ray_perp2]
 
     @staticmethod
     def calc_ray_direction_torch(ray_in):
-        """
-        Allows to the calculations to be done in ray-space coordinates
-        as oppossed to laboratory coordinates
-        Parameters:
-            ray_in [n_rays,3] (torch.array): normalized 3D vector giving the direction
-                            of the light ray
+        """Allows to the calculations to be done in ray-space coordinates
+        as oppossed to laboratory coordinates. For each ray, we calculate
+        a set of three ray basis vectors.
+        Args:
+            ray_in [n_rays, 3] (torch.array): normalized 3D vector giving
+                                            the direction of the light ray
         Returns:
+            torch.array: [3, n_rays, 3] where...
             ray (torch.array): same as input
             ray_perp1 (torch.array): normalized 3D vector
             ray_perp2 (torch.array): normalized 3D vector
         """
-        if not torch.is_tensor(ray_in):
-            ray = torch.from_numpy(ray_in)
-        else:
-            ray = ray_in
-        theta = torch.arccos(
-            torch.linalg.multi_dot(
-                (ray, torch.tensor([1.0, 0, 0], dtype=ray.dtype, device=ray_in.device))
-            )
-        )
+        ray = torch.from_numpy(ray_in) if not torch.is_tensor(ray_in) else ray_in
         # Unit vectors that give the laboratory axes, can be changed
-        scope_axis = torch.tensor([1.0, 0, 0], dtype=ray.dtype, device=ray_in.device)
-        scope_perp1 = torch.tensor([0, 1.0, 0], dtype=ray.dtype, device=ray_in.device)
-        scope_perp2 = torch.tensor([0, 0, 1.0], dtype=ray.dtype, device=ray_in.device)
-        # print(f"Rotating by {np.around(torch.rad2deg(theta).numpy(), decimals=0)} degrees")
+        scope_axis = torch.tensor([1.0, 0, 0], dtype=ray.dtype, device=ray.device)
+        scope_perp1 = torch.tensor([0, 1.0, 0], dtype=ray.dtype, device=ray.device)
+        scope_perp2 = torch.tensor([0, 0, 1.0], dtype=ray.dtype, device=ray.device)
+        theta = torch.arccos(torch.matmul(ray, scope_axis))
+        print(f"Maximum ray angle is {torch.round(torch.rad2deg(theta).max(), decimals=0)} degrees")
         normal_vec = RayTraceLFM.find_orthogonal_vec_torch(ray, scope_axis)
         Rinv = RayTraceLFM.rotation_matrix_torch(normal_vec, -theta)
         # Extracting basis vectors that are orthogonal to the ray and will be parallel
         # to the laboratory axes that are not the optic axis after a rotation.
-        # Note: If scope_perp1 if the y-axis, then ray_perp1 if the 2nd column of Rinv.
-        if scope_perp1[0] == 0 and scope_perp1[1] == 1 and scope_perp1[2] == 0:
+        # Note: If scope_perp1 is the y-axis, then ray_perp1 is the 2nd column of Rinv.
+        if torch.equal(scope_perp1, torch.tensor([0, 1.0, 0], dtype=ray.dtype)):
             ray_perp1 = Rinv[:, :, 1]  # dot product needed
         else:
-            # todo: we need to put a for loop to do this operation
             # ray_perp1 = torch.linalg.multi_dot((Rinv, scope_perp1))
             raise NotImplementedError
-        if scope_perp2[0] == 0 and scope_perp2[1] == 0 and scope_perp2[2] == 1:
-            ray_perp2 = Rinv[:, :, 2]
+        if torch.equal(scope_perp2, torch.tensor([0, 0, 1.0], dtype=ray.dtype)):
+            ray_perp2 = -Rinv[:, :, 2]
         else:
-            # todo: we need to put a for loop to do this operation
             # ray_perp2 = torch.linalg.multi_dot((Rinv, scope_perp2))
             raise NotImplementedError
+    
+        # Unsqueeze tensors to make them of shape [1, n_rays, 3]
+        ray = ray.unsqueeze(0)
+        ray_perp1 = ray_perp1.unsqueeze(0)
+        ray_perp2 = ray_perp2.unsqueeze(0)
 
-        # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
-        return torch.cat(
-            [ray.unsqueeze(0), ray_perp1.unsqueeze(0), ray_perp2.unsqueeze(0)], 0
-        )
+        return torch.cat([ray, ray_perp1, ray_perp2], dim=0)
 
     ###########################################################################################
     # Ray-tracing functions

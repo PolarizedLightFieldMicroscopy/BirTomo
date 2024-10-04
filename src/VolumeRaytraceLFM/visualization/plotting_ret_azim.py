@@ -32,7 +32,7 @@ def plot_birefringence_lines(
     lc_data = [[(l_ii[ix], l_jj[ix]), (h_ii[ix], h_jj[ix])] for ix in range(len(l_ii))]
     colors = retardance_img.flatten()
     cmap = matplotlib.cm.get_cmap(cmap)
-    rgba = cmap(colors / (2 * np.pi))
+    rgba = cmap(colors / np.pi)
 
     lc = matplotlib.collections.LineCollection(lc_data, colors=line_color, linewidths=1)
     if ax is None:
