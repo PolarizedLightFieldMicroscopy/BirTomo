@@ -74,6 +74,7 @@ class OpticalElement(OpticBlock):
         "pixels_per_ml": 17,
         "n_micro_lenses": 1,
         "n_voxels_per_ml": 1,
+        "aperture_radius_px": 7.5,
         # Objective lens information
         "M_obj": 60,
         "na_obj": 1.2,
@@ -469,7 +470,7 @@ class RayTraceLFM(OpticalElement):
     ###########################################################################################
     # Ray-tracing functions
     @staticmethod
-    def rays_through_vol(pixels_per_ml, naObj, nMedium, volume_ctr_um):
+    def rays_through_vol(pixels_per_ml, naObj, nMedium, volume_ctr_um, aperture_radius_px):
         """Identifies the rays that pass through the volume and the central lenslet
         Args:
             pixels_per_ml (int): number of pixels per microlens in one direction,
@@ -479,6 +480,8 @@ class RayTraceLFM(OpticalElement):
             nMedium (float): refractive index of the volume
             volume_ctr_um (np.array): 3D vector containing the coordinates of the center
                                         of the volume in volume space units (um)
+            aperture_radius_px (float): radius of the effective aperture of a microlens
+                                        in pixels, about pixels_per_ml/2
         Returns:
             ray_enter (np.array): (3, X, X) array where (3, i, j) gives the coordinates
                                     within the volume ray entrance plane for which the
@@ -492,7 +495,6 @@ class RayTraceLFM(OpticalElement):
         # Units are in pixel indicies, referring to the pixel that is centered up 0.5 units
         #   Ex: if ml_ctr = [8, 8], then the spatial center pixel is at [8.5, 8.5]
         ml_ctr = [(pixels_per_ml - 1) / 2, (pixels_per_ml - 1) / 2]
-        ml_radius = 7.5  # pixels_per_ml / 2
         i = np.linspace(0, pixels_per_ml - 1, pixels_per_ml)
         j = np.linspace(0, pixels_per_ml - 1, pixels_per_ml)
         jv, iv = np.meshgrid(i, j)
@@ -500,9 +502,9 @@ class RayTraceLFM(OpticalElement):
 
         # Angles that reach the pixels
         cam_pixels_azim = np.arctan2(jv - ml_ctr[1], iv - ml_ctr[0])
-        cam_pixels_azim[dist_from_ctr > ml_radius] = np.nan
-        dist_from_ctr[dist_from_ctr > ml_radius] = np.nan
-        cam_pixels_tilt = np.arcsin(dist_from_ctr / ml_radius * naObj / nMedium)
+        cam_pixels_azim[dist_from_ctr > aperture_radius_px] = np.nan
+        dist_from_ctr[dist_from_ctr > aperture_radius_px] = np.nan
+        cam_pixels_tilt = np.arcsin(dist_from_ctr / aperture_radius_px * naObj / nMedium)
 
         # Plotting
         if DEBUG:
@@ -781,6 +783,7 @@ class RayTraceLFM(OpticalElement):
         pixels_per_ml = self.optical_info["pixels_per_ml"]
         naObj = self.optical_info["na_obj"]
         nMedium = self.optical_info["n_medium"]
+        aperture_radius_px = self.optical_info["aperture_radius_px"]
         valid_vol_shape = (
             self.optical_info["n_micro_lenses"] * self.optical_info["n_voxels_per_ml"]
         )
@@ -801,7 +804,7 @@ class RayTraceLFM(OpticalElement):
 
         # Calculate the ray geometry
         ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
-            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted
+            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted, aperture_radius_px
         )
 
         # Store locally

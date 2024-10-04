@@ -18,6 +18,7 @@ def optical_info_vol11():
     optical_info["wavelength"] = 0.550
     optical_info["n_micro_lenses"] = 1
     optical_info["n_voxels_per_ml"] = 1
+    optical_info["aperture_radius_px"] = 7.5
     optical_info["polarizer"] = np.array([[1, 0], [0, 1]])
     optical_info["analyzer"] = np.array([[1, 0], [0, 1]])
 
@@ -39,6 +40,7 @@ def set_optical_info(vol_shape, pixels_per_ml, num_lenslets):
     optical_info["M_obj"] = 60
     optical_info["cube_voxels"] = True
     optical_info["camera_pix_pitch"] = 6.5
+    optical_info["aperture_radius_px"] = 7.5
     optical_info["polarizer"] = np.array([[1, 0], [0, 1]])
     optical_info["analyzer"] = np.array([[1, 0], [0, 1]])
     optical_info["polarizer_swing"] = 0.03

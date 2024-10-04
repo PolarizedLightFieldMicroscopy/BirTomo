@@ -15,10 +15,11 @@ def ray_trace_lfm_instance(backend_fixture, optical_info_vol11):
 
 
 def test_rays_through_vol(
-    pixels_per_ml=5, naObj=1.4, nMedium=1.52, volume_ctr_um=np.array([0.5, 0.5, 0.5])
+    pixels_per_ml=5, naObj=1.4, nMedium=1.52,
+    volume_ctr_um=np.array([0.5, 0.5, 0.5]), aperture_radius_px=7.5
 ):
     ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
-        pixels_per_ml, naObj, nMedium, volume_ctr_um
+        pixels_per_ml, naObj, nMedium, volume_ctr_um, aperture_radius_px
     )
     rays_shape = ray_enter.shape
     assert rays_shape == ray_exit.shape == ray_diff.shape
@@ -27,8 +28,7 @@ def test_rays_through_vol(
 
 @pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
 def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
-    """
-    Test that the voxel span is computed correctly.
+    """Test that the voxel span is computed correctly.
     The sample ray_diff is created with pixels_per_ml = 5.
     This function is called by compute_rays_geometry, where the
         axial_volume_dim is rays.optical_info['volume_shape'][0].
