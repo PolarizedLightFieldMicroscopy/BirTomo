@@ -1,21 +1,23 @@
 """This module contains the ReconstructionConfig and Reconstructor classes."""
 
 import sys
-import copy
-import time
 import os
 import json
-import torch
-import numpy as np
-from tqdm import tqdm
+import time
+import copy
 import csv
 import pickle
+import gc
+
+import torch
+import numpy as np
 import tifffile
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 ## For analyzing the memory usage of a function
 # from memory_profiler import profile
-import gc
+
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentVolume,
@@ -57,10 +59,11 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
     stay_on_sphere,
     spherical_to_unit_vector_torch,
 )
-from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
+from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance, filter_without_retardance
 from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
 from VolumeRaytraceLFM.utils.gradient_utils import monitor_gradients, clip_gradient_norms_nerf
 from utils.logging import redirect_output_to_log, restore_output
+from VolumeRaytraceLFM.volumes.compare import compare_volumes
 
 DEBUG = False
 PRINT_GRADIENTS = False
@@ -409,7 +412,7 @@ class Reconstructor:
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
         self.adjusted_lrs_list = []
-
+        self.volume_discrepancy_list = []
         self.to_device(device)
         end_time = time.perf_counter()
         print(f"Reconstructor initialized in {end_time - start_time:.2f} seconds\n")
@@ -460,6 +463,7 @@ class Reconstructor:
     @staticmethod
     def replace_nans(volume, ep):
         """Used in response to an error message."""
+        # TODO: move outside the class
         with torch.no_grad():
             num_nan_vecs = torch.sum(torch.isnan(volume.optic_axis[0, :]))
             if num_nan_vecs > 0:
@@ -977,6 +981,7 @@ class Reconstructor:
                 self.loss_total_list,
                 self.loss_data_term_list,
                 self.loss_reg_term_list,
+                discrepancy_losses=self.volume_discrepancy_list,
                 figure=fig,
             )
             fig.canvas.draw()
@@ -984,6 +989,7 @@ class Reconstructor:
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
             self._save_regularization_terms_to_csv(ep)
+            self._save_volume_discrepancy_to_csv(ep)
             if ep % save_freq == 0:
                 filename = f"optim_iter_{'{:04d}'.format(ep)}.pdf"
                 plt.savefig(os.path.join(output_dir, filename))
@@ -1102,6 +1108,14 @@ class Reconstructor:
             writer = csv.writer(file)
             writer.writerow([ep, *self.reg_term_values])
 
+    def _save_volume_discrepancy_to_csv(self, ep):
+        """Save the volume discrepancy values to a csv file."""
+        filename = "volume_discrepancy.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+        with open(filepath, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow([ep, *self.volume_discrepancy_list])
+        
     def clip_gradient_norms(self, model, verbose=False):
         # Gradient clipping
         max_norm = 1.0
@@ -1162,7 +1176,7 @@ class Reconstructor:
         if log_file:
             # Redirect output to the log file if provided
             log_file_handle = redirect_output_to_log(log_file_path)
-        print(f"Beginning reconstruction iterations...")
+        print("Beginning reconstruction iterations...")
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
 
@@ -1222,8 +1236,9 @@ class Reconstructor:
             initial_lr_0 = optimizer_opticaxis.param_groups[0]["lr"]
             initial_lr_1 = optimizer_birefringence.param_groups[0]["lr"]
 
+        fig_size = self.iteration_params.get("visualization", {}).get("fig_size", (10, 11))
         figure = setup_visualization(
-            window_title=self.recon_directory, plot_live=plot_live
+            window_title=self.recon_directory, plot_live=plot_live, fig_size=fig_size
         )
         self._create_regularization_terms_csv()
 
@@ -1272,6 +1287,9 @@ class Reconstructor:
             optimizers = (optimizer, optimizer_opticaxis, optimizer_birefringence)
             schedulers = (scheduler_nerf, scheduler_birefringence, scheduler_opticaxis)
             self.one_iteration(self.volume_pred, optimizers, schedulers)
+            
+            volume_discrepancy = compare_volumes(self.volume_pred, self.volume_ground_truth)
+            self.volume_discrepancy_list.append(volume_discrepancy.item())
 
             if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()

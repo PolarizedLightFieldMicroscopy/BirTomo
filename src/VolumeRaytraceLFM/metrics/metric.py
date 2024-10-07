@@ -259,6 +259,6 @@ class BirefringenceFieldLoss(torch.nn.Module):
     def forward(self, predicted_volume, target_volume):
         """Compute the birefringence field loss"""
         vector_field1 = predicted_volume[0, ...] * predicted_volume[1:, ...]
-        vector_field2 = target_volume[0, ...] * target_volume[1, ...]
+        vector_field2 = target_volume[0, ...] * target_volume[1:, ...]
         loss = F.mse_loss(vector_field1, vector_field2)
         return loss

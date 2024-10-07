@@ -192,6 +192,22 @@ def calculate_dynamic_max_y_limit(losses, window_size=10, scale_factor=1.1):
     return max_recent_loss * scale_factor
 
 
+def plot_discrepancy_loss_subplot(ax, discrepancy_losses, max_y_limit=None):
+    """Plots discrepancy losses on a separate subplot."""
+    iterations = list(range(len(discrepancy_losses)))
+    ax.plot(iterations, discrepancy_losses, label="discrepancy", color='purple', linestyle="-")
+    ax.set_xlim(left=0)
+    ax.set_ylim([0, max(discrepancy_losses) * 1.1])  # Dynamic y-axis limit
+    ax.set_xlabel("iteration")
+    ax.set_ylabel("discrepancy")
+    ax.legend(loc='upper right')
+    ax.grid(True)
+
+    # Set y-axis limit to zoom in on the lower range of loss values
+    if max_y_limit is not None:
+        ax.set_ylim([0, max_y_limit])
+
+
 def plot_iteration_update_gridspec(
     vol_meas,
     ret_meas,
@@ -202,11 +218,12 @@ def plot_iteration_update_gridspec(
     losses,
     data_term_losses,
     regularization_term_losses,
+    discrepancy_losses=None,
     figure=None,
     streamlit_purpose=False,
 ):
     """Plots measured and predicted volumes, retardance, orientation,
-    and combined losses using GridSpec for layout.
+    and combined losses using GridSpec for layout. Optionally plots discrepancy loss in a separate subplot.
     """
     # If a figure is provided, use it; otherwise, use the current figure
     if figure is not None:
@@ -215,42 +232,58 @@ def plot_iteration_update_gridspec(
         fig = plt.gcf()  # Get the current figure
     # Clear the current figure to ensure we're not plotting over old data
     fig.clf()
-    # Create GridSpec layout
-    gs = gridspec.GridSpec(3, 3, figure=fig, hspace=0.2, wspace=0.2)
+    
+    # Adjust GridSpec layout: Add extra rows for subheaders
+    nrows = 9 if discrepancy_losses is not None else 6
+    # Define the height ratios for the rows: smaller for the text rows, larger for the plot rows
+    height_ratios = [0.1, 1, 0.1, 1, 0.1, 1]
+    if discrepancy_losses is not None:
+        height_ratios.append(0.2)
+        height_ratios.append(0.1)
+        height_ratios.append(1)
+    
+    # Create GridSpec layout with custom height ratios
+    gs = gridspec.GridSpec(nrows, 3, figure=fig, hspace=0.2, wspace=0.2, height_ratios=height_ratios)
+
     titles = ["Birefringence (MIP)", "Retardance", "Orientation"]
     cmaps = ["plasma", "plasma", "twilight"]
-    # Plot measured data and predictions
-    for i, (meas, pred, title, cmap) in enumerate(
-        zip(
-            [vol_meas, ret_meas, azim_meas],
-            [vol_current, ret_current, azim_current],
-            titles,
-            cmaps,
-        )
-    ):
-        ax_meas = fig.add_subplot(gs[0, i])
+    text_params = {
+        "ha": "center",
+        "va": "center",
+        "fontsize": 10,
+        "weight": "bold"
+    }
+
+    # Plot the 'Measurements' header across all three columns
+    ax_measurements_header = fig.add_subplot(gs[0, :])
+    ax_measurements_header.text(0.5, 0.5, "Measurements", **text_params)
+    ax_measurements_header.axis("off")
+
+    # Plot measured data
+    for i, (meas, title, cmap) in enumerate(zip([vol_meas, ret_meas, azim_meas], titles, cmaps)):
+        ax_meas = fig.add_subplot(gs[1, i])
         plot_image_subplot(ax_meas, meas, f"{title}", cmap=cmap)
 
-        ax_pred = fig.add_subplot(gs[1, i])
+    # Plot the 'Predictions' header across all three columns
+    ax_predictions_header = fig.add_subplot(gs[2, :])
+    ax_predictions_header.text(0.5, 0.5, "Predictions", **text_params)
+    ax_predictions_header.axis("off")
+
+    # Plot predicted data
+    for i, (pred, title, cmap) in enumerate(zip([vol_current, ret_current, azim_current], titles, cmaps)):
+        ax_pred = fig.add_subplot(gs[3, i])
         plot_image_subplot(ax_pred, pred, f"{title}", cmap=cmap)
-    # Add row titles
-    fig.text(
-        0.5, 0.96, "Measurements", ha="center", va="center", fontsize=10, weight="bold"
-    )
-    fig.text(
-        0.5, 0.645, "Predictions", ha="center", va="center", fontsize=10, weight="bold"
-    )
-    fig.text(
-        0.5, 0.33, "Loss Function", ha="center", va="center", fontsize=10, weight="bold"
-    )
+
+    # Plot the 'Loss Function' header
+    ax_loss_header = fig.add_subplot(gs[4, :])
+    ax_loss_header.text(0.5, 0.5, "Loss Function", **text_params)
+    ax_loss_header.axis("off")
 
     # Calculate dynamic max_y_limit based on recent loss values
-    max_y_limit = calculate_dynamic_max_y_limit(
-        losses, window_size=50, scale_factor=1.1
-    )
+    max_y_limit = calculate_dynamic_max_y_limit(losses, window_size=50, scale_factor=1.1)
 
-    # Plot combined losses across the entire bottom row
-    ax_combined = fig.add_subplot(gs[2, :])
+    # Plot combined losses across the entire row
+    ax_combined = fig.add_subplot(gs[5, :])
     plot_combined_loss_subplot(
         ax_combined,
         losses,
@@ -258,8 +291,22 @@ def plot_iteration_update_gridspec(
         regularization_term_losses,
         max_y_limit=max_y_limit,
     )
+
+    # If discrepancy losses are provided, create a new subplot for them
+    if discrepancy_losses is not None:
+        ax_discrepancy_header = fig.add_subplot(gs[7, :])
+        ax_discrepancy_header.text(0.5, 0.5, "Discrepancy from Ground Truth", **text_params)
+        ax_discrepancy_header.axis("off")
+        ax_discrepancy = fig.add_subplot(gs[8, :])  # New subplot in the final row
+        max_y_limit_discrepancy = calculate_dynamic_max_y_limit(discrepancy_losses, window_size=500, scale_factor=1.1)
+        plot_discrepancy_loss_subplot(ax_discrepancy, discrepancy_losses, max_y_limit=max_y_limit_discrepancy)
+        ax_discrepancy.yaxis.set_label_position('right')
+        ax_discrepancy.yaxis.tick_right()
+    
     # Adjust layout to prevent overlap, leave space for row titles
     plt.subplots_adjust(left=0.05, right=0.91, bottom=0.07, top=0.92)
+    plt.tight_layout()
+    
     # Return the figure object if in Streamlit, else show the plot
     if streamlit_purpose:
         return fig
