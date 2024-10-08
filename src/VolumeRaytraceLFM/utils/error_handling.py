@@ -57,3 +57,19 @@ def check_for_negative_values_dict(my_dict):
         raise ValueError("The dictionary contains negative values.")
     else:
         print("All entries are nonnegative.")
+
+
+def replace_nans_in_optic_axis(volume):
+    """Used in response to an error message."""
+    with torch.no_grad():
+        num_nan_vecs = torch.sum(torch.isnan(volume.optic_axis[0, :]))
+        if num_nan_vecs > 0:
+            replacement_vecs = torch.nn.functional.normalize(
+                torch.rand(3, int(num_nan_vecs)), p=2, dim=0
+            )
+            volume.optic_axis[:, torch.isnan(volume.optic_axis[0, :])] = (
+                replacement_vecs
+            )
+            print(
+                f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors."
+            )

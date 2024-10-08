@@ -460,24 +460,6 @@ class Reconstructor:
             f"{output_dir}/parameters.pt",
         )
 
-    @staticmethod
-    def replace_nans(volume, ep):
-        """Used in response to an error message."""
-        # TODO: move outside the class
-        with torch.no_grad():
-            num_nan_vecs = torch.sum(torch.isnan(volume.optic_axis[0, :]))
-            if num_nan_vecs > 0:
-                replacement_vecs = torch.nn.functional.normalize(
-                    torch.rand(3, int(num_nan_vecs)), p=2, dim=0
-                )
-                volume.optic_axis[:, torch.isnan(volume.optic_axis[0, :])] = (
-                    replacement_vecs
-                )
-                if ep == 0:
-                    print(
-                        f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors."
-                    )
-
     def setup_raytracer(self, image=None, filepath=None, device="cpu"):
         """Initialize Birefringent Raytracer."""
         if filepath:
@@ -989,10 +971,11 @@ class Reconstructor:
             time.sleep(0.1)
             self.save_loss_lists_to_csv()
             self._save_regularization_terms_to_csv(ep)
-            self._save_volume_discrepancy_to_csv(ep)
+            if self.volume_ground_truth is not None:
+                self._save_volume_discrepancy_to_csv(ep)
             if ep % save_freq == 0:
                 filename = f"optim_iter_{'{:04d}'.format(ep)}.pdf"
-                plt.savefig(os.path.join(output_dir, filename))
+                plt.savefig(os.path.join(output_dir, "results_in_progress", filename))
             time.sleep(0.1)
         if ep % save_freq == 0:
             if self.remove_large_arrs:
@@ -1010,7 +993,7 @@ class Reconstructor:
                 volume_estimation.optic_axis = torch.nn.Parameter(
                     optic_axis_flat.permute(1, 0)
                 )
-                nerf_model_path = os.path.join(output_dir, f"nerf_model_{ep}.pth")
+                nerf_model_path = os.path.join(output_dir, "results_in_progress", f"nerf_model_{ep}.pth")
                 self.rays.save_nerf_model(nerf_model_path)
             else:
                 if self.volume_pred.indices_active is not None:
@@ -1020,7 +1003,7 @@ class Reconstructor:
                         ] = volume_estimation.optic_axis_active
             my_description = "Volume estimation after " + str(ep) + " iterations."
             volume_estimation.save_as_file(
-                os.path.join(output_dir, f"volume_iter_{'{:04d}'.format(ep)}.h5"),
+                os.path.join(output_dir, "results_in_progress", f"volume_iter_{'{:04d}'.format(ep)}.h5"),
                 description=my_description,
             )
             if self.remove_large_arrs:
@@ -1098,7 +1081,7 @@ class Reconstructor:
         fcn_names = [sublist[0] for sublist in reg_fcns]
         with open(filepath, mode="w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["ep", *fcn_names])
+            writer.writerow(["Iteration", *fcn_names])
 
     def _save_regularization_terms_to_csv(self, ep):
         """Save the regularization terms to a csv file."""
@@ -1108,13 +1091,21 @@ class Reconstructor:
             writer = csv.writer(file)
             writer.writerow([ep, *self.reg_term_values])
 
-    def _save_volume_discrepancy_to_csv(self, ep):
-        """Save the volume discrepancy values to a csv file."""
+    def _save_volume_discrepancy_to_csv(self, iteration_num):
+        """Append the latest volume discrepancy value to a CSV file after each iteration."""
         filename = "volume_discrepancy.csv"
         filepath = os.path.join(self.recon_directory, filename)
+
+        # Check if the file exists (write header if it does not)
+        file_exists = os.path.isfile(filepath)
+
         with open(filepath, mode="a", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow([ep, *self.volume_discrepancy_list])
+            if not file_exists:
+                writer.writerow(["Iteration", "Discrepancy"])
+            # Write the latest value from self.volume_discrepancy_list
+            latest_discrepancy = self.volume_discrepancy_list[-1]
+            writer.writerow([iteration_num, latest_discrepancy])
         
     def clip_gradient_norms(self, model, verbose=False):
         # Gradient clipping
@@ -1176,6 +1167,9 @@ class Reconstructor:
         if log_file:
             # Redirect output to the log file if provided
             log_file_handle = redirect_output_to_log(log_file_path)
+        results_directory = os.path.join(self.recon_directory, "results_in_progress")
+        if not os.path.exists(results_directory):
+            os.makedirs(results_directory)
         print("Beginning reconstruction iterations...")
         # Turn off the gradients for the initial volume guess
         self._turn_off_initial_volume_gradients()
@@ -1288,8 +1282,9 @@ class Reconstructor:
             schedulers = (scheduler_nerf, scheduler_birefringence, scheduler_opticaxis)
             self.one_iteration(self.volume_pred, optimizers, schedulers)
             
-            volume_discrepancy = compare_volumes(self.volume_pred, self.volume_ground_truth)
-            self.volume_discrepancy_list.append(volume_discrepancy.item())
+            if self.volume_ground_truth is not None:
+                volume_discrepancy = compare_volumes(self.volume_pred, self.volume_ground_truth)
+                self.volume_discrepancy_list.append(volume_discrepancy.item())
 
             if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()
@@ -1330,9 +1325,7 @@ class Reconstructor:
             )
 
         my_description = "Volume estimation after " + str(ep) + " iterations."
-        vol_save_path = os.path.join(
-            self.recon_directory, f"volume_iter_{'{:04d}'.format(ep)}.h5"
-        )
+        vol_save_path = os.path.join(self.recon_directory, "volume_final.h5")
         self.volume_pred.save_as_file(vol_save_path, description=my_description)
         print("Saved the final volume estimation to", vol_save_path)
         plt.savefig(os.path.join(self.recon_directory, "optim_final.pdf"))
