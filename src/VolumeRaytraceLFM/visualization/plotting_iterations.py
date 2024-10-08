@@ -1,6 +1,7 @@
 import torch
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.ticker as ticker
 
 
 def plot_iteration_update(
@@ -165,6 +166,7 @@ def plot_combined_loss_subplot(
     ax.set_xlabel("iteration")
     ax.set_ylabel("loss")
     ax.legend(loc="upper right")
+    ax.grid(True)
 
     # Set y-axis limit to zoom in on the lower range of loss values
     if max_y_limit is not None:
@@ -197,15 +199,26 @@ def plot_discrepancy_loss_subplot(ax, discrepancy_losses, max_y_limit=None):
     iterations = list(range(len(discrepancy_losses)))
     ax.plot(iterations, discrepancy_losses, label="discrepancy", color='purple', linestyle="-")
     ax.set_xlim(left=0)
-    ax.set_ylim([0, max(discrepancy_losses) * 1.1])  # Dynamic y-axis limit
     ax.set_xlabel("iteration")
     ax.set_ylabel("discrepancy")
-    ax.legend(loc='upper right')
+    ax.yaxis.set_label_position('right')
+    ax.yaxis.tick_right()
     ax.grid(True)
+
+    # Set dynamic y-axis limit
+    min_discrepancy = min(discrepancy_losses)
+    max_discrepancy = max(discrepancy_losses)
+    y_min = min(min_discrepancy * 0.8, max_discrepancy * 0.5)
 
     # Set y-axis limit to zoom in on the lower range of loss values
     if max_y_limit is not None:
         ax.set_ylim([0, max_y_limit])
+    else:
+        ax.set_ylim([y_min, max_discrepancy * 1.05])
+
+    # Use scientific notation for the y-axis
+    ax.yaxis.set_major_formatter(ticker.ScalarFormatter(useMathText=True))
+    ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
 
 
 def plot_iteration_update_gridspec(
@@ -234,11 +247,11 @@ def plot_iteration_update_gridspec(
     fig.clf()
     
     # Adjust GridSpec layout: Add extra rows for subheaders
-    nrows = 9 if discrepancy_losses is not None else 6
+    nrows = 10 if discrepancy_losses is not None else 7
     # Define the height ratios for the rows: smaller for the text rows, larger for the plot rows
-    height_ratios = [0.1, 1, 0.1, 1, 0.1, 1]
+    height_ratios = [0.2, 1, 0.2, 1, 0.05, 0.1, 1]
     if discrepancy_losses is not None:
-        height_ratios.append(0.2)
+        height_ratios.append(0.15)
         height_ratios.append(0.1)
         height_ratios.append(1)
     
@@ -275,7 +288,7 @@ def plot_iteration_update_gridspec(
         plot_image_subplot(ax_pred, pred, f"{title}", cmap=cmap)
 
     # Plot the 'Loss Function' header
-    ax_loss_header = fig.add_subplot(gs[4, :])
+    ax_loss_header = fig.add_subplot(gs[5, :])
     ax_loss_header.text(0.5, 0.5, "Loss Function", **text_params)
     ax_loss_header.axis("off")
 
@@ -283,7 +296,7 @@ def plot_iteration_update_gridspec(
     max_y_limit = calculate_dynamic_max_y_limit(losses, window_size=50, scale_factor=1.1)
 
     # Plot combined losses across the entire row
-    ax_combined = fig.add_subplot(gs[5, :])
+    ax_combined = fig.add_subplot(gs[6, :])
     plot_combined_loss_subplot(
         ax_combined,
         losses,
@@ -293,21 +306,23 @@ def plot_iteration_update_gridspec(
     )
 
     # If discrepancy losses are provided, create a new subplot for them
-    if discrepancy_losses is not None:
-        ax_discrepancy_header = fig.add_subplot(gs[7, :])
+    if discrepancy_losses is not None and len(discrepancy_losses) > 0:
+        ax_discrepancy_header = fig.add_subplot(gs[8, :])
         ax_discrepancy_header.text(0.5, 0.5, "Discrepancy from Ground Truth", **text_params)
         ax_discrepancy_header.axis("off")
-        ax_discrepancy = fig.add_subplot(gs[8, :])  # New subplot in the final row
-        max_y_limit_discrepancy = calculate_dynamic_max_y_limit(discrepancy_losses, window_size=500, scale_factor=1.1)
-        plot_discrepancy_loss_subplot(ax_discrepancy, discrepancy_losses, max_y_limit=max_y_limit_discrepancy)
-        ax_discrepancy.yaxis.set_label_position('right')
-        ax_discrepancy.yaxis.tick_right()
-    
-    # Adjust layout to prevent overlap, leave space for row titles
-    plt.subplots_adjust(left=0.05, right=0.91, bottom=0.07, top=0.92)
-    plt.tight_layout()
-    
-    # Return the figure object if in Streamlit, else show the plot
+        ax_discrepancy = fig.add_subplot(gs[9, :])  # New subplot in the final row
+        # max_y_limit_discrepancy = calculate_dynamic_max_y_limit(
+        #     discrepancy_losses, window_size=500, scale_factor=1.1
+        # )
+        max_y_limit_discrepancy = None
+        plot_discrepancy_loss_subplot(
+            ax_discrepancy,
+            discrepancy_losses,
+            max_y_limit=max_y_limit_discrepancy,
+        )
+
+    plt.subplots_adjust(left=0.05, right=0.91, bottom=0.07, top=0.98)
+
     if streamlit_purpose:
         return fig
     else:
