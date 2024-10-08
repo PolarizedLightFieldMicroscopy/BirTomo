@@ -44,11 +44,21 @@
             }
         }
     },
+    "visualization": {
+        "plot_live": true,
+        "fig_size": [10, 11]
+    },
+    "learnables": {
+        "all_prop_elements": false,
+        "two_optic_axis_components": true
+    },
     "misc": {
         "from_simulation": true,
-        "save_ray_geometry": false,
+        "save_ray_geometry": true,
+        "optimizer": "Nadam",
+        "datafidelity": "euler",
+        "warmup_iterations": 10,
         "mla_rays_at_once": true,
-        "two_optic_axis_components": true,
         "free_memory_by_del_large_arrays": false
     }
 }
