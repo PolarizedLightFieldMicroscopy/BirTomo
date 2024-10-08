@@ -78,6 +78,27 @@ This document describes the various keys and their potential values in the JSON 
 | `nerf.optimizer.weight_decay` | Weight decay (L2 regularization) for the NeRF optimizer.                     | Float (e.g., 1e-4)        | 1e-4           |
 | `nerf.scheduler.type`        | Scheduler type for NeRF learning rates.                                      | String (e.g., "CosineAnnealingLR") | N/A  |
 | `nerf.scheduler.params`      | Parameters for the NeRF scheduler.                                           | Dictionary                   | N/A            |
+| `nerf.MLP.hidden_layers`    | Hidden layers for the NeRF MLP.                                               | List (e.g., `[256, 256, 256]`)    | `[256, 256, 256]` |
+| `nerf.MLP.num_frequencies`   | Number of frequencies for the NeRF MLP.                                        | Integer (e.g., 10)          | 10             |
+| `nerf.MLP.final_layer_bias_birefringence` | Bias for the final layer of the NeRF MLP for birefringence.                | Float (e.g., -0.05)        | -0.05         |
+| `nerf.MLP.final_layer_weight_range` | Weight range for the final layer of the NeRF MLP for birefringence.          | List (e.g., `[-0.01, 0.01]`) | `[-0.01, 0.01]` |
+
+---
+
+## Visualization
+
+| Key                         | Description                                                                 | Possible Values           | Default        |
+|-----------------------------|-----------------------------------------------------------------------------|---------------------------|----------------|
+| `visualization.plot_live`  | Boolean flag to determine whether to plot the reconstruction live.           | `true`, `false`           | `true`         |
+
+---
+
+## Learnables
+
+| Key                         | Description                                                                 | Possible Values           | Default        |
+|-----------------------------|-----------------------------------------------------------------------------|---------------------------|----------------|
+| `learnables.all_prop_elements` | Boolean flag to indicate if all properties are learned.                     | `true`, `false`           | `false`        |
+| `learnables.two_optic_axis_components` | Boolean flag to indicate if two components are used for optic axis.        | `true`, `false`           | `true`         |
 
 ---
 
@@ -90,7 +111,7 @@ This document describes the various keys and their potential values in the JSON 
 | `misc.optimizer`             | Type of optimizer used for training or reconstruction.                       | String (e.g., "Nadam")    | `"Nadam"`      |
 | `misc.datafidelity`          | Term used in the loss function for data fidelity.                            | String (e.g., "euler")    | `"euler"`      |
 | `misc.mla_rays_at_once`      | Boolean flag to process MLA rays in batches.                                 | `true`, `false`           | `true`         |
-| `misc.two_optic_axis_components` | Boolean flag to indicate if two components are used for optic axis.        | `true`, `false`           | `true`         |
 | `misc.free_memory_by_del_large_arrays` | Boolean flag to free memory by deleting large arrays when possible.    | `true`, `false`           | `false`        |
+| `misc.save_to_logfile`       | Boolean flag to determine whether to save the output to a logfile.            | `true`, `false`           | `true`         |
 
 ---

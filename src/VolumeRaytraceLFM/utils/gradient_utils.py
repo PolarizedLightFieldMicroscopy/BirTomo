@@ -42,3 +42,27 @@ def clip_gradient_norms_nerf(model, iteration_num, verbose=False):
         print(f"Iteration {iteration_num}: Total gradient norm: {total_norm:.2f}")
         if total_norm > max_norm:
             print(f"Iteration {iteration_num}: Gradients clipped to norm {max_norm}")
+
+
+def print_grad_info(volume_estimation):
+    if False:
+        print(
+            "Delta_n requires_grad:",
+            volume_estimation.Delta_n.requires_grad,
+            "birefringence_active requires_grad:",
+            volume_estimation.birefringence_active.requires_grad,
+        )
+        if volume_estimation.Delta_n.grad is not None:
+            print(
+                "Gradient for Delta_n (up to 10 values):",
+                volume_estimation.Delta_n.grad[:10],
+            )
+        else:
+            print("Gradient for Delta_n is None")
+    if volume_estimation.birefringence_active.grad is not None:
+        print(
+            "Gradient for birefringence_active (up to 10 values):",
+            volume_estimation.birefringence_active.grad[:10],
+        )
+    else:
+        print("Gradient for birefringence_active is None")
