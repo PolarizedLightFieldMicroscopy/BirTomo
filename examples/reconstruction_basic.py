@@ -28,11 +28,10 @@ iter_config_file = os.path.join("..", "config", "iter_config_reg.json")
 
 # Path to the directory where the reconstruction will be saved
 recon_output_dir = os.path.join("..", "reconstructions", "voxel")
-recon_output_dir_postfix = "postfix"
-recon_directory = create_unique_directory(recon_output_dir, postfix=recon_output_dir_postfix)
 
 # Whether to continue a previous reconstruction
 continue_recon = False
+recon_init_file_path = r"to be alterned.h5"
 
 # For loading forward images that were saved in a previous reconstruction folder
 measurement_dir = os.path.join(recon_output_dir, "to be altered")
@@ -65,7 +64,8 @@ else:
 # %% Run reconstruction
 recon_optical_info = optical_info.copy()
 iteration_params = setup_iteration_parameters(iter_config_file)
-recon_init_file_path = iteration_params["file_paths"]["initial_volume"]
+recon_dir_postfix = iteration_params["general"]["output_directory_postfix"]
+recon_directory = create_unique_directory(recon_output_dir, postfix=recon_dir_postfix)
 if continue_recon:
     initial_volume = BirefringentVolume.init_from_file(recon_init_file_path, BACKEND, recon_optical_info)
 else:
@@ -88,7 +88,7 @@ reconstructor = Reconstructor(
     output_dir=recon_directory,
     device=DEVICE
 )
-reconstructor.reconstruct(plot_live=True)
+reconstructor.reconstruct()
 print("Reconstruction complete")
 
 # %%
