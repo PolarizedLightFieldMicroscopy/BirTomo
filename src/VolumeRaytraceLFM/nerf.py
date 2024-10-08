@@ -131,12 +131,15 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
     """
 
     def __init__(
-        self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10
+        self, input_dim, output_dim, params_dict=None
     ):
         super(ImplicitRepresentationMLPSpherical, self).__init__()
-        self.num_frequencies = num_frequencies
         self.input_dim = input_dim
         self.output_dim = output_dim
+        self.params_dict = params_dict
+        hidden_layers = self.params_dict.get("hidden_layers", [128, 64])
+        num_frequencies = self.params_dict.get("num_frequencies", 10)
+        self.num_frequencies = num_frequencies
 
         layers = []
         in_dim = input_dim * (2 * num_frequencies + 1)
@@ -158,10 +161,13 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
     def _initialize_output_layer(self):
         """Initialize the weights of the output layer."""
         final_layer = self.layers[-1]
+        weight_range = self.params_dict.get("final_layer_weight_range", [-0.01, 0.01])
+        birefringence_bias = self.params_dict.get("final_layer_bias_birefringence", 0.05)
         with torch.no_grad():
-            final_layer.weight.uniform_(-0.01, 0.01)
-            final_layer.bias[0] = 0.05  # First output dimension fixed to 0.05
-            final_layer.bias[1:].uniform_(-0.5, 0.5)  # Initializing other biases
+
+            final_layer.weight.uniform_(weight_range[0], weight_range[1])
+            final_layer.bias[0] = birefringence_bias
+            final_layer.bias[1:].uniform_(-0.5, 0.5)
 
     def positional_encoding(self, x: torch.Tensor) -> torch.Tensor:
         """Apply positional encoding to the input tensor.

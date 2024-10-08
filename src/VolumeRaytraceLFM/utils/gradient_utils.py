@@ -41,4 +41,4 @@ def clip_gradient_norms_nerf(model, iteration_num, verbose=False):
     if verbose:
         print(f"Iteration {iteration_num}: Total gradient norm: {total_norm:.2f}")
         if total_norm > max_norm:
-            print(f"Iteration {iteration_num}: Gradients clipped to {max_norm}")
+            print(f"Iteration {iteration_num}: Gradients clipped to norm {max_norm}")

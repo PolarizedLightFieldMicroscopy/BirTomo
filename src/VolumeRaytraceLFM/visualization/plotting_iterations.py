@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.ticker as ticker
@@ -145,6 +146,8 @@ def plot_image_subplot(ax, image, title, cmap="plasma"):
     ax.set_title(title, fontsize=8)
     ax.axis("off")  # Hide the axis for a cleaner look
     ax.xaxis.set_visible(False)  # Hide the x-axis if not needed
+    if title == "Orientation":
+        im.set_clim(0, np.pi)
 
 
 def plot_combined_loss_subplot(
@@ -172,10 +175,13 @@ def plot_combined_loss_subplot(
     if max_y_limit is not None:
         ax.set_ylim([0, max_y_limit])
 
+    # Use scientific notation for the y-axis
+    ax.yaxis.set_major_formatter(ticker.ScalarFormatter(useMathText=True))
+    ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+
 
 def calculate_dynamic_max_y_limit(losses, window_size=10, scale_factor=1.1):
-    """
-    Calculate the dynamic max_y_limit based on the recent loss values.
+    """Calculate the dynamic max_y_limit based on the recent loss values.
 
     Args:
         losses (list or np.array): List of total loss values.
@@ -208,7 +214,7 @@ def plot_discrepancy_loss_subplot(ax, discrepancy_losses, max_y_limit=None):
     # Set dynamic y-axis limit
     min_discrepancy = min(discrepancy_losses)
     max_discrepancy = max(discrepancy_losses)
-    y_min = min(min_discrepancy * 0.8, max_discrepancy * 0.5)
+    y_min = min(min_discrepancy * 0.6, max_discrepancy * 0.5)
 
     # Set y-axis limit to zoom in on the lower range of loss values
     if max_y_limit is not None:

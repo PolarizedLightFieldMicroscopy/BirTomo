@@ -6,8 +6,11 @@ and BirefringentRaytraceLFM class
 from math import floor
 from tqdm import tqdm
 import time
+import torch
+import numpy as np
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
+from VolumeRaytraceLFM.abstract_classes import BackEnds, RayTraceLFM
 from VolumeRaytraceLFM.birefringence_base import BirefringentElement
 from VolumeRaytraceLFM.nerf import (
     ImplicitRepresentationMLP,
@@ -26,8 +29,6 @@ from VolumeRaytraceLFM.volumes.generation import (
 )
 from VolumeRaytraceLFM.volumes.optic_axis import (
     spherical_to_unit_vector_torch,
-    unit_vector_to_spherical,
-    fill_vector_based_on_nonaxial,
     adjust_optic_axis_positive_axial,
 )
 from VolumeRaytraceLFM.jones.jones_calculus import (
@@ -991,7 +992,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.use_nerf = False
         self.inr_model = None
     
-    def initialize_nerf_mode(self, use_nerf=True):
+    def initialize_nerf_mode(self, use_nerf=True, mlp_params_dict=None):
         """Initialize the NeRF mode based on the user's preference.
         Args:
             use_nerf (bool): Flag to enable or disable NeRF mode. Default is True.
@@ -999,8 +1000,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.use_nerf = use_nerf
         if self.use_nerf:
             # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 128, 64])
-            # self.inr_model = ImplicitRepresentationMLP(3, 4, [256, 256, 256, 256, 256])
-            self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, [256, 256, 256])
+            self.inr_model = ImplicitRepresentationMLPSpherical(3, 3, mlp_params_dict)
             self.inr_model = torch.nn.DataParallel(self.inr_model)
             print("NeRF mode initialized.")
         else:
@@ -1225,10 +1225,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_ml_half = floor(n_micro_lenses / 2.0)
         collision_indices = self.ray_vol_colli_indices
         if self.verbose:
-            print(f"Storing shifted voxel indices for each microlens:")
+            print("Storing shifted voxel indices for each microlens:")
             row_iterable = tqdm(
                 range(n_micro_lenses),
-                desc=f"Computing rows of microlenses for storing voxel indices",
+                desc="Computing rows of microlenses for storing voxel indices",
                 position=1,
                 leave=True,
             )

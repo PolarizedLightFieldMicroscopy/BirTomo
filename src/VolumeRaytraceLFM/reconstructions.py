@@ -480,7 +480,8 @@ class Reconstructor:
         return rays
 
     def initialize_nerf_mode(self, use_nerf=True):
-        self.rays.initialize_nerf_mode(use_nerf)
+        nerf_params_dict = self.iteration_params.get("nerf", {}).get("MLP", {})
+        self.rays.initialize_nerf_mode(use_nerf, nerf_params_dict)
 
     def mask_outside_rays(self):
         """Mask out volume that is outside FOV of the microscope.
@@ -730,6 +731,22 @@ class Reconstructor:
         )
         return
 
+    def _assign_nerf_output_to_volume(self, volume):
+        """Method to assign the output of the NeRF model to the volume."""
+        vol_shape = self.optical_info["volume_shape"]
+        predicted_properties = predict_voxel_properties(
+            self.rays.inr_model, vol_shape, enable_grad=False
+        )
+        Delta_n = predicted_properties[..., 0]
+        volume.Delta_n = torch.nn.Parameter(Delta_n.flatten() * self.mask)
+        optic_axis_flat = predicted_properties.view(
+            -1, predicted_properties.shape[-1]
+        )[..., 1:]
+        if predicted_properties.shape[-1] == 3:
+            optic_axis_flat = spherical_to_unit_vector_torch(optic_axis_flat)
+        volume.optic_axis = torch.nn.Parameter(optic_axis_flat.permute(1, 0))
+        return volume
+
     # @profile # to see the memory breakdown of the function
     def one_iteration(self, volume_estimation, optimizers, schedulers):
         """Performs one iteration of the reconstruction process.
@@ -765,14 +782,14 @@ class Reconstructor:
                     self.volume_pred.optic_axis_active
                 )
         if self.nerf_mode:
-            # Update Delta_n before loss is computed so the the mask regularization is applied
+            # TODO: only update if regularization weight is nonzero
+            # Update Delta_n before loss is computed so regularization can be applied
             vol_shape = self.optical_info["volume_shape"]
             predicted_properties = predict_voxel_properties(
                 self.rays.inr_model, vol_shape, enable_grad=True
             )
             Delta_n = predicted_properties[..., 0]
             # # Gradients are lost when setting Delta_n as a torch nn parameter
-            # self.volume_pred.Delta_n = torch.nn.Parameter(Delta_n.flatten())
             self.volume_pred.birefringence = Delta_n
 
         loss, data_term, regularization_term = self._compute_loss(img_list)
@@ -809,20 +826,21 @@ class Reconstructor:
             if scheduler is not None:
                 step_scheduler(scheduler, loss)
 
+        # Keep the optic axis on the unit sphere
+        if self.two_optic_axis_components:
+            self.fill_optaxis_component(volume_estimation)
+        self.keep_optic_axis_on_sphere(volume_estimation)
+
         if self.nerf_mode:
             adjusted_lrs = optimizer_nerf.param_groups[0]["lr"]
+            self._assign_nerf_output_to_volume(volume_estimation)
         else:
             adjusted_lrs = optimizer_opticaxis.param_groups[0]["lr"], optimizer_birefringence.param_groups[0]["lr"]
 
         if PRINT_GRADIENTS:
             print_moments(optimizer)
 
-        # Keep the optic axis on the unit sphere
-        if self.two_optic_axis_components:
-            self.fill_optaxis_component(volume_estimation)
-        self.keep_optic_axis_on_sphere(volume_estimation)
-
-        if self.ep % 50 == 0 and False:
+        if self.ep % 50 == 0 and DEBUG:
             tqdm.write(f"Iteration {self.ep} first 5 values:")
             tqdm.write(
                 f"birefringence: {volume_estimation.birefringence_active[:5].detach().cpu().numpy()}"
@@ -931,22 +949,7 @@ class Reconstructor:
         # TODO: only update every 1 iteration if plotting is live
         if ep % 1 == 0:
             # plt.clf()
-            if self.nerf_mode:
-                vol_shape = self.optical_info["volume_shape"]
-                predicted_properties = predict_voxel_properties(
-                    self.rays.inr_model, vol_shape
-                )
-                Delta_n = predicted_properties[..., 0]
-                volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
-                # TODO: see if mask should be applied here
-                volume_estimation.Delta_n = torch.nn.Parameter(
-                    volume_estimation.Delta_n * self.mask
-                )
-                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
-            else:
-                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
-                if False:
-                    tqdm.write(f"{[round(val.item(), 4) for val in Delta_n[Delta_n != 0]]}")
+            Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             vol_size_um = self.optical_info["voxel_size_um"]
             rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
@@ -985,14 +988,6 @@ class Reconstructor:
                     torch.zeros(3, vol_size_flat), requires_grad=False
                 ).to(device)
             if self.nerf_mode:
-                optic_axis_flat = predicted_properties.view(
-                    -1, predicted_properties.shape[-1]
-                )[..., 1:]
-                if predicted_properties.shape[-1] == 3:
-                    optic_axis_flat = spherical_to_unit_vector_torch(optic_axis_flat)
-                volume_estimation.optic_axis = torch.nn.Parameter(
-                    optic_axis_flat.permute(1, 0)
-                )
                 nerf_model_path = os.path.join(output_dir, "results_in_progress", f"nerf_model_{ep}.pth")
                 self.rays.save_nerf_model(nerf_model_path)
             else:
