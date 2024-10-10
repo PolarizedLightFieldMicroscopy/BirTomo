@@ -45,7 +45,11 @@ def compare_azimuth_image(simulator, volume, expected_output):
     azim = simulator.azim_img
     print(f"  - Computed Azimuth: {azim.item():.4f}\n"
           f"  - Expected Output: {expected_output.item():.4f}")
-    azim = torch.where(torch.isclose(azim, torch.tensor(torch.pi), atol=1e-8), torch.tensor(0.0), azim)
+    azim = torch.where(
+        torch.isclose(azim, torch.tensor(torch.pi, dtype=azim.dtype), atol=1e-8),
+        torch.tensor(0.0, dtype=azim.dtype),
+        azim
+    )
     # Check if the azimuth image matches the expected output
     assert torch.allclose(azim, expected_output.float(), atol=1e-6), f"Azimuth image is not as expected. Got {azim}, expected {expected_output}"
 
