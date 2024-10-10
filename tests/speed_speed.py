@@ -825,7 +825,7 @@ def plot_azimuth(img):
     fig = plt.figure(figsize=(13, 4))
     fig.subplots_adjust(bottom=0.025, left=0.025, top=0.975, right=0.975)
 
-    plt.rcParams["image.origin"] = "lower"
+    plt.rcParams["image.origin"] = "upper"
     plt.clf()
     sub1 = plt.subplot(1, 3, 1)
     sub1.imshow(dist_from_ctr)
@@ -880,7 +880,7 @@ def plot_ret_azi_image_comparison(
 
     if "PYTEST_CURRENT_TEST" in os.environ:
         return
-    plt.rcParams["image.origin"] = "lower"
+    plt.rcParams["image.origin"] = "upper"
     plt.clf()
     plt.subplot(3, 2, 1)
     plt.imshow(ret_img_numpy)

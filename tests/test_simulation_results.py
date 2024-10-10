@@ -17,7 +17,16 @@ from tests.test_all import check_azimuth_images
 from tests.fixtures_optical_info import set_optical_info
 
 BACKEND = BackEnds.PYTORCH
+PARAMETER_SETS = [
+    ("voxel", [3, 5, 5], 16, 1),
+    ("voxel", [3, 9, 9], 16, 5),
+    ("sphere2", [11, 30, 30], 16, 11),
+    ("plane", [4, 8, 8], 16, 4),
+    ("shell_small", [7, 18, 18], 16, 9),
+]
 
+# Unit test idea: images of a (shifted) voxel should be the same for
+#                   all odd axial dimension volumes
 
 def create_simulator(optical_info, backend):
     optical_system = {"optical_info": optical_info}
@@ -73,13 +82,7 @@ def compare_images(generated_images, saved_images):
 
 @pytest.mark.parametrize(
     "vol_type, vol_shape, pixels_per_ml, n_lenslets",
-    [
-        ("voxel", [3, 5, 5], 16, 1),
-        ("voxel", [3, 9, 9], 16, 5),
-        ("sphere2", [11, 30, 30], 16, 11),
-        ("plane", [4, 8, 8], 16, 4),
-        ("shell_small", [7, 18, 18], 16, 9),
-    ],
+    PARAMETER_SETS,
 )
 @pytest.mark.slow
 def test_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
@@ -99,6 +102,10 @@ def test_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
 
 if __name__ == "__main__":
     from fixtures_optical_info import set_optical_info
-    images = run_simulation("shell_small", [7, 18, 18], 16, 9)
-    filename = generate_filename("shell_small", [7, 18, 18], 16, 9)
-    save_images(images, filename)
+    # images = run_simulation("shell_small", [7, 18, 18], 16, 9)
+
+    # Loop through the parameter sets and execute functions
+    for vol_type, vol_shape, pixels_per_ml, n_lenslets in PARAMETER_SETS:
+        images = run_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets)
+        filename = generate_filename(vol_type, vol_shape, pixels_per_ml, n_lenslets)
+        save_images(images, filename)

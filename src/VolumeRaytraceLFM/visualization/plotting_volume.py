@@ -91,6 +91,7 @@ def convert_volume_to_2d_mip(
     normalize=False,
     border_thickness=1,
     add_view_separation_lines=True,
+    transpose_and_flip=True
 ):
     """
     Convert a 3D volume to a single 2D Maximum Intensity Projection (MIP) image.
@@ -165,6 +166,14 @@ def convert_volume_to_2d_mip(
         out_img[:, :, :, scaled_vol_size[1] : scaled_vol_size[1] + border_thickness] = (
             line_color
         )
+
+    # Transpose and flip the MIP image if specified
+    if transpose_and_flip:
+        # Transpose the image (swap axes 2 and 3)
+        out_img = torch.transpose(out_img, 2, 3)
+        # Flip along the 3rd axis (axis=2 after transpose)
+        out_img = torch.flip(out_img, dims=[2])
+
     return out_img
 
 

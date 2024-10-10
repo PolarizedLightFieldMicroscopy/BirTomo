@@ -74,6 +74,7 @@ class OpticalElement(OpticBlock):
         "pixels_per_ml": 17,
         "n_micro_lenses": 1,
         "n_voxels_per_ml": 1,
+        "aperture_radius_px": 7.5,
         # Objective lens information
         "M_obj": 60,
         "na_obj": 1.2,
@@ -390,7 +391,7 @@ class RayTraceLFM(OpticalElement):
         """
         Allows to the calculations to be done in ray-space coordinates
         as oppossed to laboratory coordinates
-        Parameters:
+        Args:
             ray (np.array): normalized 3D vector giving the direction
                             of the light ray
         Returns:
@@ -398,78 +399,70 @@ class RayTraceLFM(OpticalElement):
             ray_perp1 (np.array): normalized 3D vector
             ray_perp2 (np.array): normalized 3D vector
         """
-        # in case ray is not a unit vector <- does not need to be normalized
-        # ray = ray / np.linalg.norm(ray)
         theta = np.arccos(np.dot(ray, np.array([1, 0, 0])))
         # Unit vectors that give the laboratory axes, can be changed
         scope_axis = np.array([1, 0, 0])
         scope_perp1 = np.array([0, 1, 0])
         scope_perp2 = np.array([0, 0, 1])
         theta = np.arccos(np.dot(ray, scope_axis))
-        # print(f"Rotating by {np.around(np.rad2deg(theta), decimals=0)} degrees")
+        print(f"Maximum ray angle is {np.around(np.rad2deg(theta), decimals=0)} degrees")
         normal_vec = RayTraceLFM.find_orthogonal_vec(ray, scope_axis)
         Rinv = RayTraceLFM.rotation_matrix(normal_vec, -theta)
         # Extracting basis vectors that are orthogonal to the ray and will be parallel
         # to the laboratory axes that are not the optic axis after a rotation.
         # Note: If scope_perp1 if the y-axis, then ray_perp1 if the 2nd column of Rinv.
         ray_perp1 = np.dot(Rinv, scope_perp1)
-        ray_perp2 = np.dot(Rinv, scope_perp2)
+        ray_perp2 = -np.dot(Rinv, scope_perp2)
         return [ray, ray_perp1, ray_perp2]
 
     @staticmethod
     def calc_ray_direction_torch(ray_in):
-        """
-        Allows to the calculations to be done in ray-space coordinates
-        as oppossed to laboratory coordinates
-        Parameters:
-            ray_in [n_rays,3] (torch.array): normalized 3D vector giving the direction
-                            of the light ray
+        """Allows to the calculations to be done in ray-space coordinates
+        as oppossed to laboratory coordinates. For each ray, we calculate
+        a set of three ray basis vectors.
+        Args:
+            ray_in [n_rays, 3] (torch.array): normalized 3D vector giving
+                                            the direction of the light ray
         Returns:
+            torch.array: [3, n_rays, 3] where...
             ray (torch.array): same as input
             ray_perp1 (torch.array): normalized 3D vector
             ray_perp2 (torch.array): normalized 3D vector
         """
-        if not torch.is_tensor(ray_in):
-            ray = torch.from_numpy(ray_in)
-        else:
-            ray = ray_in
-        theta = torch.arccos(
-            torch.linalg.multi_dot(
-                (ray, torch.tensor([1.0, 0, 0], dtype=ray.dtype, device=ray_in.device))
-            )
-        )
+        ray = torch.from_numpy(ray_in) if not torch.is_tensor(ray_in) else ray_in
         # Unit vectors that give the laboratory axes, can be changed
-        scope_axis = torch.tensor([1.0, 0, 0], dtype=ray.dtype, device=ray_in.device)
-        scope_perp1 = torch.tensor([0, 1.0, 0], dtype=ray.dtype, device=ray_in.device)
-        scope_perp2 = torch.tensor([0, 0, 1.0], dtype=ray.dtype, device=ray_in.device)
-        # print(f"Rotating by {np.around(torch.rad2deg(theta).numpy(), decimals=0)} degrees")
+        scope_axis = torch.tensor([1.0, 0, 0], dtype=ray.dtype, device=ray.device)
+        scope_perp1 = torch.tensor([0, 1.0, 0], dtype=ray.dtype, device=ray.device)
+        scope_perp2 = torch.tensor([0, 0, 1.0], dtype=ray.dtype, device=ray.device)
+        theta = torch.arccos(torch.matmul(ray, scope_axis))
+        print(f"Maximum ray angle is {torch.round(torch.rad2deg(theta).max(), decimals=0)} degrees")
         normal_vec = RayTraceLFM.find_orthogonal_vec_torch(ray, scope_axis)
         Rinv = RayTraceLFM.rotation_matrix_torch(normal_vec, -theta)
         # Extracting basis vectors that are orthogonal to the ray and will be parallel
         # to the laboratory axes that are not the optic axis after a rotation.
-        # Note: If scope_perp1 if the y-axis, then ray_perp1 if the 2nd column of Rinv.
-        if scope_perp1[0] == 0 and scope_perp1[1] == 1 and scope_perp1[2] == 0:
+        # Note: If scope_perp1 is the y-axis, then ray_perp1 is the 2nd column of Rinv.
+        if torch.equal(scope_perp1, torch.tensor([0, 1.0, 0], dtype=ray.dtype)):
             ray_perp1 = Rinv[:, :, 1]  # dot product needed
         else:
-            # todo: we need to put a for loop to do this operation
             # ray_perp1 = torch.linalg.multi_dot((Rinv, scope_perp1))
             raise NotImplementedError
-        if scope_perp2[0] == 0 and scope_perp2[1] == 0 and scope_perp2[2] == 1:
-            ray_perp2 = Rinv[:, :, 2]
+        if torch.equal(scope_perp2, torch.tensor([0, 0, 1.0], dtype=ray.dtype)):
+            ray_perp2 = -Rinv[:, :, 2]
         else:
-            # todo: we need to put a for loop to do this operation
             # ray_perp2 = torch.linalg.multi_dot((Rinv, scope_perp2))
             raise NotImplementedError
+    
+        # Unsqueeze tensors to make them of shape [1, n_rays, 3]
+        ray = ray.unsqueeze(0)
+        ray_perp1 = ray_perp1.unsqueeze(0)
+        ray_perp2 = ray_perp2.unsqueeze(0)
 
-        # Returns a list size 3, where each element is a torch tensor shaped [n_rays, 3]
-        return torch.cat(
-            [ray.unsqueeze(0), ray_perp1.unsqueeze(0), ray_perp2.unsqueeze(0)], 0
-        )
+        return torch.cat([ray, ray_perp1, ray_perp2], dim=0)
 
     ###########################################################################################
     # Ray-tracing functions
     @staticmethod
-    def rays_through_vol(pixels_per_ml, naObj, nMedium, volume_ctr_um):
+    def rays_through_vol(pixels_per_ml, naObj, nMedium, volume_ctr_um, aperture_radius_px):
         """Identifies the rays that pass through the volume and the central lenslet
         Args:
             pixels_per_ml (int): number of pixels per microlens in one direction,
@@ -479,6 +472,8 @@ class RayTraceLFM(OpticalElement):
             nMedium (float): refractive index of the volume
             volume_ctr_um (np.array): 3D vector containing the coordinates of the center
                                         of the volume in volume space units (um)
+            aperture_radius_px (float): radius of the effective aperture of a microlens
+                                        in pixels, about pixels_per_ml/2
         Returns:
             ray_enter (np.array): (3, X, X) array where (3, i, j) gives the coordinates
                                     within the volume ray entrance plane for which the
@@ -492,17 +487,16 @@ class RayTraceLFM(OpticalElement):
         # Units are in pixel indicies, referring to the pixel that is centered up 0.5 units
         #   Ex: if ml_ctr = [8, 8], then the spatial center pixel is at [8.5, 8.5]
         ml_ctr = [(pixels_per_ml - 1) / 2, (pixels_per_ml - 1) / 2]
-        ml_radius = 7.5  # pixels_per_ml / 2
         i = np.linspace(0, pixels_per_ml - 1, pixels_per_ml)
         j = np.linspace(0, pixels_per_ml - 1, pixels_per_ml)
         jv, iv = np.meshgrid(i, j)
         dist_from_ctr = np.sqrt((iv - ml_ctr[0]) ** 2 + (jv - ml_ctr[1]) ** 2)
 
         # Angles that reach the pixels
-        cam_pixels_azim = np.arctan2(jv - ml_ctr[1], iv - ml_ctr[0])
-        cam_pixels_azim[dist_from_ctr > ml_radius] = np.nan
-        dist_from_ctr[dist_from_ctr > ml_radius] = np.nan
-        cam_pixels_tilt = np.arcsin(dist_from_ctr / ml_radius * naObj / nMedium)
+        cam_pixels_azim = np.atan2(jv - ml_ctr[1], iv - ml_ctr[0])
+        cam_pixels_azim[dist_from_ctr > aperture_radius_px] = np.nan
+        dist_from_ctr[dist_from_ctr > aperture_radius_px] = np.nan
+        cam_pixels_tilt = np.arcsin(dist_from_ctr / aperture_radius_px * naObj / nMedium)
 
         # Plotting
         if DEBUG:
@@ -781,6 +775,7 @@ class RayTraceLFM(OpticalElement):
         pixels_per_ml = self.optical_info["pixels_per_ml"]
         naObj = self.optical_info["na_obj"]
         nMedium = self.optical_info["n_medium"]
+        aperture_radius_px = self.optical_info["aperture_radius_px"]
         valid_vol_shape = (
             self.optical_info["n_micro_lenses"] * self.optical_info["n_voxels_per_ml"]
         )
@@ -801,7 +796,7 @@ class RayTraceLFM(OpticalElement):
 
         # Calculate the ray geometry
         ray_enter, ray_exit, ray_diff = RayTraceLFM.rays_through_vol(
-            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted
+            pixels_per_ml, naObj, nMedium, volume_ctr_um_restricted, aperture_radius_px
         )
 
         # Store locally

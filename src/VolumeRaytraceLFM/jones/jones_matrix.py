@@ -5,7 +5,7 @@ import numpy as np
 def vox_ray_ret_azim_numpy(bir, optic_axis, rayDir, ell, wavelength):
     # Azimuth is the angle of the slow axis of retardance.
     # TODO: verify the order of these two components
-    azim = np.arctan2(np.dot(optic_axis, rayDir[1]), np.dot(optic_axis, rayDir[2]))
+    azim = np.atan2(np.dot(optic_axis, rayDir[1]), np.dot(optic_axis, rayDir[2]))
     azim = 0 if bir == 0 else (azim + np.pi / 2 if bir < 0 else azim)
     # proj_along_ray = np.dot(optic_axis, rayDir[0])
     ret = (
@@ -21,11 +21,11 @@ def vox_ray_ret_azim_numpy(bir, optic_axis, rayDir, ell, wavelength):
 
 def print_ret_azim_numpy(ret, azim):
     print(
-        f"Azimuth angle of index ellipsoid is "
+        "Azimuth angle of index ellipsoid is "
         + f"{np.around(np.rad2deg(azim), decimals=0)} degrees."
     )
     print(
-        f"Accumulated retardance from index ellipsoid is "
+        "Accumulated retardance from index ellipsoid is "
         + f"{np.around(np.rad2deg(ret), decimals=0)} ~ {int(np.rad2deg(ret)) % 360} degrees."
     )
 
@@ -48,8 +48,8 @@ def vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength):
     pi_tensor = torch.tensor(np.pi, device=bir.device, dtype=bir.dtype)
     # Dot product of optical axis and 3 ray-direction vectors
     OA_dot_rayDir = (rayDir.unsqueeze(2) @ optic_axis).squeeze(2)
-    # TODO: verify x2 should be mult by the azimuth angle
-    azim = 2 * torch.arctan2(OA_dot_rayDir[1], OA_dot_rayDir[2])
+    # There is the x2 here because it is not in the jones matrix function
+    azim = 2 * torch.atan2(OA_dot_rayDir[1], OA_dot_rayDir[2])
     ret = abs(bir) * (1 - (OA_dot_rayDir[0]) ** 2) * ell * pi_tensor / wavelength
     neg_delta_mask = bir < 0
 

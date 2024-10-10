@@ -49,21 +49,21 @@ class PolarimetricLossFunction:
             self.weight_retardance = params.get("weight_retardance", 1.0)
             self.weight_orientation = params.get("weight_orientation", 1.0)
             self.weight_datafidelity = params.get("weight_datafidelity", 1.0)
-            self.weight_regularization = params.get("regularization_weight", 1.0)
+            self.weight_regularization = params.get("regularization", {}).get("weight", 1.0)
             # Initialize specific loss functions
-            self.optimizer = params.get("optimizer", "Adam")
-            self.datafidelity = params.get("datafidelity", "vector")
+            self.optimizer = params.get("misc", {}).get("optimizer", "Nadam")
+            self.datafidelity = params.get("misc", {}).get("datafidelity", "euler")
             self.regularization_fcns = [
                 (REGULARIZATION_FCNS[fn_name], weight)
-                for fn_name, weight in params.get("regularization_fcns", [])
+                for fn_name, weight in params.get("regularization", {}).get("functions", [])
             ]
         else:
             self.weight_retardance = 1.0
             self.weight_orientation = 1.0
             self.weight_datafidelity = 1.0
-            self.weight_regularization = 0.1
-            self.optimizer = "Adam"
-            self.datafidelity = "vector"
+            self.weight_regularization = 1.0
+            self.optimizer = "Nadam"
+            self.datafidelity = "euler"
             self.regularization_fcns = []
         self.mask = None
 
@@ -259,6 +259,6 @@ class BirefringenceFieldLoss(torch.nn.Module):
     def forward(self, predicted_volume, target_volume):
         """Compute the birefringence field loss"""
         vector_field1 = predicted_volume[0, ...] * predicted_volume[1:, ...]
-        vector_field2 = target_volume[0, ...] * target_volume[1, ...]
+        vector_field2 = target_volume[0, ...] * target_volume[1:, ...]
         loss = F.mse_loss(vector_field1, vector_field2)
         return loss

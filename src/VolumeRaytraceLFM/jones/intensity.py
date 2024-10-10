@@ -4,7 +4,7 @@ import numpy as np
 def ret_and_azim_from_intensity(image_list, swing):
     """Note: this function is still in development."""
     if len(image_list) != 5:
-        raise ValueError(f"Expected 5 images, got {len(imgs)}.")
+        raise ValueError(f"Expected 5 images, got {len(image_list)}.")
     # The order of the images matters!
     imgs = [image_list[0], image_list[2], image_list[3], image_list[1], image_list[4]]
     # using arctan vs arctan2 does not seem to make a difference
@@ -25,6 +25,6 @@ def ret_and_azim_from_intensity(image_list, swing):
     test_value = imgs[1] + imgs[2] - 2 * imgs[0]
     indices = np.where(test_value < 0)
     ret[indices] = 2 * np.pi - ret[indices]
-    # azim = 0.5 * np.arctan2(A, B) + np.pi / 2
-    azim = 0.5 * np.arctan2(B, A) + np.pi / 2
+    # azim = 0.5 * np.atan2(A, B) + np.pi / 2
+    azim = 0.5 * np.atan2(B, A) + np.pi / 2
     return [ret, azim]

@@ -105,14 +105,13 @@ def get_scheduler_configs(iteration_params):
             "eps": 1e-8
         }
     }
-    scheduler_opticaxis_config = schedulers.get("opticaxis", default_sched_config)
+    scheduler_opticaxis_config = schedulers.get("optic_axis", default_sched_config)
     scheduler_birefringence_config = schedulers.get("birefringence", default_sched_config)
     return scheduler_opticaxis_config, scheduler_birefringence_config
 
 
-def get_scheduler_configs_nerf(iteration_params):
+def get_scheduler_configs_nerf(nerf_params):
     """Get the schedulers for the optimizer."""
-    schedulers = iteration_params.get("schedulers", {})
     default_sched_config = {
         "type": "ReduceLROnPlateau",
         "params": {
@@ -124,7 +123,7 @@ def get_scheduler_configs_nerf(iteration_params):
             "eps": 1e-8
         }
     }
-    scheduler_nerf_config = schedulers.get("nerf", default_sched_config)
+    scheduler_nerf_config = nerf_params.get("scheduler", default_sched_config)
     return scheduler_nerf_config
 
 

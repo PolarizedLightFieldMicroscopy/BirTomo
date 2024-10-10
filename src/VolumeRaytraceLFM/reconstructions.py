@@ -1,21 +1,23 @@
 """This module contains the ReconstructionConfig and Reconstructor classes."""
 
 import sys
-import copy
-import time
 import os
 import json
-import torch
-import numpy as np
-from tqdm import tqdm
+import time
+import copy
 import csv
 import pickle
+import gc
+
+import torch
+import numpy as np
 import tifffile
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 ## For analyzing the memory usage of a function
 # from memory_profiler import profile
-import gc
+
 from VolumeRaytraceLFM.abstract_classes import BackEnds
 from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentVolume,
@@ -38,6 +40,7 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter,
 )
+from VolumeRaytraceLFM.utils.orientation_utils import undo_transpose_and_flip
 from VolumeRaytraceLFM.utils.error_handling import (
     check_for_inf_or_nan,
     check_for_negative_values,
@@ -59,7 +62,9 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
 )
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
+from VolumeRaytraceLFM.utils.gradient_utils import monitor_gradients, clip_gradient_norms_nerf, print_grad_info
 from utils.logging import redirect_output_to_log, restore_output
+from VolumeRaytraceLFM.volumes.compare import compare_volumes
 
 DEBUG = False
 PRINT_GRADIENTS = False
@@ -128,7 +133,7 @@ class ReconstructionConfig:
         self.optical_info = optical_info
         self.retardance_image = self._to_numpy(ret_image)
         self.azimuth_image = self._to_numpy(azim_image)
-        radiometry_path = iteration_params.get("radiometry_path", None)
+        radiometry_path = iteration_params.get("file_paths", {}).get("radiometry", None)
         if radiometry_path:
             self.radiometry = tifffile.imread(radiometry_path)
         else:
@@ -266,10 +271,13 @@ class Reconstructor:
         omit_rays_based_on_pixels=True,
         apply_volume_mask=False,
     ):
-        """
-        Initialize the Reconstructor with the provided parameters.
+        """Initialize the Reconstructor with the provided parameters.
 
         recon_info (class): containing reconstruction parameters
+        output_dir (str): directory to save the reconstruction results
+        device (str): device to run the reconstruction on
+        omit_rays_based_on_pixels (bool): whether to omit rays based on pixels with zero retardance
+        apply_volume_mask (bool): whether to apply a mask to the volume
         """
         start_time = time.perf_counter()
         print(f"\nInitializing a Reconstructor, using computing device {device}")
@@ -316,14 +324,14 @@ class Reconstructor:
         if omit_rays_based_on_pixels:
             image_for_rays = self.ret_img_meas
             print("Omitting rays based on pixels with zero retardance.")
-        saved_ray_path = self.iteration_params.get("saved_ray_path", None)
+        saved_ray_path = self.iteration_params.get("file_paths", {}).get("saved_rays", None)
         self.rays = self.setup_raytracer(
             image=image_for_rays, filepath=saved_ray_path, device=device
         )
         self.rays.verbose = False
-        self.nerf_mode = self.iteration_params.get("nerf_mode", False)
+        self.nerf_mode = self.iteration_params.get("nerf", {}).get("enabled", False)
         self.initialize_nerf_mode(use_nerf=self.nerf_mode)
-        self.from_simulation = self.iteration_params.get("from_simulation", False)
+        self.from_simulation = self.iteration_params.get("misc", {}).get("from_simulation", False)
         self.apply_volume_mask = apply_volume_mask
         self.mask = torch.ones(
             self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool, device=device
@@ -332,7 +340,7 @@ class Reconstructor:
         # Volume that will be updated after each iteration
         self.volume_pred = copy.deepcopy(self.volume_initial_guess)
 
-        self.remove_large_arrs = self.iteration_params.get(
+        self.remove_large_arrs = self.iteration_params.get("misc", {}).get(
             "free_memory_by_del_large_arrays", False
         )
         if self.remove_large_arrs and self.apply_volume_mask:
@@ -341,14 +349,14 @@ class Reconstructor:
                 "volume gradient at the same time."
             )
         self.two_optic_axis_components = self.iteration_params.get(
-            "two_optic_axis_components", False
-        )
+            "learnables", {}).get("two_optic_axis_components", True)
 
-        self.mla_rays_at_once = self.iteration_params.get("mla_rays_at_once", False)
+        self.mla_rays_at_once = self.iteration_params.get("misc", {}).get("mla_rays_at_once", False)
         if self.mla_rays_at_once and not self.rays.MLA_volume_geometry_ready:
+            print("Preparing rays for all rays at once...")
             self.rays.prepare_for_all_rays_at_once()
             if not self.from_simulation:
-                radiometry_path = self.iteration_params.get("radiometry_path", None)
+                radiometry_path = self.iteration_params.get("file_paths", {}).get("radiometry", None)
                 if radiometry_path:
                     num_rays_og = self.rays.ray_valid_indices_all.shape[1]
                     radiometry = torch.tensor(recon_info.radiometry)
@@ -366,8 +374,7 @@ class Reconstructor:
             dict_save_dir = os.path.join(self.recon_directory, "config_parameters")
             if not os.path.exists(dict_save_dir):
                 os.makedirs(dict_save_dir)
-            dict_filename = "vox_indices_by_mla_idx.pkl"
-            dict_save_path = os.path.join(dict_save_dir, dict_filename)
+            dict_save_path = os.path.join(dict_save_dir, "vox_indices_by_mla_idx.pkl")
             with open(dict_save_path, "wb") as f:
                 pickle.dump(vox_indices_by_mla_idx, f)
             print(f"Saving voxel indices by MLA index to {dict_save_path}")
@@ -377,7 +384,7 @@ class Reconstructor:
         except AttributeError:
             self.voxel_mask_setup()
 
-        save_rays = self.iteration_params.get("save_rays", False)
+        save_rays = self.iteration_params.get("misc", {}).get("save_ray_geometry", False)
         # Ray saving should be done after self.rays.prepare_for_all_rays_at_once()
         if save_rays:
             rays_save_path = os.path.join(
@@ -392,7 +399,7 @@ class Reconstructor:
             pass
             gc.collect()
 
-        datafidelity_method = self.iteration_params.get("datafidelity", "vector")
+        datafidelity_method = self.iteration_params.get("misc", {}).get("datafidelity", "euler")
         first_word = datafidelity_method.split()[0]
         if first_word == "intensity":
             self.intensity_bool = True
@@ -406,7 +413,7 @@ class Reconstructor:
         self.loss_data_term_list = []
         self.loss_reg_term_list = []
         self.adjusted_lrs_list = []
-
+        self.volume_discrepancy_list = []
         self.to_device(device)
         end_time = time.perf_counter()
         print(f"Reconstructor initialized in {end_time - start_time:.2f} seconds\n")
@@ -454,23 +461,6 @@ class Reconstructor:
             f"{output_dir}/parameters.pt",
         )
 
-    @staticmethod
-    def replace_nans(volume, ep):
-        """Used in response to an error message."""
-        with torch.no_grad():
-            num_nan_vecs = torch.sum(torch.isnan(volume.optic_axis[0, :]))
-            if num_nan_vecs > 0:
-                replacement_vecs = torch.nn.functional.normalize(
-                    torch.rand(3, int(num_nan_vecs)), p=2, dim=0
-                )
-                volume.optic_axis[:, torch.isnan(volume.optic_axis[0, :])] = (
-                    replacement_vecs
-                )
-                if ep == 0:
-                    print(
-                        f"Replaced {num_nan_vecs} NaN optic axis vectors with random unit vectors."
-                    )
-
     def setup_raytracer(self, image=None, filepath=None, device="cpu"):
         """Initialize Birefringent Raytracer."""
         if filepath:
@@ -491,7 +481,8 @@ class Reconstructor:
         return rays
 
     def initialize_nerf_mode(self, use_nerf=True):
-        self.rays.initialize_nerf_mode(use_nerf)
+        nerf_params_dict = self.iteration_params.get("nerf", {}).get("MLP", {})
+        self.rays.initialize_nerf_mode(use_nerf, nerf_params_dict)
 
     def mask_outside_rays(self):
         """Mask out volume that is outside FOV of the microscope.
@@ -536,29 +527,43 @@ class Reconstructor:
 
     def _turn_off_initial_volume_gradients(self):
         """Turn off the gradients for the initial volume guess."""
-        self.volume_initial_guess.Delta_n.requires_grad = False
-        self.volume_initial_guess.optic_axis.requires_grad = False
+        self.volume_initial_guess.set_requires_grad(False)
 
-    def specify_variables_to_learn(self, learning_vars=None):
-        """
-        Specify which variables of the initial volume object should be considered for learning.
-        This method updates the 'members_to_learn' attribute of the initial volume object, ensuring
-        no duplicates are added.
+    def _specify_variables_to_learn(self):
+        """Specify which variables of the initial volume object should be
+        considered for learning. This method updates the 'members_to_learn'
+        attribute of the initial volume object, ensuring no duplicates are added.
         The variable names must be attributes of the BirefringentVolume class.
-        Args:
-            learning_vars (list): Variable names to be appended for learning.
-                                    Defaults to ['Delta_n', 'optic_axis'].
         """
         volume = self.volume_pred
-        if learning_vars is None:
+        learning_vars = []
+
+        # Determine learnable variables based on iteration params and volume properties
+        all_prop_elements = self.iteration_params.get("learnables", {}).get("all_prop_elements", False)
+        
+        if all_prop_elements:
             learning_vars = ["Delta_n", "optic_axis"]
+        else:
+            self.create_parameters_from_mask(volume, self.mask)
+            if self.two_optic_axis_components:
+                learning_vars = ["birefringence_active", "optic_axis_planar"]
+            else:
+                learning_vars = ["birefringence_active", "optic_axis_active"]
+
+            # Handle large arrays if necessary
+            if self.remove_large_arrs:
+                del volume.Delta_n
+                del volume.optic_axis
+                gc.collect()
+            else:
+                self._detach_volume_params(volume)
         for var in learning_vars:
             if var not in volume.members_to_learn:
                 volume.members_to_learn.append(var)
 
     def optimizer_setup(self, parameters, training_params):
         """Setup optimizer."""
-        optimizer_type = training_params.get("optimizer", "Nadam")
+        optimizer_type = training_params.get("misc", {}).get("optimizer", "Nadam")
         optimizers = {
             "Adam": lambda params: torch.optim.Adam(params),
             "SGD": lambda params: torch.optim.SGD(params, nesterov=True, momentum=0.7),
@@ -594,7 +599,7 @@ class Reconstructor:
             filtered_voxels = filter_voxels_using_retardance(
                 self.rays.vox_indices_ml_shifted_all,
                 self.rays.ray_valid_indices_all,
-                self.ret_img_meas,
+                undo_transpose_and_flip(self.ret_img_meas)
             )
 
             mask = torch.zeros(num_vox_in_volume, dtype=torch.bool)
@@ -606,7 +611,7 @@ class Reconstructor:
             print(f"Voxel mask created in {end_time - start_time:.2f} seconds")
         else:
             try:
-                vox_indices_path = self.iteration_params["vox_indices_by_mla_idx_path"]
+                vox_indices_path = self.iteration_params["file_paths"]["vox_indices_by_mla_idx"]
                 if not vox_indices_path:
                     raise ValueError("Vox indices path is empty.")
                 start_time = time.perf_counter()
@@ -709,10 +714,8 @@ class Reconstructor:
         )
 
         # Compute regularization term
-        if isinstance(params["regularization_weight"], list):
-            params["regularization_weight"] = params["regularization_weight"][0]
         reg_loss, reg_term_values = LossFcn.compute_regularization_term(vol_pred)
-        regularization_term = params["regularization_weight"] * reg_loss
+        regularization_term = params["regularization"]["weight"] * reg_loss
         self.reg_term_values = [reg.item() for reg in reg_term_values]
 
         # Total loss (which has gradients enabled)
@@ -743,6 +746,46 @@ class Reconstructor:
         )
         return
 
+    def _assign_nerf_output_to_volume(self, volume):
+        """Method to assign the output of the NeRF model to the volume."""
+        vol_shape = self.optical_info["volume_shape"]
+        predicted_properties = predict_voxel_properties(
+            self.rays.inr_model, vol_shape, enable_grad=False
+        )
+        Delta_n = predicted_properties[..., 0]
+        volume.Delta_n = torch.nn.Parameter(Delta_n.flatten() * self.mask)
+        optic_axis_flat = predicted_properties.view(
+            -1, predicted_properties.shape[-1]
+        )[..., 1:]
+        if predicted_properties.shape[-1] == 3:
+            optic_axis_flat = spherical_to_unit_vector_torch(optic_axis_flat)
+        volume.optic_axis = torch.nn.Parameter(optic_axis_flat.permute(1, 0))
+        return volume
+
+    def _create_placeholder_volume_attributes(self, volume, grad=False):
+        """Create the Delta_n and optic_axis attributes for the volume.
+        This method is intended to be used when the large arrays are deleted.
+        """
+        vol_shape = self.optical_info["volume_shape"]
+        device = volume.birefringence_active.device
+        volume.Delta_n = torch.nn.Parameter(
+            torch.zeros(vol_shape).flatten(), requires_grad=grad
+        ).to(device)
+        vol_size_flat = volume.Delta_n.size(0)
+        volume.optic_axis = torch.nn.Parameter(
+            torch.zeros(3, vol_size_flat), requires_grad=grad
+        ).to(device)
+        return volume
+
+    def _assign_active_params_to_volume(self, volume):
+        """Assign the active parameters to the volume."""
+        if volume.indices_active is None:
+            raise ValueError("Indices active is None")
+        with torch.no_grad():
+            volume.Delta_n[volume.indices_active] = volume.birefringence_active
+            volume.optic_axis[:, volume.indices_active] = volume.optic_axis_active
+        return volume
+
     # @profile # to see the memory breakdown of the function
     def one_iteration(self, volume_estimation, optimizers, schedulers):
         """Performs one iteration of the reconstruction process.
@@ -770,22 +813,17 @@ class Reconstructor:
         # In case the entire volume is needed for the loss computation:
         total_vol_needed = False
         if total_vol_needed and self.volume_pred.indices_active is not None:
-            with torch.no_grad():
-                self.volume_pred.Delta_n[self.volume_pred.indices_active] = (
-                    self.volume_pred.birefringence_active
-                )
-                self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = (
-                    self.volume_pred.optic_axis_active
-                )
+            self._assign_active_params_to_volume(volume_estimation)
+
         if self.nerf_mode:
-            # Update Delta_n before loss is computed so the the mask regularization is applied
+            # TODO: only update if regularization weight is nonzero
+            # Update Delta_n before loss is computed so regularization can be applied
             vol_shape = self.optical_info["volume_shape"]
             predicted_properties = predict_voxel_properties(
                 self.rays.inr_model, vol_shape, enable_grad=True
             )
             Delta_n = predicted_properties[..., 0]
             # # Gradients are lost when setting Delta_n as a torch nn parameter
-            # self.volume_pred.Delta_n = torch.nn.Parameter(Delta_n.flatten())
             self.volume_pred.birefringence = Delta_n
 
         loss, data_term, regularization_term = self._compute_loss(img_list)
@@ -795,13 +833,17 @@ class Reconstructor:
         # Verify the gradients before and after the backward pass
         if PRINT_GRADIENTS:
             print("\nBefore backward pass:")
-            self.print_grad_info(volume_estimation)
+            print_grad_info(volume_estimation)
 
         loss.backward()
 
         if PRINT_GRADIENTS:
             print("\nAfter backward pass:")
-            self.print_grad_info(volume_estimation)
+            print_grad_info(volume_estimation)
+
+        if self.nerf_mode:
+            monitor_gradients(self.rays.inr_model)
+            clip_gradient_norms_nerf(self.rays.inr_model, self.ep, verbose=True)
 
         if CLIP_GRADIENT_NORM:
             self.clip_gradient_norms(volume_estimation)
@@ -818,20 +860,21 @@ class Reconstructor:
             if scheduler is not None:
                 step_scheduler(scheduler, loss)
 
+        # Keep the optic axis on the unit sphere
+        if self.two_optic_axis_components:
+            self.fill_optaxis_component(volume_estimation)
+        self.keep_optic_axis_on_sphere(volume_estimation)
+
         if self.nerf_mode:
             adjusted_lrs = optimizer_nerf.param_groups[0]["lr"]
+            self._assign_nerf_output_to_volume(volume_estimation)
         else:
             adjusted_lrs = optimizer_opticaxis.param_groups[0]["lr"], optimizer_birefringence.param_groups[0]["lr"]
 
         if PRINT_GRADIENTS:
             print_moments(optimizer)
 
-        # Keep the optic axis on the unit sphere
-        if self.two_optic_axis_components:
-            self.fill_optaxis_component(volume_estimation)
-        self.keep_optic_axis_on_sphere(volume_estimation)
-
-        if self.ep % 50 == 0 and False:
+        if self.ep % 50 == 0 and DEBUG:
             tqdm.write(f"Iteration {self.ep} first 5 values:")
             tqdm.write(
                 f"birefringence: {volume_estimation.birefringence_active[:5].detach().cpu().numpy()}"
@@ -880,29 +923,6 @@ class Reconstructor:
             )
         return
 
-    def print_grad_info(self, volume_estimation):
-        if False:
-            print(
-                "Delta_n requires_grad:",
-                volume_estimation.Delta_n.requires_grad,
-                "birefringence_active requires_grad:",
-                volume_estimation.birefringence_active.requires_grad,
-            )
-            if volume_estimation.Delta_n.grad is not None:
-                print(
-                    "Gradient for Delta_n (up to 10 values):",
-                    volume_estimation.Delta_n.grad[:10],
-                )
-            else:
-                print("Gradient for Delta_n is None")
-        if volume_estimation.birefringence_active.grad is not None:
-            print(
-                "Gradient for birefringence_active (up to 10 values):",
-                volume_estimation.birefringence_active.grad[:10],
-            )
-        else:
-            print("Gradient for birefringence_active is None")
-
     def store_results(
         self,
         ret_image_current,
@@ -921,41 +941,53 @@ class Reconstructor:
         self.loss_reg_term_list.append(regularization_term.item())
         self.adjusted_lrs_list.append(adjusted_lrs)
 
+    def _save_figure_as_pdf(self, ep, output_dir, in_progress=False):
+        """Saves the current figure as a PDF."""
+        if in_progress:
+            filename = f"optim_iter_{'{:04d}'.format(ep)}.pdf"
+            plt.savefig(os.path.join(output_dir, "results_in_progress", filename))
+        else:
+            plt.savefig(os.path.join(output_dir, "optimization.pdf"))
+
+    def _save_volume_as_h5(self, volume, output_dir, ep, in_progress=False):
+        """Saves the volume as a h5 file."""
+        desc = f"Volume estimation after {ep} iterations."
+        if in_progress:
+            volume_filename = f"volume_iter_{'{:04d}'.format(ep)}.h5"
+            volume.save_as_file(os.path.join(output_dir, "results_in_progress", volume_filename), description=desc)
+        else:
+            vol_save_path = os.path.join(output_dir, "volume.h5")
+            volume.save_as_file(vol_save_path, description=desc)
+            print("Saved the final volume estimation to", vol_save_path)
+
+    def _save_nerf_model(self, rays, output_dir, ep, in_progress=False):
+        """Saves the NeRF model as a pth file."""
+        if in_progress:
+            filename = f"nerf_model_iter_{'{:04d}'.format(ep)}.pth"
+            rays.save_nerf_model(os.path.join(output_dir, "results_in_progress", filename))
+        else:
+            filepath = os.path.join(output_dir, "nerf_model.pth")
+            rays.save_nerf_model(filepath)
+            print("Saved the final NeRF model to", filepath)
+
     def visualize_and_save(self, ep, fig, output_dir):
+        """Visualize and save the results of the reconstruction."""
+        self.save_loss_lists_to_csv()
+        self._save_regularization_terms_to_csv(ep)
+        if self.volume_ground_truth is not None:
+            self._save_volume_discrepancy_to_csv(ep)
+
         volume_estimation = self.volume_pred
         if self.remove_large_arrs:
-            vol_shape = self.optical_info["volume_shape"]
-            temp_bir = torch.zeros(vol_shape).flatten()
-            device = volume_estimation.birefringence_active.device
-            volume_estimation.Delta_n = torch.nn.Parameter(
-                temp_bir, requires_grad=False
-            ).to(device)
-        if self.volume_pred.indices_active is not None:
-            with torch.no_grad():
-                volume_estimation.Delta_n[volume_estimation.indices_active] = (
-                    volume_estimation.birefringence_active
-                )
+            self._create_placeholder_volume_attributes(volume_estimation, grad=False)
+        if self.two_optic_axis_components:
+            self._assign_active_params_to_volume(volume_estimation)
 
-        save_freq = self.iteration_params.get("save_freq", 5)
-        # TODO: only update every 1 iteration if plotting is live
-        if ep % 1 == 0:
+        save_freq = self.iteration_params["general"]["save_freq"]
+        plot_live = self.iteration_params.get("visualization", {}).get("plot_live", True)
+        if plot_live or ep % save_freq == 0:
             # plt.clf()
-            if self.nerf_mode:
-                vol_shape = self.optical_info["volume_shape"]
-                predicted_properties = predict_voxel_properties(
-                    self.rays.inr_model, vol_shape
-                )
-                Delta_n = predicted_properties[..., 0]
-                volume_estimation.Delta_n = torch.nn.Parameter(Delta_n.flatten())
-                # TODO: see if mask should be applied here
-                volume_estimation.Delta_n = torch.nn.Parameter(
-                    volume_estimation.Delta_n * self.mask
-                )
-                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
-            else:
-                Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
-                if False:
-                    tqdm.write(f"{[round(val.item(), 4) for val in Delta_n[Delta_n != 0]]}")
+            Delta_n = volume_estimation.get_delta_n().detach().unsqueeze(0)
             vol_size_um = self.optical_info["voxel_size_um"]
             rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
@@ -972,46 +1004,17 @@ class Reconstructor:
                 self.loss_total_list,
                 self.loss_data_term_list,
                 self.loss_reg_term_list,
+                discrepancy_losses=self.volume_discrepancy_list,
                 figure=fig,
             )
             fig.canvas.draw()
             fig.canvas.flush_events()
-            time.sleep(0.1)
-            self.save_loss_lists_to_csv()
-            self._save_regularization_terms_to_csv(ep)
-            if ep % save_freq == 0:
-                filename = f"optim_iter_{'{:04d}'.format(ep)}.pdf"
-                plt.savefig(os.path.join(output_dir, filename))
-            time.sleep(0.1)
+            time.sleep(0.001)
         if ep % save_freq == 0:
-            if self.remove_large_arrs:
-                vol_size_flat = volume_estimation.Delta_n.size(0)
-                device = volume_estimation.optic_axis_active.device
-                volume_estimation.optic_axis = torch.nn.Parameter(
-                    torch.zeros(3, vol_size_flat), requires_grad=False
-                ).to(device)
+            self._save_figure_as_pdf(ep, output_dir, in_progress=True)
+            self._save_volume_as_h5(volume_estimation, output_dir, ep, in_progress=True)
             if self.nerf_mode:
-                optic_axis_flat = predicted_properties.view(
-                    -1, predicted_properties.shape[-1]
-                )[..., 1:]
-                if predicted_properties.shape[-1] == 3:
-                    optic_axis_flat = spherical_to_unit_vector_torch(optic_axis_flat)
-                volume_estimation.optic_axis = torch.nn.Parameter(
-                    optic_axis_flat.permute(1, 0)
-                )
-                nerf_model_path = os.path.join(output_dir, f"nerf_model_{ep}.pth")
-                self.rays.save_nerf_model(nerf_model_path)
-            else:
-                if self.volume_pred.indices_active is not None:
-                    with torch.no_grad():
-                        volume_estimation.optic_axis[
-                            :, volume_estimation.indices_active
-                        ] = volume_estimation.optic_axis_active
-            my_description = "Volume estimation after " + str(ep) + " iterations."
-            volume_estimation.save_as_file(
-                os.path.join(output_dir, f"volume_iter_{'{:04d}'.format(ep)}.h5"),
-                description=my_description,
-            )
+                self._save_nerf_model(self.rays, output_dir, ep, in_progress=True)
             if self.remove_large_arrs:
                 del volume_estimation.optic_axis
                 gc.collect()
@@ -1020,10 +1023,12 @@ class Reconstructor:
             gc.collect()
         return
 
-    def __visualize_and_update_streamlit(
-        self, progress_bar, ep, n_iterations, recon_img_plot, my_loss
-    ):
+    def __visualize_and_update_streamlit(self, streamlit_elements, ep, n_iterations):
         import pandas as pd
+        
+        progress_bar = streamlit_elements['progress_bar']
+        recon_img_plot = streamlit_elements['my_recon_img_plot']
+        my_loss = streamlit_elements['my_loss']
 
         percent_complete = int(ep / n_iterations * 100)
         progress_bar.progress(percent_complete + 1)
@@ -1083,11 +1088,11 @@ class Reconstructor:
         """Create a csv file to store the regularization terms."""
         filename = "regularization_terms.csv"
         filepath = os.path.join(self.recon_directory, filename)
-        reg_fcns = self.iteration_params["regularization_fcns"]
+        reg_fcns = self.iteration_params["regularization"]["functions"]
         fcn_names = [sublist[0] for sublist in reg_fcns]
         with open(filepath, mode="w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["ep", *fcn_names])
+            writer.writerow(["Iteration", *fcn_names])
 
     def _save_regularization_terms_to_csv(self, ep):
         """Save the regularization terms to a csv file."""
@@ -1097,6 +1102,22 @@ class Reconstructor:
             writer = csv.writer(file)
             writer.writerow([ep, *self.reg_term_values])
 
+    def _save_volume_discrepancy_to_csv(self, iteration_num):
+        """Append the latest volume discrepancy value to a CSV file after each iteration."""
+        filename = "volume_discrepancy.csv"
+        filepath = os.path.join(self.recon_directory, filename)
+
+        # Check if the file exists (write header if it does not)
+        file_exists = os.path.isfile(filepath)
+
+        with open(filepath, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            if not file_exists:
+                writer.writerow(["Iteration", "Discrepancy"])
+            # Write the latest value from self.volume_discrepancy_list
+            latest_discrepancy = self.volume_discrepancy_list[-1]
+            writer.writerow([iteration_num, latest_discrepancy])
+        
     def clip_gradient_norms(self, model, verbose=False):
         # Gradient clipping
         max_norm = 1.0
@@ -1144,46 +1165,63 @@ class Reconstructor:
         check_for_inf_or_nan(volume.birefringence_active)
         check_for_inf_or_nan(volume.optic_axis_active)
 
-    def reconstruct(
-        self,
-        use_streamlit=False,
-        plot_live=False,
-        all_prop_elements=False,
-    ):
-        """Method to perform the actual reconstruction based on the provided parameters.
-        """
-        log_file = True
-        log_file_path = os.path.join(self.recon_directory, "output_log.txt")
+    def update_ret_azim_when_missing(self):
+        """Update the ret_img_pred and azim_img_pred attributes when
+        they are not present, such as when using intensity boolean."""
+        with torch.no_grad():
+            [ret_image_current, azim_image_current] = (
+                self.rays.ray_trace_through_volume(self.volume_pred)
+            )
+        self.ret_img_pred = ret_image_current.detach().cpu().numpy()
+        self.azim_img_pred = azim_image_current.detach().cpu().numpy()
+
+    def _detach_volume_params(self, volume):
+        """Detach and disable gradient for Delta_n and optic_axis."""
+        volume.Delta_n.detach_()
+        volume.Delta_n.requires_grad = False
+        volume.optic_axis.detach_()
+        volume.optic_axis.requires_grad = False
+
+    def _create_results_subdirectory(self):
+        """Create the results subdirectory if it does not exist."""
+        results_directory = os.path.join(self.recon_directory, "results_in_progress")
+        if not os.path.exists(results_directory):
+            os.makedirs(results_directory)
+        return results_directory
+
+    def _setup_logging(self):
+        log_file = self.iteration_params.get("misc", {}).get("save_to_logfile", True)
         if log_file:
-            # Redirect output to the log file if provided
-            log_file_handle = redirect_output_to_log(log_file_path)
-        print(f"Beginning reconstruction iterations...")
-        # Turn off the gradients for the initial volume guess
+            log_file_path = os.path.join(self.recon_directory, "output_log.txt")
+            return redirect_output_to_log(log_file_path)
+        return None
+
+    def _setup_streamlit(self, use_streamlit, n_iterations):
+        if use_streamlit:
+            import streamlit as st
+            st.write("Working on these ", n_iterations, "iterations...")
+            return {
+                'my_recon_img_plot': st.empty(),
+                'my_loss': st.empty(),
+                'progress_bar': st.progress(0)
+            }
+        return None
+
+    def reconstruct(self, use_streamlit=False):
+        """Method to perform the actual reconstruction based on the
+        provided parameters.
+        """
+        log_file_handle = self._setup_logging()
+        print("Beginning reconstruction...")
+        self._create_results_subdirectory()
         self._turn_off_initial_volume_gradients()
+        self._specify_variables_to_learn()
 
-        # Specify variables to learn
-        if all_prop_elements:
-            param_list = ["Delta_n", "optic_axis"]
-        else:
-            self.create_parameters_from_mask(self.volume_pred, self.mask)
-            if self.two_optic_axis_components:
-                param_list = ["birefringence_active", "optic_axis_planar"]
-            else:
-                param_list = ["birefringence_active", "optic_axis_active"]
-            if self.remove_large_arrs:
-                del self.volume_pred.Delta_n
-                del self.volume_pred.optic_axis
-                gc.collect()
-            else:
-                self.volume_pred.Delta_n.detach()
-                self.volume_pred.Delta_n.requires_grad = False
-                self.volume_pred.optic_axis.detach()
-                self.volume_pred.optic_axis.requires_grad = False
-        self.specify_variables_to_learn(param_list)
-
+        print("Setting up optimizer and scheduler...")
         if self.nerf_mode:
-            optimizer = setup_optimizer_nerf(self.rays, self.iteration_params)
-            scheduler_nerf_config = get_scheduler_configs_nerf(self.iteration_params)
+            nerf_params = self.iteration_params.get("nerf", {})
+            optimizer = setup_optimizer_nerf(self.rays.inr_model, nerf_params)
+            scheduler_nerf_config = get_scheduler_configs_nerf(nerf_params)
             scheduler_nerf = create_scheduler(optimizer, scheduler_nerf_config)
             optimizer_opticaxis, optimizer_birefringence = None, None
             scheduler_opticaxis, scheduler_birefringence = None, None
@@ -1191,17 +1229,18 @@ class Reconstructor:
         else:
             training_params = self.iteration_params
             volume_estimation = self.volume_pred
+            self.prepare_volume_for_recon(volume_estimation)
             trainable_parameters = volume_estimation.get_trainable_variables()
             trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
             parameters_optic_axis = [{
                 "params": trainable_parameters[0],
-                "lr": training_params["lr_optic_axis"],
+                "lr": training_params["learning_rates"]["optic_axis"],
                 "name": trainable_vars_names[0],
             }]
             optimizer_opticaxis = self.optimizer_setup(parameters_optic_axis, training_params)
             parameters_birefringence = [{
                 "params": trainable_parameters[1],
-                "lr": training_params["lr_birefringence"],
+                "lr": training_params["learning_rates"]["birefringence"],
                 "name": trainable_vars_names[1],
             }]
             optimizer_birefringence = self.optimizer_setup(parameters_birefringence, training_params)
@@ -1215,32 +1254,24 @@ class Reconstructor:
             initial_lr_0 = optimizer_opticaxis.param_groups[0]["lr"]
             initial_lr_1 = optimizer_birefringence.param_groups[0]["lr"]
 
+        plot_live = self.iteration_params.get("visualization", {}).get("plot_live", True)
+        fig_size = self.iteration_params.get("visualization", {}).get("fig_size", (10, 11))
         figure = setup_visualization(
-            window_title=self.recon_directory, plot_live=plot_live
+            window_title=self.recon_directory, plot_live=plot_live, fig_size=fig_size
         )
         self._create_regularization_terms_csv()
 
-        n_iterations = self.iteration_params["num_iterations"]
-        if use_streamlit:
-            import streamlit as st
-
-            st.write("Working on these ", n_iterations, "iterations...")
-            my_recon_img_plot = st.empty()
-            my_loss = st.empty()
-            my_plot = st.empty()  # set up a place holder for the plot
-            my_3D_plot = st.empty()  # set up a place holder for the 3D plot
-            progress_bar = st.progress(0)
-
-        self.prepare_volume_for_recon(self.volume_pred)
+        n_iterations = self.iteration_params["general"]["num_iterations"]
+        streamlit_elements = self._setup_streamlit(use_streamlit, n_iterations)
 
         # Parameters for learning rate warmup
-        warmup_iterations = 10
-        warmup_start_proportion = 0.1
+        warmup_iterations = self.iteration_params.get("misc", {}).get("warmup_iterations", 10)
+        warmup_start_proportion = 1 / warmup_iterations
 
+        print("Starting iterations...")
         # Iterations
         for ep in tqdm(range(1, n_iterations + 1), "Minimizing"):
             self.ep = ep
-            # Learning rate warmup
             if ep <= warmup_iterations:
                 warmup_factor = warmup_start_proportion + (1 - warmup_start_proportion) * (ep / warmup_iterations)
                 lr_0 = initial_lr_0 * warmup_factor
@@ -1264,58 +1295,38 @@ class Reconstructor:
             optimizers = (optimizer, optimizer_opticaxis, optimizer_birefringence)
             schedulers = (scheduler_nerf, scheduler_birefringence, scheduler_opticaxis)
             self.one_iteration(self.volume_pred, optimizers, schedulers)
+            
+            if self.volume_ground_truth is not None:
+                volume_discrepancy = compare_volumes(self.volume_pred, self.volume_ground_truth)
+                self.volume_discrepancy_list.append(volume_discrepancy.item())
 
             if ep == 1 and PRINT_TIMING_INFO:
                 self.rays.print_timing_info()
             if ep % 20 == 0 and self.intensity_bool:
-                with torch.no_grad():
-                    [ret_image_current, azim_image_current] = (
-                        self.rays.ray_trace_through_volume(self.volume_pred)
-                    )
-                self.ret_img_pred = ret_image_current.detach().cpu().numpy()
-                self.azim_img_pred = azim_image_current.detach().cpu().numpy()
+                self.update_ret_azim_when_missing()
             sys.stdout.flush()
 
             azim_damp_mask = self._to_numpy(self.ret_img_meas / self.ret_img_meas.max())
             self.azim_img_pred[azim_damp_mask == 0] = 0
             if use_streamlit:
                 self.__visualize_and_update_streamlit(
-                    progress_bar, ep, n_iterations, my_recon_img_plot, my_loss
+                    streamlit_elements, ep, n_iterations
                 )
             self.visualize_and_save(ep, figure, self.recon_directory)
 
-        self.save_loss_lists_to_csv()
-        if self.remove_large_arrs:
-            vol_shape = self.optical_info["volume_shape"]
-            temp_bir = torch.zeros(vol_shape).flatten()
-            device = self.volume_pred.birefringence_active.device
-            self.volume_pred.Delta_n = torch.nn.Parameter(
-                temp_bir, requires_grad=False
-            ).to(device)
-            self.volume_pred.Delta_n[self.volume_pred.indices_active] = (
-                self.volume_pred.birefringence_active
-            )
-            vol_size_flat = self.volume_pred.Delta_n.size(0)
-            self.volume_pred.optic_axis = torch.nn.Parameter(
-                torch.zeros(3, vol_size_flat), requires_grad=False
-            ).to(device)
-            self.volume_pred.optic_axis[:, self.volume_pred.indices_active] = (
-                self.volume_pred.optic_axis_active
-            )
-
-        my_description = "Volume estimation after " + str(ep) + " iterations."
-        vol_save_path = os.path.join(
-            self.recon_directory, f"volume_iter_{'{:04d}'.format(ep)}.h5"
-        )
-        self.volume_pred.save_as_file(vol_save_path, description=my_description)
-        print("Saved the final volume estimation to", vol_save_path)
-        plt.savefig(os.path.join(self.recon_directory, "optim_final.pdf"))
+        self._save_figure_as_pdf(ep, self.recon_directory, in_progress=False)
         plt.close()
 
-        if self.nerf_mode:
-            nerf_model_path = os.path.join(self.recon_directory, "nerf_model.pth")
-            self.rays.save_nerf_model(nerf_model_path) 
+        self.save_loss_lists_to_csv()
 
-        if log_file:
-            # Restore the standard output
+        if self.remove_large_arrs:
+            self._create_placeholder_volume_attributes(self.volume_pred, grad=False)
+            self._assign_active_params_to_volume(self.volume_pred)
+        self._save_volume_as_h5(self.volume_pred, self.recon_directory, ep, in_progress=False)
+
+        if self.nerf_mode:
+            self._save_nerf_model(self.rays, self.recon_directory, ep, in_progress=False)
+
+        if log_file_handle:
             restore_output(log_file_handle)
+        print("Reconstruction complete.")

@@ -131,12 +131,15 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
     """
 
     def __init__(
-        self, input_dim, output_dim, hidden_layers=[128, 64], num_frequencies=10
+        self, input_dim, output_dim, params_dict=None
     ):
         super(ImplicitRepresentationMLPSpherical, self).__init__()
-        self.num_frequencies = num_frequencies
         self.input_dim = input_dim
         self.output_dim = output_dim
+        self.params_dict = params_dict
+        hidden_layers = self.params_dict.get("hidden_layers", [128, 64])
+        num_frequencies = self.params_dict.get("num_frequencies", 10)
+        self.num_frequencies = num_frequencies
 
         layers = []
         in_dim = input_dim * (2 * num_frequencies + 1)
@@ -158,10 +161,13 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
     def _initialize_output_layer(self):
         """Initialize the weights of the output layer."""
         final_layer = self.layers[-1]
+        weight_range = self.params_dict.get("final_layer_weight_range", [-0.01, 0.01])
+        birefringence_bias = self.params_dict.get("final_layer_bias_birefringence", 0.05)
         with torch.no_grad():
-            final_layer.weight.uniform_(-0.01, 0.01)
-            final_layer.bias[0] = 0.05  # First output dimension fixed to 0.05
-            final_layer.bias[1:].uniform_(-0.5, 0.5)  # Initializing other biases
+
+            final_layer.weight.uniform_(weight_range[0], weight_range[1])
+            final_layer.bias[0] = birefringence_bias
+            final_layer.bias[1:].uniform_(-0.5, 0.5)
 
     def positional_encoding(self, x: torch.Tensor) -> torch.Tensor:
         """Apply positional encoding to the input tensor.
@@ -205,7 +211,7 @@ class ImplicitRepresentationMLPSpherical(nn.Module):
 def setup_optimizer_nerf(
     model: nn.Module, training_params: dict
 ) -> torch.optim.Optimizer:
-    """Set up the optimizer for the neural network model.
+    """Set up the optimizer for the neural network model with layer-specific learning rates.
 
     Args:
         model (nn.Module): The neural network model.
@@ -213,16 +219,54 @@ def setup_optimizer_nerf(
     Returns:
         torch.optim.Optimizer: Configured optimizer.
     """
-    inr_params = model.inr_model.parameters()
+    if isinstance(model, nn.DataParallel):
+        model = model.module  # Access the actual model inside DataParallel
+
+    # Extract the NeRF-specific parameters
+    nerf_params = training_params.get("nerf", {})
+
+    # Extract NeRF learning rates
+    lr_fc1 = nerf_params.get("learning_rates", {}).get("fc1", 1e-2)  # Learning rate for fc1
+    lr_fc2 = nerf_params.get("learning_rates", {}).get("fc2", 1e-4)  # Learning rate for fc2
+    lr_fc3 = nerf_params.get("learning_rates", {}).get("fc3", 1e-4)  # Learning rate for fc3
+    lr_output = nerf_params.get("learning_rates", {}).get("output", 1e-4)  # Learning rate for output layer
+
+    # Extract optimizer parameters from the JSON
+    optimizer_type = nerf_params.get("optimizer", {}).get("type", "NAdam")
+    betas = tuple(nerf_params.get("optimizer", {}).get("betas", [0.9, 0.999]))  # Tuple for betas
+    eps = nerf_params.get("optimizer", {}).get("eps", 1e-8)
+    weight_decay = nerf_params.get("optimizer", {}).get("weight_decay", 1e-4)
+
+    # Access layers from model (assuming it's an instance of ImplicitRepresentationMLPSpherical)
     parameters = [
+        # fc1 layer
         {
-            "params": inr_params,
-            "lr": training_params.get("lr", 0.001),
-        }
+            "params": model.layers[0].parameters(),  # First Linear layer (fc1)
+            "lr": lr_fc1,
+        },
+        # fc2 layer
+        {
+            "params": model.layers[2].parameters(),  # Second Linear layer (fc2)
+            "lr": lr_fc2,
+        },
+        # fc3 layer
+        {
+            "params": model.layers[4].parameters(),  # Third Linear layer (fc3)
+            "lr": lr_fc3,
+        },
+        # Output layer
+        {
+            "params": model.layers[-1].parameters(),  # Output Linear layer
+            "lr": lr_output,
+        },
     ]
-    # optimizer_class = getattr(torch.optim, training_params.get("optimizer", "NAdam"))
-    # optimizer = optimizer_class(parameters)
-    optimizer = torch.optim.NAdam(parameters)  # , lr=0.001)
+    # Setup the optimizer using the NAdam parameters from the JSON
+    optimizer = torch.optim.NAdam(
+        parameters,
+        betas=betas,           # Momentum coefficients from the JSON
+        eps=eps,               # Epsilon for numerical stability
+        weight_decay=weight_decay,  # Weight decay for regularization
+    )
     return optimizer
 
 
