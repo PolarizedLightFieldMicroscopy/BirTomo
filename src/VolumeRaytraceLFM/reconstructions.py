@@ -40,6 +40,7 @@ from VolumeRaytraceLFM.utils.dimensions_utils import (
     reshape_and_crop,
     store_as_pytorch_parameter,
 )
+from VolumeRaytraceLFM.utils.orientation_utils import undo_transpose_and_flip
 from VolumeRaytraceLFM.utils.error_handling import (
     check_for_inf_or_nan,
     check_for_negative_values,
@@ -526,8 +527,7 @@ class Reconstructor:
 
     def _turn_off_initial_volume_gradients(self):
         """Turn off the gradients for the initial volume guess."""
-        self.volume_initial_guess.Delta_n.requires_grad = False
-        self.volume_initial_guess.optic_axis.requires_grad = False
+        self.volume_initial_guess.set_requires_grad(False)
 
     def _specify_variables_to_learn(self):
         """Specify which variables of the initial volume object should be
@@ -599,7 +599,7 @@ class Reconstructor:
             filtered_voxels = filter_voxels_using_retardance(
                 self.rays.vox_indices_ml_shifted_all,
                 self.rays.ray_valid_indices_all,
-                self.ret_img_meas,
+                undo_transpose_and_flip(self.ret_img_meas)
             )
 
             mask = torch.zeros(num_vox_in_volume, dtype=torch.bool)
@@ -1009,7 +1009,7 @@ class Reconstructor:
             )
             fig.canvas.draw()
             fig.canvas.flush_events()
-            time.sleep(0.1)
+            time.sleep(0.001)
         if ep % save_freq == 0:
             self._save_figure_as_pdf(ep, output_dir, in_progress=True)
             self._save_volume_as_h5(volume_estimation, output_dir, ep, in_progress=True)

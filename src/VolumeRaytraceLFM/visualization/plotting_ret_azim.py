@@ -8,7 +8,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 def plot_birefringence_lines(
     retardance_img,
     azimuth_img,
-    origin="lower",
+    origin="upper",
     upscale=1,
     cmap="Wistia_r",
     line_color="blue",
@@ -37,7 +37,7 @@ def plot_birefringence_lines(
     lc = matplotlib.collections.LineCollection(lc_data, colors=line_color, linewidths=1)
     if ax is None:
         fig, ax = plt.subplots()
-    im = ax.imshow(retardance_img, origin="lower", cmap=cmap)
+    im = ax.imshow(retardance_img, origin="upper", cmap=cmap)
     ax.add_collection(lc)
     ax.autoscale()
     ax.margins(0.1)
@@ -177,7 +177,7 @@ def plot_retardance_orientation(
 ):
     plt.ioff()  # Prevents plots from popping up
     fig = plt.figure(figsize=(12, 3))
-    plt.rcParams["image.origin"] = "lower"
+    plt.rcParams["image.origin"] = "upper"
     # Retardance subplot
     plt.subplot(1, 3, 1)
     plt.imshow(ret_image, cmap="plasma")  # viridis

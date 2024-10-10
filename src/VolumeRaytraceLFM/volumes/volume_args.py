@@ -230,13 +230,39 @@ shell_small_args = {
     },
 }
 
-shell_big_args = {
+shell_wide_args = {
     "init_mode": "shell",
     "init_args": {
-        "radius": [32, 40, 24],
+        "radius": [2.5, 3.5, 5.5],
         "center": [0.5, 0.5, 0.5],
         "delta_n": -0.01,
         "border_thickness": 1,
+        "tallness": 3,
+        "highness": 3,
+        "flip": True,
+    },
+}
+
+shell_widewide_args = {
+    "init_mode": "shell",
+    "init_args": {
+        "radius": [2.5, 2.5, 6.5],
+        "center": [0.5, 0.5, 0.5],
+        "delta_n": -0.01,
+        "border_thickness": 1,
+        "tallness": 3,
+        "highness": 3,
+        "flip": True,
+    },
+}
+
+shell_big_args = {
+    "init_mode": "shell",
+    "init_args": {
+        "radius": [32, 24, 40],
+        "center": [0.5, 0.5, 0.5],
+        "delta_n": -0.01,
+        "border_thickness": 2,
         "tallness": 6,
         # "highness": 8,
         # "flip": False,

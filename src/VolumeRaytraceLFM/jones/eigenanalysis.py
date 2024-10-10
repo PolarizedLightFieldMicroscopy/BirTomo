@@ -95,7 +95,8 @@ def azimuth_from_jones_numpy(jones, simple=True):
     j12 = jones[0, 1]
     imag_j11 = np.imag(j11)
     imag_j12 = np.imag(j12)
-    azimuth = 0.5 * np.arctan2(imag_j12, imag_j11) + np.pi / 2.0
+    azimuth = 0.5 * np.atan2(imag_j11, imag_j12) - np.pi / 4.0
+    azimuth = np.remainder(azimuth, np.pi)
     if np.isclose(np.abs(imag_j11), 0.0) and np.isclose(np.abs(imag_j12), 0.0):
         azimuth = 0.0
     return azimuth
@@ -124,8 +125,9 @@ def azimuth_from_jones_torch(jones):
     )
     # Compute azimuth for non-zero mask elements
     azimuth_non_zero = (
-        0.5 * torch.atan2(imag_j12[non_zero_mask], imag_j11[non_zero_mask])
-        + torch.pi / 2.0
+        0.5 * torch.atan2(imag_j11[non_zero_mask], imag_j12[non_zero_mask]) - torch.pi / 4.0
     )
+    # Ensure the azimuth is within the range [0, pi)
+    azimuth_non_zero = torch.remainder(azimuth_non_zero, torch.pi)
     azimuth[non_zero_mask] = azimuth_non_zero
     return azimuth

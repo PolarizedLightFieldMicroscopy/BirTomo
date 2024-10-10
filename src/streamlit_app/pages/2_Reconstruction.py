@@ -316,8 +316,7 @@ def generate_random_vol(mask=False):
         volume_creation_args={"init_mode": "random"},
     )
     # Let's rescale the random to initialize the volume
-    volume.Delta_n.requires_grad = False
-    volume.optic_axis.requires_grad = False
+    volume.set_requires_grad(False)
     volume.Delta_n *= delta_n_init_magnitude
     if mask:
         # And mask out volume that is outside FOV of the microscope

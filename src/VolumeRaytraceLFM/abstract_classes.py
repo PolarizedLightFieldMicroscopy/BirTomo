@@ -493,7 +493,7 @@ class RayTraceLFM(OpticalElement):
         dist_from_ctr = np.sqrt((iv - ml_ctr[0]) ** 2 + (jv - ml_ctr[1]) ** 2)
 
         # Angles that reach the pixels
-        cam_pixels_azim = np.arctan2(jv - ml_ctr[1], iv - ml_ctr[0])
+        cam_pixels_azim = np.atan2(jv - ml_ctr[1], iv - ml_ctr[0])
         cam_pixels_azim[dist_from_ctr > aperture_radius_px] = np.nan
         dist_from_ctr[dist_from_ctr > aperture_radius_px] = np.nan
         cam_pixels_tilt = np.arcsin(dist_from_ctr / aperture_radius_px * naObj / nMedium)

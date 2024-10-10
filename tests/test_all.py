@@ -390,6 +390,7 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     # Gather global data
     local_data = copy.deepcopy(global_data)
     optical_info = local_data["optical_info"]
+    optical_info["aperture_radius_px"] = optical_info["pixels_per_ml"] / 2
 
     # Volume shape
     volume_shape = volume_shape_in
@@ -398,7 +399,7 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     # The n_micro_lenses defines the active volume area, and it should be
     #   smaller than the volume_shape.
     # This as some rays go beyond the volume in front of a single micro-lens
-    optical_info["n_micro_lenses"] = volume_shape[1] - 4
+    optical_info["n_micro_lenses"] = volume_shape[1] - 6
     optical_info["n_voxels_per_ml"] = 1
 
     # Create Ray-tracing objects
@@ -444,18 +445,10 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
         ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch
     )
 
-    assert np.all(
-        np.isnan(ret_img_numpy) == False
-    ), "Error in numpy retardance computations nan found"
-    assert np.all(
-        np.isnan(azi_img_numpy) == False
-    ), "Error in numpy azimuth computations nan found"
-    assert torch.all(
-        torch.isnan(ret_img_torch) == False
-    ), "Error in torch retardance computations nan found"
-    assert torch.all(
-        torch.isnan(azi_img_torch) == False
-    ), "Error in torch azimuth computations nan found"
+    assert not np.any(np.isnan(ret_img_numpy)), "Error in numpy retardance computations nan found"
+    assert not np.any(np.isnan(azi_img_numpy)), "Error in numpy azimuth computations nan found"
+    assert not torch.any(torch.isnan(ret_img_torch)), "Error in torch retardance computations nan found"
+    assert not torch.any(torch.isnan(azi_img_torch)), "Error in torch azimuth computations nan found"
 
     assert np.all(
         np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)
@@ -1045,9 +1038,6 @@ def main():
     # Objective configuration
 
 
-# Check azimuth images
-
-
 def check_azimuth_images(
     img1, img2, message="Error when comparing azimuth computations"
 ):
@@ -1056,9 +1046,27 @@ def check_azimuth_images(
     if not np.all(np.isclose(img1, img2, atol=1e-5)):
         # Check if the difference is a multiple of pi
         diff = np.abs(img1 - img2)
-        assert np.all(
-            np.isclose(diff[~np.isclose(diff, 0.0, atol=1e-5)], np.pi, atol=1e-5)
-        ), message
+        # assert np.all(
+        #     np.isclose(diff[~np.isclose(diff, 0.0, atol=1e-5)], np.pi, atol=1e-5)
+        # ), message
+
+        # Debugging: print the max difference for better diagnosis
+        max_diff = np.max(diff)
+        print(f"Max difference: {max_diff:.8f}")
+        
+        # Check if the difference is a multiple of pi
+        # Only consider differences that are not close to zero
+        non_zero_diff = diff[~np.isclose(diff, 0.0, atol=1e-5)]
+        
+        # plot_azimuth(diff)
+        
+        # If there are non-zero differences, check if they are close to pi
+        if non_zero_diff.size > 0:
+            is_multiple_of_pi = np.all(np.isclose(non_zero_diff, np.pi, atol=1e-5))
+            if not is_multiple_of_pi:
+                print(f"Non-zero differences: {non_zero_diff}")
+                print(f"Expected differences close to pi, but got max: {np.max(non_zero_diff)}")
+            assert is_multiple_of_pi, message
 
 
 def plot_azimuth(img):
@@ -1070,9 +1078,9 @@ def plot_azimuth(img):
     dist_from_ctr = np.sqrt((iv - ctr[0]) ** 2 + (jv - ctr[1]) ** 2)
 
     fig = plt.figure(figsize=(13, 4))
-    fig.subplots_adjust(bottom=0.025, left=0.025, top=0.975, right=0.975)
+    fig.subplots_adjust(bottom=0, left=0.025, top=0.925, right=0.975)
 
-    plt.rcParams["image.origin"] = "lower"
+    plt.rcParams["image.origin"] = "upper"
     plt.clf()
     sub1 = plt.subplot(1, 3, 1)
     sub1.imshow(dist_from_ctr)
@@ -1128,7 +1136,7 @@ def plot_ret_azi_image_comparison(
 
     if "PYTEST_CURRENT_TEST" in os.environ:
         return
-    plt.rcParams["image.origin"] = "lower"
+    plt.rcParams["image.origin"] = "upper"
     plt.clf()
     plt.subplot(3, 2, 1)
     plt.imshow(ret_img_numpy)
@@ -1165,7 +1173,7 @@ def plot_ret_azi_flipsign_image_comparison(
 
     if "PYTEST_CURRENT_TEST" in os.environ:
         return
-    plt.rcParams["image.origin"] = "lower"
+    plt.rcParams["image.origin"] = "upper"
     plt.clf()
     plt.subplot(3, 2, 1)
     plt.imshow(ret_img_pos)

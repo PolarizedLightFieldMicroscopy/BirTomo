@@ -44,6 +44,7 @@ from VolumeRaytraceLFM.jones.eigenanalysis import (
 from VolumeRaytraceLFM.jones import jones_matrix
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors
 from VolumeRaytraceLFM.utils.error_handling import check_for_negative_values_dict
+from VolumeRaytraceLFM.utils.orientation_utils import transpose_and_flip
 from VolumeRaytraceLFM.combine_lenslets import (
     gather_voxels_of_rays_pytorch_batch,
     calculate_offsets_vectorized,
@@ -227,6 +228,11 @@ class BirefringentVolume(BirefringentElement):
         )
         self.optic_axis = optic_axis_tensor.repeat(1, *self.volume_shape)
 
+    def set_requires_grad(self, requires_grad=False):
+        """Set the requires_grad attribute for Delta_n and optic_axis."""
+        self.Delta_n.requires_grad = requires_grad
+        self.optic_axis.requires_grad = requires_grad
+
     def get_delta_n(self):
         """Retrieves the birefringence as a 3D array"""
         if self.backend == BackEnds.PYTORCH:
@@ -276,13 +282,11 @@ class BirefringentVolume(BirefringentElement):
         requires_grad = getattr(self.Delta_n, "requires_grad", False)
         if requires_grad:
             torch.set_grad_enabled(False)
-            self.Delta_n.requires_grad = False
-            self.optic_axis.requires_grad = False
+            self.set_requires_grad(False)
 
         # Perform the addition
         self.Delta_n += other.Delta_n
         self.optic_axis += other.optic_axis
-        # Maybe normalize axis again?
 
         # Normalize the optic axis
         norm = (
@@ -294,8 +298,7 @@ class BirefringentVolume(BirefringentElement):
 
         # Re-enable gradients if they were disabled
         if requires_grad:
-            self.Delta_n.requires_grad = True
-            self.optic_axis.requires_grad = True
+            self.set_requires_grad(True)
             torch.set_grad_enabled(True)
         return self
 
@@ -1413,6 +1416,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.times["ray_trace_through_volume"] += (
             end_time_raytrace - start_time_raytrace
         )
+        for i, img in enumerate(full_img_list):
+            full_img_list[i] = transpose_and_flip(img)
         return full_img_list
 
     def _get_row_iterable(self, n_ml_half, odd_mla_shift):
@@ -1632,10 +1637,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             torch.Tensor: The cumulative Jones Matrices for the rays.
                             torch.Size([n_rays_with_voxels, 2, 2])
         """
-        if False:  # DEBUG
-            assert not all(element == voxels_of_segs[0] for element in voxels_of_segs)
-            # Note: if all elements of voxels_of_segs are equal, then all of
-            #   self.ray_vol_colli_indices may be equal
         if False:  # DEBUG
             print("DEBUG: making the optical info of volume and self the same")
             print("vol in: ", volume_in.optical_info)

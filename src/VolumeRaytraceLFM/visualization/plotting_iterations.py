@@ -19,7 +19,7 @@ def plot_iteration_update(
 ):
     if streamlit_purpose:
         fig = plt.figure(figsize=(18, 9))
-        plt.rcParams["image.origin"] = "lower"
+        plt.rcParams["image.origin"] = "upper"
 
     # Plot measurements
     plt.subplot(2, 4, 1)
@@ -88,7 +88,7 @@ def plot_est_iteration_update(
 ):
     if streamlit_purpose:
         fig = plt.figure(figsize=(18, 9))
-        plt.rcParams["image.origin"] = "lower"
+        plt.rcParams["image.origin"] = "upper"
 
     # Plot predictions
     plt.subplot(2, 4, 5)

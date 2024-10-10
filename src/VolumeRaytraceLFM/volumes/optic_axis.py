@@ -101,5 +101,5 @@ def unit_vector_to_spherical(vector):
     """
     z, y, x = vector
     phi = np.arccos(z)
-    theta = np.arctan2(y, x)
+    theta = np.atan2(y, x)
     return theta, phi
