@@ -596,10 +596,12 @@ class Reconstructor:
             )
 
             start_time = time.perf_counter()
+            num_ret_pixels = self.iteration_params.get("misc", {}).get("min_num_zero_ret_pixels", 2)
             filtered_voxels = filter_voxels_using_retardance(
                 self.rays.vox_indices_ml_shifted_all,
                 self.rays.ray_valid_indices_all,
-                undo_transpose_and_flip(self.ret_img_meas)
+                undo_transpose_and_flip(self.ret_img_meas),
+                num_ret_pixels
             )
 
             mask = torch.zeros(num_vox_in_volume, dtype=torch.bool)

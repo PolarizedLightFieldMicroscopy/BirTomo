@@ -123,7 +123,7 @@ def clean_and_unique_elements(voxel_tensor):
 
 
 # @profile
-def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
+def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image, min_num_zero_ret_pixels):
     def print_voxel_info(message, voxel_tensor):
         """Print the number of unique voxels with a message."""
         print(f"{message}: {len(voxel_tensor):,}")
@@ -155,8 +155,8 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
 
     # Filter for voxels appearing at least twice
     voxels_zero_ret = remove_neg1_values(ray_voxels_raytraced_zero_ret)
-    voxels_zero_ret_two_times, _ = indices_with_multiple_occurences(voxels_zero_ret, 2)
-    print_voxel_info("\t\tFor two or more rays", voxels_zero_ret_two_times)
+    voxels_zero_ret_multiple_times, _ = indices_with_multiple_occurences(voxels_zero_ret, min_num_zero_ret_pixels)
+    print_voxel_info(f"\t\tFor {min_num_zero_ret_pixels} or more rays", voxels_zero_ret_multiple_times)
 
     del ray_voxels_raytraced_zero_ret, voxels_zero_ret
     torch.cuda.empty_cache()  # Only if working with CUDA tensors
@@ -166,16 +166,16 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image):
     memory_intensive = False
     if memory_intensive:
         vox_exclusion_mask = (
-            ~total_voxels.unsqueeze(1).eq(voxels_zero_ret_two_times).any(1)
+            ~total_voxels.unsqueeze(1).eq(voxels_zero_ret_multiple_times).any(1)
         )
         filtered_voxels = total_voxels[vox_exclusion_mask]
     else:
         # Convert tensors to sets
         total_voxels_set = set(total_voxels.tolist())
-        voxels_zero_ret_two_times_set = set(voxels_zero_ret_two_times.tolist())
+        voxels_zero_ret_multiple_times_set = set(voxels_zero_ret_multiple_times.tolist())
 
-        # Perform set difference to find elements in total_voxels that are not in voxels_zero_ret_two_times
-        filtered_voxels_set = total_voxels_set - voxels_zero_ret_two_times_set
+        # Perform set difference to find elements in total_voxels that are not in voxels_zero_ret_multiple_times
+        filtered_voxels_set = total_voxels_set - voxels_zero_ret_multiple_times_set
 
         # Convert the result back to a tensor
         filtered_voxels = torch.tensor(sorted(list(filtered_voxels_set)))

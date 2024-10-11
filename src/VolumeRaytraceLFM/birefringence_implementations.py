@@ -1190,7 +1190,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             self.create_ray_valid_indices_all()
             self.replicate_ray_info_each_microlens()
             self.MLA_volume_geometry_ready = True
-            print(f"Prepared geometry for all rays at once.")
+            print("Prepared geometry for all rays at once.")
         self.del_arr_unnecessary_for_all_rays_at_once()
 
     def del_arr_unnecessary_for_all_rays_at_once(self):

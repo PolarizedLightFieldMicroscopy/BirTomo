@@ -8,10 +8,10 @@ version = "0.1.0"
 description = "Birefringence tomography"
 authors = [{ name = "Geneva Schlafly", email = "gschlafly@uchicago.edu" }]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { file = "LICENSE" }
 dependencies = [
-    "numpy>=1.24.4",
+    "numpy>=2.0.0",
     "matplotlib>=3.7.5",
     "h5py>=3.11.0",
     "tqdm>=4.66.4",
@@ -27,7 +27,6 @@ packages = ["VolumeRaytraceLFM", "streamlit_app", "utils"]
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2.2",
-    "black>=24.4.2",
     "memory_profiler>=0.61.0",
     "ipykernel>=6.29.4",
     "streamlit>=1.35.0",

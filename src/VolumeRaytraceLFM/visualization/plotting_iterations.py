@@ -214,13 +214,16 @@ def plot_discrepancy_loss_subplot(ax, discrepancy_losses, max_y_limit=None):
     # Set dynamic y-axis limit
     min_discrepancy = min(discrepancy_losses)
     max_discrepancy = max(discrepancy_losses)
-    y_min = min(min_discrepancy * 0.6, max_discrepancy * 0.5)
+    y_min = min(min_discrepancy * 0.9, max_discrepancy * 0.5)
 
     # Set y-axis limit to zoom in on the lower range of loss values
     if max_y_limit is not None:
         ax.set_ylim([0, max_y_limit])
     else:
         ax.set_ylim([y_min, max_discrepancy * 1.05])
+
+    # Switch to a logarithmic scale for better visualization of small changes
+    ax.set_yscale('log')
 
     # Use scientific notation for the y-axis
     ax.yaxis.set_major_formatter(ticker.ScalarFormatter(useMathText=True))
@@ -299,7 +302,8 @@ def plot_iteration_update_gridspec(
     ax_loss_header.axis("off")
 
     # Calculate dynamic max_y_limit based on recent loss values
-    max_y_limit = calculate_dynamic_max_y_limit(losses, window_size=50, scale_factor=1.1)
+    window = max(50, int(len(losses) / 2))
+    max_y_limit = calculate_dynamic_max_y_limit(losses, window_size=window, scale_factor=1.1)
 
     # Plot combined losses across the entire row
     ax_combined = fig.add_subplot(gs[6, :])
