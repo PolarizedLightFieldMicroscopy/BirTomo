@@ -42,7 +42,7 @@ from VolumeRaytraceLFM.jones.eigenanalysis import (
     azimuth_from_jones_numpy,
 )
 from VolumeRaytraceLFM.jones import jones_matrix
-from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors
+from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors, torch_precision_map
 from VolumeRaytraceLFM.utils.error_handling import check_for_negative_values_dict
 from VolumeRaytraceLFM.utils.orientation_utils import transpose_and_flip
 from VolumeRaytraceLFM.combine_lenslets import (
@@ -1534,7 +1534,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             retardance, duration = self._measure_time(retardance_from_su2_numpy, jones)
         elif self.backend == BackEnds.PYTORCH:
-            retardance, duration = self._measure_time(retardance_from_su2, jones)
+            clamp_eps_bool = self.optical_info.get("precision", {}).get("clamp_eps", False)
+            retardance, duration = self._measure_time(retardance_from_su2, jones, clamp_eps=clamp_eps_bool)
             if DEBUG:
                 assert not torch.isnan(
                     retardance
@@ -1710,11 +1711,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     voxels_of_segs = self.vox_indices_by_mla_idx[mla_index]
                     max_length = max(len(inner_list) for inner_list in voxels_of_segs)
                     # Pad shorter lists with a specific value (e.g., -1 if -1 is not a valid data point)
-                    padded_voxels_of_segs = [
+                    voxels_of_segs_tensor = torch.tensor([
                         inner_list + [-1] * (max_length - len(inner_list))
                         for inner_list in voxels_of_segs
-                    ]
-                    voxels_of_segs_tensor = torch.tensor(padded_voxels_of_segs)
+                    ])
                     self.vox_indices_by_mla_idx_tensors[mla_index] = (
                         voxels_of_segs_tensor
                     )
@@ -1760,12 +1760,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             )
 
             # Compute the interaction from the rays with their corresponding voxels
+            precision_jones = self.optical_info.get("precision", {}).get("jones", "float64")
+            torch_dtype = torch_precision_map[precision_jones]
             jones = self.voxRayJM(
                 Delta_n=Delta_n,
                 opticAxis=opticAxis,
                 rayDir=ray_dir_basis,
                 ell=ell_in_voxels,
                 wavelength=self.optical_info["wavelength"],
+                precision=torch_dtype
             )
 
             start_time_mloop = time.perf_counter()
@@ -1957,6 +1960,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         assert self.backend == BackEnds.PYTORCH, err_msg
         vol_shape = self.optical_info["volume_shape"]
 
+        microlens_offset = (int(microlens_offset[0]), int(microlens_offset[1]))
         # TODO: test tensor_method to see if equivalent
         tensor_method = False
         if tensor_method:
@@ -2266,19 +2270,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         effective_jones = self.calc_cummulative_JM_of_ray_torch(
             volume_in, all_rays_at_once=True
         )
+
         # Calculate retardance and azimuth
-        retardance = self.retardance(effective_jones).to(torch.float32)
-        azimuth = self.azimuth(effective_jones).to(torch.float32)
+        precision_ret_azim = self.optical_info.get("precision", {}).get("ret_azim_final", "float32")
+        precision_dtype = torch_precision_map[precision_ret_azim]
+        retardance = self.retardance(effective_jones).to(precision_dtype)
+        azimuth = self.azimuth(effective_jones).to(precision_dtype)
 
         # Create output images
         ret_image = torch.zeros(
             (pixels_per_mla, pixels_per_mla),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=retardance.device,
         )
         azim_image = torch.zeros(
             (pixels_per_mla, pixels_per_mla),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=azimuth.device,
         )
 
@@ -2289,7 +2296,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return [ret_image, azim_image]
 
     def ret_and_azim_images_torch(
-        self, volume_in: BirefringentVolume, microlens_offset=[0, 0], mla_index=(0, 0)
+        self, volume_in: BirefringentVolume, microlens_offset=[0, 0],
+        mla_index=(0, 0)
     ):
         """Computes the retardance and azimuth images for a given volume
         and microlens offset using PyTorch.
@@ -2318,18 +2326,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         )
 
         # Calculate retardance and azimuth from the effective Jones Matrices
-        retardance = self.retardance(effective_jones).to(torch.float32)
-        azimuth = self.azimuth(effective_jones).to(torch.float32)
+        precision_ret_azim = self.optical_info.get("precision", {}).get("ret_azim_final", "float32")
+        precision_dtype = torch_precision_map[precision_ret_azim]
+        retardance = self.retardance(effective_jones).to(precision_dtype)
+        azimuth = self.azimuth(effective_jones).to(precision_dtype)
 
         # Initialize output images
         ret_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=retardance.device,
         )
         azim_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=azimuth.device,
         )
 
@@ -2401,7 +2411,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return mask
 
     def intensity_images(
-        self, volume_in: BirefringentVolume, microlens_offset=[0, 0], mla_index=(0, 0)
+        self, volume_in: BirefringentVolume, microlens_offset=[0, 0],
+        mla_index=(0, 0)
     ):
         """Calculate intensity images using Jones Calculus. The polarizer and
         analyzer are applied to the cummulated Jones matrices."""
@@ -2423,14 +2434,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 intensity = np.linalg.norm(E_out, axis=2) ** 2
                 intensity_image_list[setting] = intensity
             else:
+                precision_intensity = self.optical_info.get("precision", {}).get("intensity", "float64")
+                precision_dtype = torch_precision_map[precision_intensity]
                 intensity_image_list[setting] = torch.zeros(
                     (pixels_per_ml, pixels_per_ml),
-                    dtype=torch.float32,
+                    dtype=precision_dtype,
                     device=lenslet_jones.device,
                 )
-                pol_torch = torch.from_numpy(pol_hor).type(torch.complex64)
-                ana_torch = torch.from_numpy(analyzer).type(torch.complex64)
-                E_out = ana_torch @ lenslet_jones @ pol_torch
+                if precision_dtype == torch.float64:
+                    complex_dtype = torch.complex128
+                else:
+                    complex_dtype = torch.complex64
+                pol_torch = torch.from_numpy(pol_hor).type(complex_dtype)
+                ana_torch = torch.from_numpy(analyzer).type(complex_dtype)
+                E_out = ana_torch @ lenslet_jones.to(complex_dtype) @ pol_torch
                 intensity = torch.linalg.norm(E_out, axis=1) ** 2
                 intensity_image_list[setting][
                     self.ray_valid_indices[0, :], self.ray_valid_indices[1, :]
@@ -2462,11 +2479,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                         )
         return lenslet
 
-    def voxRayJM(self, Delta_n, opticAxis, rayDir, ell, wavelength):
+    def voxRayJM(self, Delta_n, opticAxis, rayDir, ell, wavelength, precision=torch.float64):
         """Compute Jones matrix associated with a particular ray and voxel combination"""
         start_time_voxRayJM = time.perf_counter()
         ret, azim = self.vox_ray_ret_azim(Delta_n, opticAxis, rayDir, ell, wavelength)
-        jones = self.vox_ray_matrix(ret, azim)
+        jones = self.vox_ray_matrix(ret, azim, precision=precision)
         end_time_voxRayJM = time.perf_counter()
         self.times["voxRayJM"] += end_time_voxRayJM - start_time_voxRayJM
         return jones
@@ -2485,9 +2502,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 Delta_n, opticAxis, rayDir, ell, wavelength
             )
         else:
-            if DEBUG:
-                if not torch.is_tensor(opticAxis):
-                    opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
             ret, azim = jones_matrix.calculate_vox_ray_ret_azim_torch(
                 Delta_n,
                 opticAxis,
@@ -2501,7 +2515,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.times["calc_ret_azim_for_jones"] += end_time - start_time
         return ret, azim
 
-    def vox_ray_matrix(self, ret, azim):
+    def vox_ray_matrix(self, ret, azim, precision=torch.float64):
         """Calculate the Jones matrix from a given retardance and
         azimuth angle."""
         start_time = time.perf_counter()
@@ -2522,7 +2536,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 self.times["Stacking"] += jones_time_end - diag_time_end
             else:
                 jones = jones_matrix.calculate_jones_torch(
-                    ret, azim, nonzeros_only=self.only_nonzero_for_jones
+                    ret, azim, nonzeros_only=self.only_nonzero_for_jones, precision=precision
                 )
                 # self.times["Diag-Offdiag"] = 0
                 # self.times["Stacking"] = 0

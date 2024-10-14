@@ -1,6 +1,5 @@
 """Abstract classes"""
 
-# Third party libraries imports
 from enum import Enum
 import pickle
 from os.path import exists
@@ -8,9 +7,8 @@ import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
-from VolumeRaytraceLFM.visualization.plotting_rays import plot_ray_angles
 
-# Packages needed for siddon algorithm calculations
+from VolumeRaytraceLFM.visualization.plotting_rays import plot_ray_angles
 from VolumeRaytraceLFM.my_siddon import (
     siddon_params,
     siddon_midpoints,
@@ -22,10 +20,8 @@ from VolumeRaytraceLFM.my_siddon import (
 #   that will work with only numpy
 try:
     import torch
-    import torch.nn as nn
     from VolumeRaytraceLFM.optic_config import *
 except:
-
     class OpticBlock:  # Dummy function for numpy
         def __init__(
             self,
@@ -36,7 +32,7 @@ except:
 
 
 DEBUG = False
-
+VERBOSE = False
 
 class SimulType(Enum):
     """Defines which types of volumes we can have, as each type has a
@@ -85,6 +81,12 @@ class OpticalElement(OpticBlock):
         "polarizer": np.array([[1, 0], [0, 1]]),
         "analyzer": np.array([[1, 0], [0, 1]]),
         "polarizer_swing": 0.03,
+        # Precision of the computation
+        "precision": {
+            "jones": "float64",
+            "ret_azim_final": "float64",
+            "intensity": "float64"
+        }
     }
 
     def __init__(
@@ -405,7 +407,8 @@ class RayTraceLFM(OpticalElement):
         scope_perp1 = np.array([0, 1, 0])
         scope_perp2 = np.array([0, 0, 1])
         theta = np.arccos(np.dot(ray, scope_axis))
-        print(f"Maximum ray angle is {np.around(np.rad2deg(theta), decimals=0)} degrees")
+        if VERBOSE:
+            print(f"Maximum ray angle is {np.around(np.rad2deg(theta), decimals=0)} degrees")
         normal_vec = RayTraceLFM.find_orthogonal_vec(ray, scope_axis)
         Rinv = RayTraceLFM.rotation_matrix(normal_vec, -theta)
         # Extracting basis vectors that are orthogonal to the ray and will be parallel
@@ -435,7 +438,8 @@ class RayTraceLFM(OpticalElement):
         scope_perp1 = torch.tensor([0, 1.0, 0], dtype=ray.dtype, device=ray.device)
         scope_perp2 = torch.tensor([0, 0, 1.0], dtype=ray.dtype, device=ray.device)
         theta = torch.arccos(torch.matmul(ray, scope_axis))
-        print(f"Maximum ray angle is {torch.round(torch.rad2deg(theta).max(), decimals=0)} degrees")
+        if VERBOSE:
+            print(f"Maximum ray angle is {torch.round(torch.rad2deg(theta).max(), decimals=0)} degrees")
         normal_vec = RayTraceLFM.find_orthogonal_vec_torch(ray, scope_axis)
         Rinv = RayTraceLFM.rotation_matrix_torch(normal_vec, -theta)
         # Extracting basis vectors that are orthogonal to the ray and will be parallel

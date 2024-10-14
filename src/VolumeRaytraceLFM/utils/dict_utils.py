@@ -3,6 +3,12 @@
 import torch
 
 
+torch_precision_map = {
+    "float32": torch.float32,
+    "float64": torch.float64
+}
+
+
 def extract_numbers_from_dict_of_lists(input_dict):
     """
     Extracts all the unique numeric values from a dictionary.

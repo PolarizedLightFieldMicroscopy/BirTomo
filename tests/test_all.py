@@ -10,6 +10,7 @@ from VolumeRaytraceLFM.birefringence_implementations import (
     BirefringentRaytraceLFM,
 )
 from VolumeRaytraceLFM.jones.jones_calculus import JonesMatrixGenerators
+from VolumeRaytraceLFM.visualization.plotting_intensity import plot_intensity_images
 
 
 @pytest.fixture(scope="module")
@@ -264,17 +265,17 @@ def test_compute_JonesMatrices(global_data, volume_shape_in):
 
         # Important, set the tolerance to 1e-5, as numpy computes in float64 and torch in float32
         assert np.isclose(
-            JM_numpy.astype(np.complex64), JM_torch[ray_ix].detach().numpy(), atol=1e-5
+            JM_numpy.astype(np.complex64), JM_torch[ray_ix].detach().numpy(), atol=1e-7
         ).all(), f"JM mismatch on coord: (i,j)= ({i},{j}):"
         # As we are testing for JM, use try_catch on azimuth and retardance, such that they don't brake the test
         # And report if there was mismatch at the end
         try:
             # Check retardance for this ray
             assert np.isclose(
-                ret_img_numpy[i, j], ret_img_torch[i, j], atol=1e-5
+                ret_img_numpy[i, j], ret_img_torch[i, j], atol=1e-7
             ).all(), f"Retardance mismatch on coord: (i,j)= ({i},{j}):"
-        except:
-            print(f"Retardance mismatch on coord: (i,j)= ({i},{j}):")
+        except AssertionError as e:
+            print(e)
             any_fail = True
         try:
             # Check azimuth for this ray
@@ -355,21 +356,13 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     # Use this in debug console to visualize errors
     # plot_ret_azi_image_comparison(ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch)
 
-    assert np.all(
-        np.isnan(ret_img_numpy) == False
-    ), "Error in numpy retardance computations nan found"
-    assert np.all(
-        np.isnan(azi_img_numpy) == False
-    ), "Error in numpy azimuth computations nan found"
-    assert torch.all(
-        torch.isnan(ret_img_torch) == False
-    ), "Error in torch retardance computations nan found"
-    assert torch.all(
-        torch.isnan(azi_img_torch) == False
-    ), "Error in torch azimuth computations nan found"
+    assert not np.any(np.isnan(ret_img_numpy)), "Error in numpy retardance computations nan found"
+    assert not np.any(np.isnan(azi_img_numpy)), "Error in numpy azimuth computations nan found"
+    assert not torch.any(torch.isnan(ret_img_torch)), "Error in torch retardance computations nan found"
+    assert not torch.any(torch.isnan(azi_img_torch)), "Error in torch azimuth computations nan found"
 
     assert np.all(
-        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)
+        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
@@ -451,7 +444,7 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     assert not torch.any(torch.isnan(azi_img_torch)), "Error in torch azimuth computations nan found"
 
     assert np.all(
-        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-5)
+        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
     check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
 
@@ -513,27 +506,20 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
         voxel_torch_random
     )
 
-    plot_ret_azi_image_comparison(
-        ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch
-    )
+    # plot_ret_azi_image_comparison(
+    #     ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch
+    # )
+    # plt.show(block=True)
+
+    assert not np.any(np.isnan(ret_img_numpy)), "Error in numpy retardance computations nan found"
+    assert not np.any(np.isnan(azi_img_numpy)), "Error in numpy azimuth computations nan found"
+    assert not torch.any(torch.isnan(ret_img_torch)), "Error in torch retardance computations nan found"
+    assert not torch.any(torch.isnan(azi_img_torch)), "Error in torch azimuth computations nan found"
 
     assert np.all(
-        np.isnan(ret_img_numpy) == False
-    ), "Error in numpy retardance computations nan found"
-    assert np.all(
-        np.isnan(azi_img_numpy) == False
-    ), "Error in numpy azimuth computations nan found"
-    assert torch.all(
-        torch.isnan(ret_img_torch) == False
-    ), "Error in torch retardance computations nan found"
-    assert torch.all(
-        torch.isnan(azi_img_torch) == False
-    ), "Error in torch azimuth computations nan found"
-
-    assert np.all(
-        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-4)
+        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
-    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
+    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-5)
 
 
 @pytest.mark.parametrize("n_voxels_per_ml", [1, 3, 4])
@@ -598,24 +584,16 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
         ret_img_numpy, azi_img_numpy, ret_img_torch, azi_img_torch
     )
 
-    assert np.all(
-        np.isnan(ret_img_numpy) == False
-    ), "Error in numpy retardance computations nan found"
-    assert np.all(
-        np.isnan(azi_img_numpy) == False
-    ), "Error in numpy azimuth computations nan found"
-    assert torch.all(
-        torch.isnan(ret_img_torch) == False
-    ), "Error in torch retardance computations nan found"
-    assert torch.all(
-        torch.isnan(azi_img_torch) == False
-    ), "Error in torch azimuth computations nan found"
+    assert not np.any(np.isnan(ret_img_numpy)), "Error in numpy retardance computations nan found"
+    assert not np.any(np.isnan(azi_img_numpy)), "Error in numpy azimuth computations nan found"
+    assert not torch.any(torch.isnan(ret_img_torch)), "Error in torch retardance computations nan found"
+    assert not torch.any(torch.isnan(azi_img_torch)), "Error in torch azimuth computations nan found"
 
     assert np.all(
-        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=5e-3)
+        np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
 
-    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
+    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-6)
 
 
 @pytest.mark.parametrize(
@@ -785,14 +763,6 @@ def test_torch_auto_differentiation_subsets(global_data, volume_init_mode):
     ), "Seems like the volume was not updated correctly. Nothing changed in the volume after the optimization step."
 
 
-# @pytest.mark.parametrize('volume_init_mode', [
-#         'random',
-#         'ellipsoid',
-#         '1planes',
-#         '3planes'
-#     ])
-
-
 def speed_speed(global_data, volume_init_mode):
     # Enable torch gradients
     torch.set_grad_enabled(True)
@@ -936,12 +906,13 @@ def test_azimuth_neg_birefringence(global_data):
         rotated_azi_img_neg.numpy(),
     )
     assert np.all(
-        np.isclose(ret_img_pos.numpy(), ret_img_neg.numpy(), atol=1e-5)
+        np.isclose(ret_img_pos.numpy(), ret_img_neg.numpy(), atol=1e-7)
     ), "Retardance depends on the sign of the birefrigence."
     check_azimuth_images(
         azi_img_pos.numpy(),
         rotated_azi_img_neg.numpy(),
-        "Flipping the sign of the birefringence does not simply rotate the azimuth.",
+        atol=1e-6,
+        message="Flipping the sign of the birefringence does not simply rotate the azimuth.",
     )
 
     # Verify with numpy
@@ -958,13 +929,14 @@ def test_azimuth_neg_birefringence(global_data):
     )
     assert np.all(
         np.isclose(
-            ret_img_pos.astype(np.float32), ret_img_neg.astype(np.float32), atol=1e-5
+            ret_img_pos.astype(np.float32), ret_img_neg.astype(np.float32), atol=1e-7
         )
     ), "Retardance depends on the sign of the birefrigence."
     check_azimuth_images(
         azi_img_pos.astype(np.float32),
         rotated_azi_img_neg.astype(np.float32),
-        "Flipping the sign of the birefringence does not simply rotate the azimuth.",
+        atol=1e-6,
+        message="Flipping the sign of the birefringence does not simply rotate the azimuth.",
     )
 
 
@@ -978,23 +950,11 @@ def test_intensity_with_both_methods(global_data):
     backends = [BackEnds.NUMPY, BackEnds.PYTORCH]
     results = []
     for backend in backends:
-        # Get optical parameters template
         optical_info = local_data["optical_info"]
-        # Alter some of the optical parameters
-        # optical_info['volume_shape'] = [15, 51, 51]
-        # optical_info['axial_voxel_size_um'] = 1.0
-        # optical_info['cube_voxels'] = True
-        # optical_info['pixels_per_ml'] = 17
-        # optical_info['n_micro_lenses'] = 9
-        # optical_info['n_voxels_per_ml'] = 1
-        # Create non-identity polarizers and analyzers
+        optical_info['aperture_radius_ml'] = 3
         # LC-PolScope setup
         optical_info["analyzer"] = JonesMatrixGenerators.left_circular_polarizer()
         optical_info["polarizer_swing"] = 0.03
-
-        # number is the shift from the end of the volume, change it as you wish,
-        #       do single_voxel{volume_shape[0]//2} for a voxel in the center
-        shift_from_center = 0
 
         # Create a Birefringent Raytracer!
         rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
@@ -1011,6 +971,8 @@ def test_intensity_with_both_methods(global_data):
         my_volume = loaded_volume
 
         image_list = rays.ray_trace_through_volume(my_volume, intensity=True)
+        # plot_intensity_images(image_list)
+        # plt.show(block=True)
 
         if backend == BackEnds.PYTORCH:
             image_list = [img.detach().cpu().numpy() for img in image_list]
@@ -1039,30 +1001,20 @@ def main():
 
 
 def check_azimuth_images(
-    img1, img2, message="Error when comparing azimuth computations"
+    img1, img2, atol=1e-7, message="Error when comparing azimuth computations"
 ):
     """Compares two azimuth images, taking into account that atan2 output
     of 0 and pi is equivalent"""
-    if not np.all(np.isclose(img1, img2, atol=1e-5)):
-        # Check if the difference is a multiple of pi
+    if not np.all(np.isclose(img1, img2, atol=atol)):
         diff = np.abs(img1 - img2)
-        # assert np.all(
-        #     np.isclose(diff[~np.isclose(diff, 0.0, atol=1e-5)], np.pi, atol=1e-5)
-        # ), message
-
-        # Debugging: print the max difference for better diagnosis
-        max_diff = np.max(diff)
-        print(f"Max difference: {max_diff:.8f}")
-        
         # Check if the difference is a multiple of pi
         # Only consider differences that are not close to zero
-        non_zero_diff = diff[~np.isclose(diff, 0.0, atol=1e-5)]
-        
+        non_zero_diff = diff[~np.isclose(diff, 0.0, atol=atol)]
         # plot_azimuth(diff)
         
         # If there are non-zero differences, check if they are close to pi
         if non_zero_diff.size > 0:
-            is_multiple_of_pi = np.all(np.isclose(non_zero_diff, np.pi, atol=1e-5))
+            is_multiple_of_pi = np.all(np.isclose(non_zero_diff, np.pi, atol=atol))
             if not is_multiple_of_pi:
                 print(f"Non-zero differences: {non_zero_diff}")
                 print(f"Expected differences close to pi, but got max: {np.max(non_zero_diff)}")
@@ -1077,7 +1029,7 @@ def plot_azimuth(img):
     jv, iv = np.meshgrid(i, j)
     dist_from_ctr = np.sqrt((iv - ctr[0]) ** 2 + (jv - ctr[1]) ** 2)
 
-    fig = plt.figure(figsize=(13, 4))
+    fig = plt.figure(figsize=(13, 5))
     fig.subplots_adjust(bottom=0, left=0.025, top=0.925, right=0.975)
 
     plt.rcParams["image.origin"] = "upper"
@@ -1088,7 +1040,7 @@ def plot_azimuth(img):
 
     sub2 = plt.subplot(1, 3, 2)
     cax = sub2.imshow(img * 180 / np.pi)
-    # plt.colorbar()
+    plt.colorbar()
     plt.title("Azimuth (degrees)")
     # Add colorbar, make sure to specify tick locations to match desired ticklabels
     # vertically oriented colorbar
@@ -1125,7 +1077,7 @@ def plot_azimuth(img):
     plt.ylabel("Azimuth")
 
     plt.pause(0.05)
-    plt.show()
+    plt.show(block=True)
 
 
 def plot_ret_azi_image_comparison(
@@ -1155,12 +1107,14 @@ def plot_ret_azi_image_comparison(
     plt.subplot(3, 2, 5)
     diff = np.abs(ret_img_torch - ret_img_numpy)
     plt.imshow(diff)
-    plt.title(f"Ret. Diff: {diff.sum()}")
+    plt.title(f"Ret. Diff Sum: {diff.sum():.3f}")
 
     plt.subplot(3, 2, 6)
     diff = np.abs(azi_img_torch - azi_img_numpy)
     plt.imshow(diff)
-    plt.title(f"Azi. Diff: {diff.sum()}")
+    plt.title(f"Azi. Diff Sum: {diff.sum():.3f}")
+    
+    plt.tight_layout()
     plt.pause(0.05)
     plt.show(block=True)
 

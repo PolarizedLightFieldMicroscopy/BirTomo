@@ -65,6 +65,7 @@ class ForwardModel:
         self.forward_img_dir = None
         self.base_dir = ""
         self.img_list = [None] * 5
+        self.to_device(device)
 
         # Set up directories
         if False:
@@ -211,6 +212,8 @@ class ForwardModel:
             self.img_list (list of np.arrays):
                 List of intensity images, created only if 'intensity' is True.
         """
+        if self.is_pytorch_backend():
+            volume = volume.to(self.rays.ray_valid_indices.device)
         ret_image, azim_image = self.rays.ray_trace_through_volume(
             volume, all_rays_at_once=all_lenslets
         )

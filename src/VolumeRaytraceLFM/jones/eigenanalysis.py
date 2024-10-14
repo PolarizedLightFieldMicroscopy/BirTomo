@@ -2,21 +2,25 @@ import torch
 import numpy as np
 
 
-def calc_theta(jones):
+def calc_theta(jones, clamp_eps=True):
     # jones is a batch of 2x2 matrices
     jones = jones.to(torch.complex128)
     a = jones[:, 0, 0]
     device = jones.device
     # Clamp the real part to the valid range of acos to prevent NaNs
     # Note: bounds of -1 and 1 cause NaNs in backward pass
-    upper_limit = torch.nextafter(
-        torch.tensor(1.0, dtype=torch.float64),
-        torch.tensor(-np.inf, dtype=torch.float64),
-    ).to(device)
-    lower_limit = torch.nextafter(
-        torch.tensor(-1.0, dtype=torch.float64),
-        torch.tensor(np.inf, dtype=torch.float64),
-    ).to(device)
+    if clamp_eps:
+        upper_limit = torch.nextafter(
+            torch.tensor(1.0, dtype=torch.float64),
+            torch.tensor(-np.inf, dtype=torch.float64),
+        ).to(device)
+        lower_limit = torch.nextafter(
+            torch.tensor(-1.0, dtype=torch.float64),
+            torch.tensor(np.inf, dtype=torch.float64),
+        ).to(device)
+    else:
+        upper_limit = torch.tensor(1.0, dtype=torch.float64).to(device)
+        lower_limit = torch.tensor(-1.0, dtype=torch.float64).to(device)
     theta = torch.acos(torch.clamp(a.real, lower_limit, upper_limit))
     return theta
 
@@ -41,8 +45,8 @@ def eigenvalues(jones):
     return x
 
 
-def eigenvalues_su2(jones):
-    theta = calc_theta(jones)
+def eigenvalues_su2(jones, clamp_eps=True):
+    theta = calc_theta(jones, clamp_eps)
     x = torch.stack([torch.exp(1j * theta), torch.exp(-1j * theta)], dim=-1)
     return x
 
@@ -62,8 +66,8 @@ def retardance_from_jones_single(jones, su2_method=False):
     return retardance
 
 
-def retardance_from_su2(jones):
-    theta = calc_theta(jones)
+def retardance_from_su2(jones, clamp_eps=True):
+    theta = calc_theta(jones, clamp_eps)
     retardance = 2 * theta.abs()
     return retardance
 

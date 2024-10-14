@@ -45,7 +45,7 @@ def vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength):
         ret (torch.Tensor): Retardance values. Shape: [num_voxels, intersection_rows]
         azim (torch.Tensor): Azimuth angles. Shape: [num_voxels, intersection_rows]
     """
-    pi_tensor = torch.tensor(np.pi, device=bir.device, dtype=bir.dtype)
+    pi_tensor = torch.tensor(np.pi, dtype=bir.dtype, device=bir.device)
     # Dot product of optical axis and 3 ray-direction vectors
     OA_dot_rayDir = (rayDir.unsqueeze(2) @ optic_axis).squeeze(2)
     # There is the x2 here because it is not in the jones matrix function
@@ -98,17 +98,18 @@ def calculate_vox_ray_ret_azim_torch(
         return vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength)
 
 
-def _get_diag_offdiag_jones(ret, azim):
-    # cos_ret = torch.cos(ret)
-    # sin_ret = torch.sin(ret)
-    # cos_azim = torch.cos(azim)
-    # sin_azim = torch.sin(azim)
-
-    # diag = cos_ret + 1j * cos_azim * sin_ret
-    # offdiag = 1j * sin_azim * sin_ret
-
-    exp_ret = torch.polar(torch.tensor(1.0, device=ret.device), ret)
-    exp_azim = torch.polar(torch.tensor(1.0, device=azim.device), azim)
+def _get_diag_offdiag_jones(ret, azim, precision=torch.float64):
+    """
+    Args:
+        ret (torch.Tensor): Retardance angles.
+        azim (torch.Tensor): Azimuth angles.
+        precision: torch.float32 or torch.float64
+    """
+    ret = ret.to(precision)
+    azim = azim.to(precision)
+    
+    exp_ret = torch.polar(torch.tensor(1.0, dtype=precision, device=ret.device), ret)
+    exp_azim = torch.polar(torch.tensor(1.0, dtype=precision, device=azim.device), azim)
 
     diag = exp_ret.real + 1j * exp_azim.real * exp_ret.imag
     offdiag = 1j * exp_azim.imag * exp_ret.imag
@@ -117,7 +118,7 @@ def _get_diag_offdiag_jones(ret, azim):
 
 
 def jones_torch_from_diags(diag, offdiag):
-    jones = torch.empty([*diag.shape, 2, 2], dtype=torch.complex64, device=diag.device)
+    jones = torch.empty([*diag.shape, 2, 2], dtype=diag.dtype, device=diag.device)
     jones[:, :, 0, 0] = diag
     jones[:, :, 0, 1] = offdiag
     jones[:, :, 1, 0] = offdiag
@@ -125,26 +126,27 @@ def jones_torch_from_diags(diag, offdiag):
     return jones
 
 
-def jones_torch(ret, azim):
+def jones_torch(ret, azim, precision=torch.float64):
     """Computes the Jones matrix given the retardance and azimuth angles.
     Args:
         ret (torch.Tensor): Retardance angles.
         azim (torch.Tensor): Azimuth angles.
+        precision (torch.dtype): Precision of the computation.
     Returns:
         torch.Tensor: The Jones matrices.
                       Shape: [*ret.shape, 2, 2]
     """
-    diag, offdiag = _get_diag_offdiag_jones(ret, azim)
+    diag, offdiag = _get_diag_offdiag_jones(ret, azim, precision=precision)
     jones = jones_torch_from_diags(diag, offdiag)
     return jones
 
 
-def jones_torch_nonzeros(ret, azim):
+def jones_torch_nonzeros(ret, azim, precision=torch.float32):
     nonzero_indices = ret != 0
-    cos_ret = torch.cos(ret[nonzero_indices].to(dtype=torch.float32))
-    sin_ret = torch.sin(ret[nonzero_indices].to(dtype=torch.float32))
-    cos_azim = torch.cos(azim[nonzero_indices].to(dtype=torch.float32))
-    sin_azim = torch.sin(azim[nonzero_indices].to(dtype=torch.float32))
+    cos_ret = torch.cos(ret[nonzero_indices].to(dtype=precision))
+    sin_ret = torch.sin(ret[nonzero_indices].to(dtype=precision))
+    cos_azim = torch.cos(azim[nonzero_indices].to(dtype=precision))
+    sin_azim = torch.sin(azim[nonzero_indices].to(dtype=precision))
     offdiag = 1j * sin_azim * sin_ret
     diag1 = cos_ret + 1j * cos_azim * sin_ret
     diag2 = torch.conj(diag1)
@@ -157,10 +159,10 @@ def jones_torch_nonzeros(ret, azim):
     return jones
 
 
-def calculate_jones_torch(ret, azim, nonzeros_only=False):
+def calculate_jones_torch(ret, azim, nonzeros_only=False, precision=torch.float64):
     if nonzeros_only:
         # Faster when the number of non-zero elements is large
         return jones_torch_nonzeros(ret, azim)
     else:
         # Faster when the number of non-zero elements is small
-        return jones_torch(ret, azim)
+        return jones_torch(ret, azim, precision=precision)

@@ -90,6 +90,7 @@ def scale_birefringence_z_projection_center(birefringence, ret_avg):
     """
     bir_copy = birefringence.copy()
     z_dim, y_dim, x_dim = bir_copy.shape
+    ret_avg = ret_avg.T
     ret_y, ret_x = ret_avg.shape
     ret_avg = ret_avg / np.max(ret_avg)
     

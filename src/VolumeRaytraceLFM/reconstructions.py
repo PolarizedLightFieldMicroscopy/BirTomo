@@ -322,7 +322,7 @@ class Reconstructor:
 
         image_for_rays = None
         if omit_rays_based_on_pixels:
-            image_for_rays = self.ret_img_meas
+            image_for_rays = undo_transpose_and_flip(self.ret_img_meas)
             print("Omitting rays based on pixels with zero retardance.")
         saved_ray_path = self.iteration_params.get("file_paths", {}).get("saved_rays", None)
         self.rays = self.setup_raytracer(
@@ -605,7 +605,10 @@ class Reconstructor:
             )
 
             mask = torch.zeros(num_vox_in_volume, dtype=torch.bool)
-            mask[filtered_voxels] = True
+            if filtered_voxels.numel() > 0:
+                mask[filtered_voxels] = True
+            else:
+                print("Warning: filtered_voxels is empty. No indices to update in mask.")
             self.mask = mask
             self.rays.mask = mask  # Created as a rays arribute for saving purposes
 
@@ -613,7 +616,7 @@ class Reconstructor:
             print(f"Voxel mask created in {end_time - start_time:.2f} seconds")
         else:
             try:
-                vox_indices_path = self.iteration_params["file_paths"]["vox_indices_by_mla_idx"]
+                vox_indices_path = self.iteration_params.get("file_paths", {}).get("vox_indices_by_mla_idx", None)
                 if not vox_indices_path:
                     raise ValueError("Vox indices path is empty.")
                 start_time = time.perf_counter()
@@ -1236,13 +1239,13 @@ class Reconstructor:
             trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
             parameters_optic_axis = [{
                 "params": trainable_parameters[0],
-                "lr": training_params["learning_rates"]["optic_axis"],
+                "lr": training_params.get("learning_rates", {}).get("optic_axis", 1e-1),
                 "name": trainable_vars_names[0],
             }]
             optimizer_opticaxis = self.optimizer_setup(parameters_optic_axis, training_params)
             parameters_birefringence = [{
                 "params": trainable_parameters[1],
-                "lr": training_params["learning_rates"]["birefringence"],
+                "lr": training_params.get("learning_rates", {}).get("birefringence", 1e-4),
                 "name": trainable_vars_names[1],
             }]
             optimizer_birefringence = self.optimizer_setup(parameters_birefringence, training_params)
