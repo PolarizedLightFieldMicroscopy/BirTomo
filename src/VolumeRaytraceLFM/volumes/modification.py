@@ -2,6 +2,9 @@
 birefringent volume."""
 
 import numpy as np
+from VolumeRaytraceLFM.utils.orientation_utils import undo_transpose_and_flip
+from VolumeRaytraceLFM.utils.lightfield_utils import average_intensity_per_lenslet
+from VolumeRaytraceLFM.utils.dimensions_utils import extend_image_with_borders
 
 
 def pad_to_region_shape(delta_n, optic_axis, volume_shape, region_shape):
@@ -113,3 +116,13 @@ def scale_birefringence_z_projection_center(birefringence, ret_avg):
         # Scale only the center region of the birefringence array
         bir_copy[:, start_y:end_y, start_x:end_x] *= ret_avg_expanded
     return bir_copy
+
+
+def adjust_birefringence_distribution_from_retardance(initial_birefringence, ret_image_meas, optical_info):
+    # Adjust the initial volume to match the retardance image
+    ret_image_meas_oriented = undo_transpose_and_flip(ret_image_meas)
+    ret_avg = average_intensity_per_lenslet(ret_image_meas_oriented, optical_info["pixels_per_ml"])#.T
+    vol_shape = optical_info["volume_shape"]
+    ret_avg = extend_image_with_borders(ret_avg, (vol_shape[1], vol_shape[2]))
+    scaled_birefringence = scale_birefringence_z_projection_center(initial_birefringence, ret_avg)
+    return scaled_birefringence
