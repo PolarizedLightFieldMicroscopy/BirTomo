@@ -43,7 +43,7 @@ from VolumeRaytraceLFM.jones.eigenanalysis import (
 )
 from VolumeRaytraceLFM.jones import jones_matrix
 from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors, torch_precision_map
-from VolumeRaytraceLFM.utils.error_handling import check_for_negative_values_dict
+from VolumeRaytraceLFM.utils.error_handling import check_for_negative_values_dict, check_for_negative_values_list_of_lists
 from VolumeRaytraceLFM.utils.orientation_utils import transpose_and_flip
 from VolumeRaytraceLFM.combine_lenslets import (
     gather_voxels_of_rays_pytorch_batch,
@@ -1227,6 +1227,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
         n_ml_half = floor(n_micro_lenses / 2.0)
         collision_indices = self.ray_vol_colli_indices
+        vox1_min, vox2_min = self._calculate_min_shifted_indices(n_micro_lenses, n_voxels_per_ml, collision_indices)
+        if vox1_min < 0 or vox2_min < 0:
+            print("Voxel indices are negative. Try increasing the non-axial volume dimensions.")
+            print(f"Vox1 min shifted: {vox1_min}, Vox2 min shifted: {vox2_min}")
+            raise ValueError(f"Try increasing the non-axial volume dimensions by {[int(-2 * vox1_min), int(-2 * vox2_min)]}.")
+
         if self.verbose:
             print("Storing shifted voxel indices for each microlens:")
             row_iterable = tqdm(
@@ -1248,8 +1254,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 vox_list = self._gather_voxels_of_rays_pytorch(
                     current_offset, collision_indices
                 )
+                if DEBUG and ml_ii_idx == 0 and ml_jj_idx == 0:
+                    try:
+                        print("Confirming for the first microlens that all voxel indices are nonnegative...")
+                        check_for_negative_values_list_of_lists(vox_list)
+                    except ValueError as e:
+                        print(f"Error storing shifted voxel indices at mla_index {ml_ii_idx}, {ml_jj_idx}: {e}")
+                        flattened = [coord for ray in vox_list for coord in ray]
+                        tensor = torch.tensor(flattened)
+                        print(f"Min: {tensor.min()}, Max: {tensor.max()}")
+                        raise
+
                 if mla_index not in self.vox_indices_by_mla_idx.keys():
                     self.vox_indices_by_mla_idx[mla_index] = vox_list
+        print("Confirming that all voxel indices are nonnegative...")
         check_for_negative_values_dict(self.vox_indices_by_mla_idx)
         return self.vox_indices_by_mla_idx
 
@@ -1486,6 +1504,27 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Calculate and return the final offset for the current microlens
         return scaled_indices + central_offset - half_voxel_span
 
+    def _min_offset_possible(self, num_microlenses, num_voxels_per_ml):
+        n_ml_half = floor(num_microlenses / 2.0)
+        scaled_indices = np.array([num_voxels_per_ml * (-n_ml_half), num_voxels_per_ml * (-n_ml_half)])
+        central_offset = np.array(self.vox_ctr_idx[1:])
+        half_voxel_span = floor(num_voxels_per_ml * num_microlenses / 2.0)
+        min_offset = scaled_indices + central_offset - half_voxel_span
+        return min_offset
+
+    def _calculate_min_shifted_indices(self, num_microlenses, num_voxels_per_ml, collision_indices):
+        min_offset = self._min_offset_possible(num_microlenses, num_voxels_per_ml)
+        flattened_indices = [coord for ray in collision_indices for coord in ray]
+        flat_np = np.array(flattened_indices)
+        vox1_min = flat_np[:, 1].min()
+        vox2_min = flat_np[:, 2].min()
+        
+        # Calculate the shifted minimum voxel values
+        vox1_min_shifted = vox1_min + min_offset[0]
+        vox2_min_shifted = vox2_min + min_offset[1]
+
+        return vox1_min_shifted, vox2_min_shifted
+
     def generate_images(self, volume, offset, intensity, mla_index=(0, 0)):
         """Generates images for a single microlens, by passing an offset
         to the ray tracing process. The offset shifts the volume indices
@@ -1683,7 +1722,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             )
             assert len(voxels_of_segs) == len(collision_indices), err_message
             if not voxels_of_segs:
-                # print("The list 'voxels_of_segs' is empty.")
                 max_length = 0
                 padded_voxels_of_segs = []
             else:
