@@ -356,9 +356,12 @@ class Reconstructor:
         self.mla_rays_at_once = self.iteration_params.get("misc", {}).get("mla_rays_at_once", False)
         if self.mla_rays_at_once and not self.rays.MLA_volume_geometry_ready:
             print("Preparing rays for all rays at once...")
+            verbose_bool = self.rays.verbose
+            self.rays.verbose = True
             self.rays.prepare_for_all_rays_at_once()
+            self.rays.verbose = verbose_bool
             if not self.from_simulation:
-                if self.radiometry:
+                if self.radiometry is not None:
                     num_rays_og = self.rays.ray_valid_indices_all.shape[1]
                     radiometry = torch.tensor(self.radiometry)
                     self.rays.filter_from_radiometry(radiometry)
