@@ -284,6 +284,7 @@ class Reconstructor:
         self.optical_info = recon_info.optical_info
         self.ret_img_meas = recon_info.retardance_image
         self.azim_img_meas = recon_info.azimuth_image
+        self.radiometry = recon_info.radiometry
         # if initial_volume is not None else self._initialize_volume()
         self.volume_initial_guess = recon_info.initial_volume
         self.iteration_params = recon_info.interation_parameters
@@ -293,12 +294,13 @@ class Reconstructor:
         if self.volume_ground_truth is not None:
             birefringence_simulated = (
                 self.volume_ground_truth.get_delta_n().detach()
-            )   
+            )
+            # TODO: Check that the ground truth volume will adjust for non-cube voxels
             vol_size_um = self.volume_ground_truth.optical_info["voxel_size_um"]
             rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
                 birefringence_simulated.unsqueeze(0),
-                scaling_factors=(1, 1, rel_scaling_factor)
+                scaling_factors=(rel_scaling_factor, 1, 1)
             )
             self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
         else:
@@ -310,7 +312,7 @@ class Reconstructor:
             rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
                 birefringence_initial.unsqueeze(0),
-                scaling_factors=(1, 1, rel_scaling_factor)
+                scaling_factors=(rel_scaling_factor, 1, 1)
             )
             self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
         if self.intensity_imgs_meas:
@@ -356,10 +358,9 @@ class Reconstructor:
             print("Preparing rays for all rays at once...")
             self.rays.prepare_for_all_rays_at_once()
             if not self.from_simulation:
-                radiometry_path = self.iteration_params.get("file_paths", {}).get("radiometry", None)
-                if radiometry_path:
+                if self.radiometry:
                     num_rays_og = self.rays.ray_valid_indices_all.shape[1]
-                    radiometry = torch.tensor(recon_info.radiometry)
+                    radiometry = torch.tensor(self.radiometry)
                     self.rays.filter_from_radiometry(radiometry)
                     num_rays = self.rays.ray_valid_indices_all.shape[1]
                     print(
@@ -468,8 +469,12 @@ class Reconstructor:
             time0 = time.time()
             with open(filepath, "rb") as file:
                 rays = pickle.load(file)
-            # rays.MLA_volume_geometry_ready = True
             print(f"Loaded rays in {time.time() - time0:.0f} seconds")
+            if rays.optical_info["volume_shape"] != self.optical_info["volume_shape"]:
+                raise ValueError(
+                    f"Mismatch in volume shape: Loaded rays have shape {rays.optical_info['volume_shape']}, "
+                    f"but current setup has shape {self.optical_info['volume_shape']}."
+                )
         else:
             print(f"For raytracing, using computing device {device}")
             rays = BirefringentRaytraceLFM(
@@ -996,7 +1001,7 @@ class Reconstructor:
             vol_size_um = self.optical_info["voxel_size_um"]
             rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
-                Delta_n, scaling_factors=(1, 1, rel_scaling_factor)
+                Delta_n, scaling_factors=(rel_scaling_factor, 1, 1)
             )
             mip_image_np = prepare_plot_mip(mip_image, plot=False)
             plot_iteration_update_gridspec(

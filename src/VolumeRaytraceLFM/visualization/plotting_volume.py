@@ -26,16 +26,15 @@ def convert_volume_to_2d_mip(
     thresholds=(0.0, 1.0),
     normalize=False,
     border_thickness=1,
-    add_view_separation_lines=True,
-    transpose_and_flip=True
+    add_view_separation_lines=True
 ):
     """
     Convert a 3D volume to a single 2D Maximum Intensity Projection (MIP) image.
 
     Args:
-    - volume_input (Tensor): The input volume tensor of shape [batch, 1, xDim, yDim, zDim].
+    - volume_input (Tensor): The input volume tensor of shape [batch, 1, zDim, yDim, xDim].
     - projection_func (function): Function to use for projection, e.g., torch.sum or torch.max.
-    - scaling_factors (tuple): Scaling factors for x, y, and z dimensions respectively.
+    - scaling_factors (tuple): Scaling factors for z, y, and x dimensions respectively.
     - depths_in_channel (bool): If True, include depth as a channel in the output.
     - thresholds (tuple): Minimum and maximum thresholds for volume intensity.
     - normalize (bool): If True, normalize the volume to be between 0 and 1.
@@ -45,70 +44,24 @@ def convert_volume_to_2d_mip(
     Returns:
     - out_img (Tensor): The resulting 2D MIP image.
     """
-    volume = volume_input.detach().abs().clone()
-
-    # Normalize if required
-    if normalize:
-        volume = safe_normalize(volume)
-    # Permute and add channel if required
-    if depths_in_channel:
-        volume = volume.permute(0, 3, 2, 1).unsqueeze(1)
+    volume = prepare_volume(volume_input, normalize, depths_in_channel)
 
     # Apply intensity thresholds
     if thresholds != (0.0, 1.0):
-        vol_min, vol_max = volume.min(), volume.max()
-        threshold_min = vol_min + (vol_max - vol_min) * thresholds[0]
-        threshold_max = vol_min + (vol_max - vol_min) * thresholds[1]
-        volume = torch.clamp(volume, min=threshold_min, max=threshold_max)
+        volume = apply_thresholds(volume, thresholds)
 
     # Prepare new volume size after scaling
-    scaled_vol_size = [int(volume.shape[i + 2] * scaling_factors[i]) for i in range(3)]
-    batch_size, num_channels = volume.shape[:2]
+    batch_size, num_channels, scaled_vol_size = compute_scaled_volume_size(volume, scaling_factors)
 
     # Compute projections
-    volume_cpu = volume.float().cpu()
-    x_projection = projection_wrapper(volume_cpu, projection_func, dim=2)
-    y_projection = projection_wrapper(volume_cpu, projection_func, dim=3)
-    z_projection = projection_wrapper(volume_cpu, projection_func, dim=4)
+    projections = compute_projections(volume, projection_func)
 
-    # Initialize output image with zeros
-    out_img = torch.zeros(
-        batch_size,
-        num_channels,
-        scaled_vol_size[0] + scaled_vol_size[2] + border_thickness,
-        scaled_vol_size[1] + scaled_vol_size[2] + border_thickness,
-    )
-    # Place projections into the output image
-    out_img[:, :, : scaled_vol_size[0], : scaled_vol_size[1]] = z_projection
-    out_img[:, :, scaled_vol_size[0] + border_thickness :, : scaled_vol_size[1]] = (
-        F.interpolate(
-            x_projection.permute(0, 1, 3, 2),
-            size=(scaled_vol_size[2], scaled_vol_size[0]),
-            mode="nearest",
-        )
-    )
-    out_img[:, :, : scaled_vol_size[0], scaled_vol_size[1] + border_thickness :] = (
-        F.interpolate(
-            y_projection, size=(scaled_vol_size[0], scaled_vol_size[2]), mode="nearest"
-        )
-    )
+    # Create output image and place projections
+    out_img = create_output_image(batch_size, num_channels, scaled_vol_size, projections, border_thickness)
 
     # Add white border lines between views
     if add_view_separation_lines:
-        line_color = volume.max()
-        out_img[:, :, scaled_vol_size[0] : scaled_vol_size[0] + border_thickness, :] = (
-            line_color
-        )
-        out_img[:, :, :, scaled_vol_size[1] : scaled_vol_size[1] + border_thickness] = (
-            line_color
-        )
-
-    # Transpose and flip the MIP image if specified
-    if transpose_and_flip:
-        # Transpose the image (swap axes 2 and 3)
-        out_img = torch.transpose(out_img, 2, 3)
-        # Flip along the 3rd axis (axis=2 after transpose)
-        out_img = torch.flip(out_img, dims=[2])
+        add_border_lines(out_img, scaled_vol_size, border_thickness, volume.max())
 
     return out_img
 
@@ -137,3 +90,66 @@ def prepare_plot_mip(mip_image, img_index=0, plot=True):
         plt.axis("off")  # Turn off axis labels and ticks
         plt.show()
     return single_image_np
+
+
+def prepare_volume(volume_input, normalize, depths_in_channel):
+    """Prepare the volume by detaching, normalizing, and permuting if necessary."""
+    volume = volume_input.detach().abs().clone()
+    if normalize:
+        volume = safe_normalize(volume)
+    volume = volume.flip(3)
+    if depths_in_channel:
+        volume = volume.unsqueeze(1)
+    return volume
+
+
+def apply_thresholds(volume, thresholds):
+    """Apply intensity thresholds to the volume."""
+    vol_min, vol_max = volume.min(), volume.max()
+    threshold_min = vol_min + (vol_max - vol_min) * thresholds[0]
+    threshold_max = vol_min + (vol_max - vol_min) * thresholds[1]
+    return torch.clamp(volume, min=threshold_min, max=threshold_max)
+
+
+def compute_scaled_volume_size(volume, scaling_factors):
+    """Compute the new volume size after applying scaling factors."""
+    scaled_vol_size = [int(volume.shape[i + 2] * scaling_factors[i]) for i in range(3)]
+    batch_size, num_channels = volume.shape[:2]
+    return batch_size, num_channels, scaled_vol_size
+
+
+def compute_projections(volume, projection_func):
+    """Compute the projections along the x, y, and z axes."""
+    volume_cpu = volume.float().cpu()
+    proj0 = projection_wrapper(volume_cpu, projection_func, dim=2)
+    proj1 = projection_wrapper(volume_cpu, projection_func, dim=3)
+    proj2 = projection_wrapper(volume_cpu, projection_func, dim=4)
+    return proj0, proj1, proj2
+
+
+def create_output_image(batch_size, num_channels, scaled_vol_size, projections, border_thickness):
+    """Create the output image and insert the projections."""
+    proj0, proj1, proj2 = projections
+    out_img = torch.zeros(
+        batch_size,
+        num_channels,
+        scaled_vol_size[0] + scaled_vol_size[1] + border_thickness, # height
+        scaled_vol_size[0] + scaled_vol_size[2] + border_thickness, # width
+    )
+    # Placing in top left corner
+    out_img[:, :, :scaled_vol_size[1], :scaled_vol_size[2]] = proj0
+    # Placing in bottom left corner
+    out_img[:, :, scaled_vol_size[1] + border_thickness:, :scaled_vol_size[2]] = F.interpolate(
+        proj1, size=(scaled_vol_size[0], scaled_vol_size[2]), mode="nearest"
+    )
+    # Placing in top right corner
+    out_img[:, :, :scaled_vol_size[1], scaled_vol_size[2] + border_thickness:] = F.interpolate(
+        proj2.transpose(2, 3).flip(3), size=(scaled_vol_size[1], scaled_vol_size[0]), mode="nearest"
+    )
+    return out_img
+
+
+def add_border_lines(out_img, scaled_vol_size, border_thickness, line_color):
+    """Add white border lines between the projections."""
+    out_img[:, :, scaled_vol_size[2]:scaled_vol_size[2] + border_thickness, :] = line_color
+    out_img[:, :, :, scaled_vol_size[1]:scaled_vol_size[1] + border_thickness] = line_color
