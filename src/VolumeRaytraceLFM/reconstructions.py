@@ -363,7 +363,7 @@ class Reconstructor:
             if not self.from_simulation:
                 if self.radiometry is not None:
                     num_rays_og = self.rays.ray_valid_indices_all.shape[1]
-                    radiometry = torch.tensor(self.radiometry)
+                    radiometry = undo_transpose_and_flip(torch.tensor(self.radiometry))
                     self.rays.filter_from_radiometry(radiometry)
                     num_rays = self.rays.ray_valid_indices_all.shape[1]
                     print(
