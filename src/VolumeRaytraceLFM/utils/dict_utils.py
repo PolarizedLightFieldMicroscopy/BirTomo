@@ -82,3 +82,21 @@ def convert_to_tensors(dict_of_lists):
         # Store the tensor in the new dictionary
         tensor_dict[mla_index] = tensor
     return tensor_dict
+
+
+def convert_list_to_tensor(list_of_lists):
+    """Convert a list of lists to a padded tensor.
+
+    Args:
+        list_of_lists (list): A list of lists to be converted into a tensor.
+
+    Returns:
+        torch.Tensor: A padded tensor where each list is padded to the maximum length.
+    """
+    max_length = max(len(inner_list) for inner_list in list_of_lists)
+    padded_lists = [
+        inner_list + [-1] * (max_length - len(inner_list)) for inner_list in list_of_lists
+    ]
+    tensor = torch.tensor(padded_lists, dtype=torch.int)
+    
+    return tensor

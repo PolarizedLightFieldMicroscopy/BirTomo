@@ -116,9 +116,22 @@ def remove_neg1_values(tensor2d):
     return tensor1d[tensor1d != -1]
 
 
+def remove_nan_values(tensor2d):
+    """
+    Remove nan values from a 2D tensor.
+    Args:
+        tensor2d (torch.Tensor): A 2D tensor.
+    Returns:
+        torch.Tensor: Flattened tensor with nan values removed.
+    """
+    tensor1d = tensor2d.flatten()
+    return tensor1d[~torch.isnan(tensor1d)]
+
+
 def clean_and_unique_elements(voxel_tensor):
     """Remove -1 values and return unique elements."""
     voxel_tensor = remove_neg1_values(voxel_tensor)
+    voxel_tensor = remove_nan_values(voxel_tensor)
     return voxel_tensor.unique()
 
 
@@ -185,4 +198,4 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image, min
         + f"First, at most, 20 voxels are {filtered_voxels[:20]}"
     )
 
-    return filtered_voxels
+    return filtered_voxels.long()

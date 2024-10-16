@@ -48,6 +48,8 @@ from VolumeRaytraceLFM.utils.orientation_utils import transpose_and_flip
 from VolumeRaytraceLFM.combine_lenslets import (
     gather_voxels_of_rays_pytorch_batch,
     calculate_offsets_vectorized,
+    vectorized_offset_calculation,
+    pad_and_convert_to_tensor,
 )
 from VolumeRaytraceLFM.utils.mask_utils import get_bool_mask_for_ray_indices
 from VolumeRaytraceLFM.visualization.prep_plotly import (
@@ -176,10 +178,10 @@ class BirefringentVolume(BirefringentElement):
         self.Delta_n[torch.isnan(self.Delta_n)] = 0
         self.optic_axis[torch.isnan(self.optic_axis)] = 0
         # Store the data as pytorch parameters
-        self.optic_axis = nn.Parameter(self.optic_axis.reshape(3, -1)).type(
+        self.optic_axis = torch.nn.Parameter(self.optic_axis.reshape(3, -1)).type(
             torch.get_default_dtype()
         )
-        self.Delta_n = nn.Parameter(self.Delta_n.flatten()).type(
+        self.Delta_n = torch.nn.Parameter(self.Delta_n.flatten()).type(
             torch.get_default_dtype()
         )
 
@@ -1182,10 +1184,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             print("The geometry for the MLA is already prepared.")
         else:
             self.use_lenslet_based_filtering = False
-            if self.vox_indices_by_mla_idx == {}:
-                self.store_shifted_vox_indices()
-                # self.store_shifted_vox_indices_all() # in progress
-            self.store_vox_indices_by_mla_idx()
+            tensor_method = True
+            if tensor_method:
+                # We can store the voxel indices by mla index in a tensorized manner
+                # Then we do not need the for loop in store_shifted_vox_indices()
+                # and we can delete the vox_indices_by_mla_idx dictionary
+                # and do not need self.store_vox_indices_by_mla_idx()
+                self.check_if_volume_shape_is_too_small()
+                self.store_shifted_vox_indices_all()
+            else:
+                if self.vox_indices_by_mla_idx == {}:
+                    self.store_shifted_vox_indices()
+                self.store_vox_indices_by_mla_idx()
+
             self.create_colli_indices_all()
             self.create_ray_valid_indices_all()
             self.replicate_ray_info_each_microlens()
@@ -1201,6 +1212,16 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             self.vox_indices_ml_shifted = None
         if hasattr(self, "ray_vol_colli_indices"):
             self.ray_vol_colli_indices = None
+
+    def check_if_volume_shape_is_too_small(self):
+        """Check if the volume shape is too small for the microlenses to fit."""
+        n_micro_lenses = self.optical_info["n_micro_lenses"]
+        n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
+        vox1_min, vox2_min = self._calculate_min_shifted_indices(n_micro_lenses, n_voxels_per_ml, self.ray_vol_colli_indices)
+        if vox1_min < 0 or vox2_min < 0:
+            print("Voxel indices are negative. Try increasing the non-axial volume dimensions.")
+            print(f"Vox1 min shifted: {vox1_min}, Vox2 min shifted: {vox2_min}")
+            raise ValueError(f"Try increasing the non-axial volume dimensions by {[int(-2 * vox1_min), int(-2 * vox2_min)]}.")
 
     def store_shifted_vox_indices(self):
         """Store the shifted voxel indices for each microlens in a
@@ -1233,42 +1254,47 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             print(f"Vox1 min shifted: {vox1_min}, Vox2 min shifted: {vox2_min}")
             raise ValueError(f"Try increasing the non-axial volume dimensions by {[int(-2 * vox1_min), int(-2 * vox2_min)]}.")
 
-        if self.verbose:
-            print("Storing shifted voxel indices for each microlens:")
-            row_iterable = tqdm(
-                range(n_micro_lenses),
-                desc="Computing rows of microlenses for storing voxel indices",
-                position=1,
-                leave=True,
-            )
+        tensor_method = False
+        if tensor_method:
+            self.vox_indices_by_mla_idx = self.gather_voxels_for_all_offsets(collision_indices, n_micro_lenses, n_voxels_per_ml, self.vox_ctr_idx)
         else:
-            row_iterable = range(n_micro_lenses)
-        for ml_ii_idx in row_iterable:
-            ml_ii = ml_ii_idx - n_ml_half
-            for ml_jj_idx in range(n_micro_lenses):
-                ml_jj = ml_jj_idx - n_ml_half
-                current_offset = self._calculate_current_offset(
-                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
+            if self.verbose:
+                print("Storing shifted voxel indices for each microlens:")
+                row_iterable = tqdm(
+                    range(n_micro_lenses),
+                    desc="Computing rows of microlenses for storing voxel indices",
+                    position=1,
+                    leave=True,
                 )
-                mla_index = (ml_jj_idx, ml_ii_idx)
-                vox_list = self._gather_voxels_of_rays_pytorch(
-                    current_offset, collision_indices
-                )
-                if DEBUG and ml_ii_idx == 0 and ml_jj_idx == 0:
-                    try:
-                        print("Confirming for the first microlens that all voxel indices are nonnegative...")
-                        check_for_negative_values_list_of_lists(vox_list)
-                    except ValueError as e:
-                        print(f"Error storing shifted voxel indices at mla_index {ml_ii_idx}, {ml_jj_idx}: {e}")
-                        flattened = [coord for ray in vox_list for coord in ray]
-                        tensor = torch.tensor(flattened)
-                        print(f"Min: {tensor.min()}, Max: {tensor.max()}")
-                        raise
+            else:
+                row_iterable = range(n_micro_lenses)
+            for ml_ii_idx in row_iterable:
+                ml_ii = ml_ii_idx - n_ml_half
+                for ml_jj_idx in range(n_micro_lenses):
+                    ml_jj = ml_jj_idx - n_ml_half
+                    current_offset = self._calculate_current_offset(
+                        ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
+                    )
+                    mla_index = (ml_jj_idx, ml_ii_idx)
+                    vox_list = self._gather_voxels_of_rays_pytorch(
+                        current_offset, collision_indices
+                    )
+                    if DEBUG and ml_ii_idx == 0 and ml_jj_idx == 0:
+                        try:
+                            print("Confirming for the first microlens that all voxel indices are nonnegative...")
+                            check_for_negative_values_list_of_lists(vox_list)
+                        except ValueError as e:
+                            print(f"Error storing shifted voxel indices at mla_index {ml_ii_idx}, {ml_jj_idx}: {e}")
+                            flattened = [coord for ray in vox_list for coord in ray]
+                            tensor = torch.tensor(flattened)
+                            print(f"Min: {tensor.min()}, Max: {tensor.max()}")
+                            raise
 
-                if mla_index not in self.vox_indices_by_mla_idx.keys():
-                    self.vox_indices_by_mla_idx[mla_index] = vox_list
+                    if mla_index not in self.vox_indices_by_mla_idx.keys():
+                        self.vox_indices_by_mla_idx[mla_index] = vox_list
         print("Confirming that all voxel indices are nonnegative...")
         check_for_negative_values_dict(self.vox_indices_by_mla_idx)
+
         return self.vox_indices_by_mla_idx
 
     def store_shifted_vox_indices_all(self):
@@ -1278,16 +1304,51 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_micro_lenses = self.optical_info["n_micro_lenses"]
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
         collision_indices = self.ray_vol_colli_indices
+        # offsets should also be negative
         offsets, mla_indices = calculate_offsets_vectorized(
             n_micro_lenses, n_voxels_per_ml, self.vox_ctr_idx
         )
-        vox_lists = gather_voxels_of_rays_pytorch_batch(
+        vox_tensor = gather_voxels_of_rays_pytorch_batch(
             offsets, collision_indices, self.optical_info["volume_shape"], self.backend
         )
         for idx, mla_index in enumerate(map(tuple, mla_indices)):
-            self.vox_indices_by_mla_idx[mla_index] = vox_lists[idx]
-        check_for_negative_values_dict(self.vox_indices_by_mla_idx)
+            jj_idx, ii_idx = int(mla_index[0]), int(mla_index[1])
+            self.vox_indices_by_mla_idx_tensors[(jj_idx, ii_idx)] = vox_tensor[idx]
+            # self.vox_indices_by_mla_idx[mla_index] = vox_lists[idx]
+        # check_for_negative_values_dict(self.vox_indices_by_mla_idx)
         return self.vox_indices_by_mla_idx
+
+    def gather_voxels_for_all_offsets(self, collision_indices, n_micro_lenses, n_voxels_per_ml, vox_ctr_idx):
+        """Gathers voxel indices for all microlens offsets in a vectorized manner and stores them."""
+
+        # Step 1: Vectorized calculation of offsets
+        offsets = vectorized_offset_calculation(n_micro_lenses, n_voxels_per_ml, vox_ctr_idx)
+
+        # Create grid of indices for ml_ii_idx and ml_jj_idx (for the mla_index mapping)
+        ml_half = n_micro_lenses // 2
+        indices = torch.arange(-ml_half, ml_half + 1)
+        ml_ii_grid, ml_jj_grid = torch.meshgrid(indices, indices, indexing="ij")
+
+        # Step 2: Flatten the grids and offsets for batch processing
+        ml_ii_flat = ml_ii_grid.flatten()
+        ml_jj_flat = ml_jj_grid.flatten()
+        offsets_flat = offsets.view(-1, 2)  # Flatten offsets
+
+        my_dict = {}
+        # Step 3: Iterate over each offset and gather voxel indices
+        for i, current_offset in enumerate(offsets_flat):
+            # Create mla_index for storage
+            ml_ii_idx = ml_ii_flat[i].item() + ml_half  # Adjust index back to positive
+            ml_jj_idx = ml_jj_flat[i].item() + ml_half  # Adjust index back to positive
+            mla_index = (ml_jj_idx, ml_ii_idx)
+
+            # Gather voxels using the calculated current offset
+            vox_list = self._gather_voxels_of_rays_pytorch(current_offset, collision_indices)
+
+            # Step 4: Store the voxel list in the dictionary if not already present
+            if mla_index not in my_dict.keys():
+                my_dict[mla_index] = vox_list
+        return my_dict
 
     def create_colli_indices_all(self):
         """Gather the collision indices for all microlenses at once."""
@@ -1761,11 +1822,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.times["prep_for_cummulative_jones"] += end_time_prep - start_time_prep
 
         device = ell_in_voxels.device
-        voxels_of_segs_tensor = voxels_of_segs.to(device)
+        voxels_of_segs_tensor = torch.nan_to_num(voxels_of_segs, nan=-1).long().to(device)
         if voxels_of_segs_tensor.numel() == 0:
             print("The tensor is empty.")
             valid_voxels_count = torch.tensor([], dtype=torch.int, device=device)
         else:
+            # May only need to check for -1, as nans were replaced with -1
             valid_voxels_mask = voxels_of_segs_tensor != -1
             valid_voxels_count = valid_voxels_mask.sum(dim=1)
 
@@ -1790,7 +1852,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 )
             else:
                 Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
-                    volume_in, voxels_of_segs_tensor.long(), active_props_only=alt_props
+                    volume_in, voxels_of_segs_tensor, active_props_only=alt_props
                 )
             end_time_gather_params = time.perf_counter()
             self.times["gather_params_for_voxRayJM"] += (
@@ -1851,9 +1913,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if active_props_only:
             device = volume.birefringence_active.device
             idx_tensor = volume.active_idx2spatial_idx_tensor  # .to(device)
-            indices = idx_tensor[vox]
-            safe_indices = torch.clamp(indices, min=0)
-            mask = indices >= 0
+            indices = idx_tensor[vox.long()]  # NaN will not be excluded on the later step
+            safe_indices = torch.clamp(indices, min=0).long()
+            mask = (indices >= 0) & (~torch.isnan(indices))
             Delta_n = torch.where(
                 mask,
                 volume.birefringence_active[safe_indices],
@@ -1881,8 +1943,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     torch.tensor(0.0, device=device),
                 )
         else:
-            Delta_n = volume.Delta_n[vox]
-            opticAxis = volume.optic_axis[:, vox]
+            valid_mask = (vox >= 0) & (~torch.isnan(vox))
+            # Replace -1 and NaN values with a default valid index (e.g., 0), just for safe indexing
+            safe_vox = torch.where(valid_mask, vox, torch.tensor(0.0, device=vox.device)).long()
+            Delta_n = torch.where(
+                valid_mask,  # Apply the mask to choose between valid and invalid
+                volume.Delta_n[safe_vox],  # Use safe indices for valid positions
+                torch.tensor(0.0, device=vox.device)  # Use 0.0 or any other value for invalid entries
+            )
+            opticAxis = torch.where(
+                valid_mask.unsqueeze(0),  # Apply the mask to choose between valid and invalid
+                volume.optic_axis[:, safe_vox],  # Use safe indices for valid positions
+                torch.tensor(0.0, device=vox.device)  # Use 0.0 or any other value for invalid entries
+            )
 
         return Delta_n, opticAxis.permute(1, 0, 2)
 
@@ -2045,6 +2118,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 )
                 for vox in collision_indices
             ]
+            collision_indices_tensor = pad_and_convert_to_tensor(collision_indices)
 
             # Create offsets tensor
             offsets = torch.zeros(
@@ -2068,9 +2142,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             raveled_indices = [
                 ravel_index_tensor(shifted, vol_shape) for shifted in shifted_vox
             ]
-            assert (
-                list_of_voxel_lists == list_of_voxel_lists_og
-            ), "The tensor method does not match the original method."
+            
+            # Check if the tensor method matches the original method
+            # Step 1: Convert PyTorch tensors to NumPy arrays
+            raveled_indices_np = [raveled.cpu().numpy() for raveled in raveled_indices]
+
+            # Step 2: Compare each element in both lists
+            for raveled_np, voxel_list in zip(raveled_indices_np, list_of_voxel_lists_og):
+                # Convert the voxel_list (which is a list of np.int64 values) to a NumPy array
+                voxel_list_np = np.array(voxel_list)
+                
+                # Step 3: Use np.array_equal to compare the two arrays
+                if not np.array_equal(raveled_np, voxel_list_np):
+                    print(f"Mismatch found! Raveled Tensor: {raveled_np}, Original List: {voxel_list_np}")
+                else:
+                    print(f"Match found for Raveled Tensor: {raveled_np}")
+
             return raveled_indices
         else:
             if DEBUG:
