@@ -8,6 +8,7 @@ from tqdm import tqdm
 import time
 import torch
 import numpy as np
+import pickle
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds, RayTraceLFM
@@ -1053,6 +1054,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def save(self, filepath):
         """Save the BirefringentRaytraceLFM instance to a file"""
+        print("Saving rays...")
         time0 = time.time()
         with open(filepath, "wb") as file:
             pickle.dump(self, file)
@@ -1212,6 +1214,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             self.vox_indices_ml_shifted = None
         if hasattr(self, "ray_vol_colli_indices"):
             self.ray_vol_colli_indices = None
+        if hasattr(self, "vox_indices_by_mla_idx_tensors"):
+            self.vox_indices_by_mla_idx_tensors = None
 
     def check_if_volume_shape_is_too_small(self):
         """Check if the volume shape is too small for the microlenses to fit."""
@@ -1822,7 +1826,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.times["prep_for_cummulative_jones"] += end_time_prep - start_time_prep
 
         device = ell_in_voxels.device
-        voxels_of_segs_tensor = torch.nan_to_num(voxels_of_segs, nan=-1).long().to(device)
+        voxels_of_segs_tensor = torch.nan_to_num(voxels_of_segs, nan=-1).to(torch.int32).to(device)
         if voxels_of_segs_tensor.numel() == 0:
             print("The tensor is empty.")
             valid_voxels_count = torch.tensor([], dtype=torch.int, device=device)

@@ -534,7 +534,8 @@ class Reconstructor:
         self.rays = self.setup_raytracer()
 
     def _turn_off_initial_volume_gradients(self):
-        """Turn off the gradients for the initial volume guess."""
+        """Turn off the gradients for the initial volume guess.
+        Note: Not relevant if the initial guess is deleted before reconstruction."""
         self.volume_initial_guess.set_requires_grad(False)
 
     def _specify_variables_to_learn(self):
@@ -597,6 +598,7 @@ class Reconstructor:
 
     def voxel_mask_setup(self):
         """Extract volume voxel related information."""
+        print("Setting up the voxel mask...")
         if self.rays.MLA_volume_geometry_ready:
             num_vox_in_volume = self.volume_pred.Delta_n.shape[0]
             print(
@@ -1220,14 +1222,33 @@ class Reconstructor:
             }
         return None
 
+    def _delete_attributes_unnecessary_for_recon(self):
+        print("Deleting unnecessary attributes to save memory...")
+        if hasattr(self.rays, "nonzero_pixels_dict"):
+            del self.rays.nonzero_pixels_dict
+            print("\tDeleted nonzero pixels dict")
+        if hasattr(self.rays, "ray_valid_indices_by_ray_num"):
+            del self.rays.ray_valid_indices_by_ray_num
+            print("\tDeleted ray valid indices by ray num")
+        if hasattr(self.rays, "mask") and not self.nerf_mode:
+            del self.rays.mask
+            print("\tDeleted mask from rays class")
+        if hasattr(self, "radiometry"):
+            del self.radiometry
+            print("\tDeleted radiometry")
+        if hasattr(self, "volume_initial_guess"):
+            del self.volume_initial_guess
+            print("\tDeleted volume initial guess")
+        torch.cuda.empty_cache()
+
     def reconstruct(self, use_streamlit=False):
         """Method to perform the actual reconstruction based on the
         provided parameters.
         """
+        self._delete_attributes_unnecessary_for_recon()
         log_file_handle = self._setup_logging()
         print("Beginning reconstruction...")
         self._create_results_subdirectory()
-        self._turn_off_initial_volume_gradients()
         self._specify_variables_to_learn()
 
         print("Setting up optimizer and scheduler...")

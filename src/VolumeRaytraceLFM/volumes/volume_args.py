@@ -238,7 +238,6 @@ shell_wide_args = {
         "delta_n": -0.01,
         "border_thickness": 1,
         "tallness": 3,
-        "highness": 3,
         "flip": True,
     },
 }

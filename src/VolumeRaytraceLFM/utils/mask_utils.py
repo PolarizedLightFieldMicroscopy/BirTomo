@@ -191,11 +191,11 @@ def filter_voxels_using_retardance(voxels_raytraced, ray_indices, ret_image, min
         filtered_voxels_set = total_voxels_set - voxels_zero_ret_multiple_times_set
 
         # Convert the result back to a tensor
-        filtered_voxels = torch.tensor(sorted(list(filtered_voxels_set)))
+        filtered_voxels = torch.tensor(sorted(list(filtered_voxels_set))).to(torch.int32)
 
     print(
         f"Masking out voxels except for {len(filtered_voxels)} voxels. "
         + f"First, at most, 20 voxels are {filtered_voxels[:20]}"
     )
 
-    return filtered_voxels.long()
+    return filtered_voxels

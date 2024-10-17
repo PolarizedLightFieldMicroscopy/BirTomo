@@ -211,7 +211,7 @@ def plot_retardance_orientation(
             plt.yticks([])
             plot_birefringence_colorized(ret_image, azim_image)
     plt.rcParams.update({"text.usetex": False, "font.family": "sans-serif"})
-    plt.subplots_adjust(left=0.08, wspace=0.3, hspace=0)
+    plt.subplots_adjust(left=0.03, wspace=0.3, hspace=0)
     return fig
 
 
