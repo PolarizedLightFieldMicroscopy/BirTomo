@@ -39,6 +39,7 @@ def recon_info():
 
 @pytest.fixture
 def reconstructor(recon_info):
+    recon_info.recon_directory = ""
     return Reconstructor(recon_info)
 
 

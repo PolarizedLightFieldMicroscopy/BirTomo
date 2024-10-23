@@ -280,6 +280,9 @@ class Reconstructor:
         apply_volume_mask (bool): whether to apply a mask to the volume
         """
         start_time = time.perf_counter()
+        self.recon_directory = recon_info.recon_directory
+        self.iteration_params = recon_info.interation_parameters
+        log_file_handle = self._setup_logging()
         print(f"\nInitializing a Reconstructor, using computing device {device}")
         self.optical_info = recon_info.optical_info
         self.ret_img_meas = recon_info.retardance_image
@@ -287,10 +290,8 @@ class Reconstructor:
         self.radiometry = recon_info.radiometry
         # if initial_volume is not None else self._initialize_volume()
         self.volume_initial_guess = recon_info.initial_volume
-        self.iteration_params = recon_info.interation_parameters
         self.volume_ground_truth = recon_info.gt_volume
         self.intensity_imgs_meas = recon_info.intensity_img_list
-        self.recon_directory = recon_info.recon_directory
         if self.volume_ground_truth is not None:
             birefringence_simulated = (
                 self.volume_ground_truth.get_delta_n().detach()
@@ -421,6 +422,8 @@ class Reconstructor:
         self.to_device(device)
         end_time = time.perf_counter()
         print(f"Reconstructor initialized in {end_time - start_time:.2f} seconds\n")
+        if log_file_handle:
+            restore_output(log_file_handle)
 
     def _initialize_volume(self):
         """
@@ -1207,6 +1210,8 @@ class Reconstructor:
     def _setup_logging(self):
         log_file = self.iteration_params.get("misc", {}).get("save_to_logfile", True)
         if log_file:
+            if self.recon_directory is None:
+                raise ValueError("recon_directory is not set")
             log_file_path = os.path.join(self.recon_directory, "output_log.txt")
             return redirect_output_to_log(log_file_path)
         return None
@@ -1245,8 +1250,8 @@ class Reconstructor:
         """Method to perform the actual reconstruction based on the
         provided parameters.
         """
-        self._delete_attributes_unnecessary_for_recon()
         log_file_handle = self._setup_logging()
+        self._delete_attributes_unnecessary_for_recon()
         print("Beginning reconstruction...")
         self._create_results_subdirectory()
         self._specify_variables_to_learn()
