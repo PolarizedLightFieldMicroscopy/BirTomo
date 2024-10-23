@@ -222,9 +222,9 @@ class ForwardModel:
         self.azim_img = azim_image
 
         if intensity:
-            self.optical_info["analyzer"] = (
+            self.rays.optical_info["analyzer"] = (
                 JonesMatrixGenerators.left_circular_polarizer()
             )
-            self.optical_info["polarizer_swing"] = 0.03
+            self.rays.optical_info["polarizer_swing"] = 0.03
             self.img_list = self.rays.ray_trace_through_volume(volume, intensity=True)
             print("Intensity images computed according to the LC-PolScope setup")

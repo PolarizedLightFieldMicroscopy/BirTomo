@@ -11,6 +11,7 @@ from VolumeRaytraceLFM.birefringence_implementations import (
 )
 from VolumeRaytraceLFM.jones.jones_calculus import JonesMatrixGenerators
 from VolumeRaytraceLFM.visualization.plotting_intensity import plot_intensity_images
+from VolumeRaytraceLFM.jones.intensity import ret_and_azim_from_intensity
 
 
 @pytest.fixture(scope="module")
@@ -981,6 +982,65 @@ def test_intensity_with_both_methods(global_data):
         check_azimuth_images(results[0][nSetting], results[1][nSetting])
 
 
+def test_retardance_and_azimuth_from_intensity(global_data):
+    """Test that image lists transformed into retardance and azimuth using ret_and_azim_from_intensity 
+       match the output of ray_trace_through_volume with intensity=False."""
+    
+    # Disable gradient tracking for efficiency during tests
+    torch.set_grad_enabled(False)
+
+    # Gather global data
+    local_data = copy.deepcopy(global_data)
+
+    # Select backend methods to compare
+    # backends = [BackEnds.NUMPY, BackEnds.PYTORCH]
+    backends = [BackEnds.NUMPY]
+    results = []
+    swing = 0.03  # Polarizer swing value used in the LC-PolScope setup
+
+    for backend in backends:
+        optical_info = local_data["optical_info"]
+        optical_info['aperture_radius_ml'] = 3
+        optical_info["analyzer"] = JonesMatrixGenerators.left_circular_polarizer()
+        optical_info["polarizer_swing"] = swing
+
+        # Create a Birefringent Raytracer
+        rays = BirefringentRaytraceLFM(backend=backend, optical_info=optical_info)
+
+        # Compute rays geometry and voxel intersections using Siddon's algorithm
+        rays.compute_rays_geometry()
+
+        # Load volume data
+        loaded_volume = BirefringentVolume.init_from_file(
+            "data/objects/shell.h5", backend, optical_info
+        )
+        my_volume = loaded_volume
+
+        # Trace rays through the volume and gather intensity images
+        image_list = rays.ray_trace_through_volume(my_volume, intensity=True)
+
+        if backend == BackEnds.PYTORCH:
+            # Convert PyTorch tensors to numpy arrays for comparison
+            image_list = [img.detach().cpu().numpy() for img in image_list]
+        
+        # Transform the intensity images into retardance and azimuth images
+        ret_intensity, azim_intensity = ret_and_azim_from_intensity(image_list, swing)
+
+        # Trace rays through the volume with intensity=False to get direct retardance and azimuth
+        ret_direct, azim_direct = rays.ray_trace_through_volume(my_volume, intensity=False)
+
+        # Store results for both methods
+        results.append((ret_intensity, azim_intensity, ret_direct, azim_direct))
+
+    # Verify that the transformed intensity results match the direct method results
+    for ret_intensity, azim_intensity, ret_direct, azim_direct in results:
+        np.testing.assert_allclose(ret_intensity, ret_direct, rtol=1e-5, atol=1e-7, 
+                                   err_msg="Retardance images do not match")
+        azim_intensity[np.abs(azim_intensity) < 0.094] = 0
+        check_azimuth_images(azim_intensity, azim_direct, atol=1e-7, 
+                            message="Azimuth images do not match")
+
+
 def main():
     # test_torch_auto_differentiation(global_data(), '1planes')
     # test_torch_auto_differentiation(global_data(), 'ellipsoid')
@@ -1014,11 +1074,8 @@ def check_azimuth_images(
         
         # If there are non-zero differences, check if they are close to pi
         if non_zero_diff.size > 0:
-            is_multiple_of_pi = np.all(np.isclose(non_zero_diff, np.pi, atol=atol))
-            if not is_multiple_of_pi:
-                print(f"Non-zero differences: {non_zero_diff}")
-                print(f"Expected differences close to pi, but got max: {np.max(non_zero_diff)}")
-            assert is_multiple_of_pi, message
+            np.testing.assert_allclose(non_zero_diff, np.pi, atol=atol, 
+                                       err_msg="Azimuth differences are not close to pi")
 
 
 def plot_azimuth(img):

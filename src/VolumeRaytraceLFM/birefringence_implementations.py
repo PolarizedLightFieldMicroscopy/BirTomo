@@ -2546,6 +2546,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         """Calculate intensity images using Jones Calculus. The polarizer and
         analyzer are applied to the cummulated Jones matrices."""
         analyzer = self.optical_info["analyzer"]
+        analyzer = np.flip(analyzer, (0, 1)).copy()
         swing = self.optical_info["polarizer_swing"]
         pixels_per_ml = self.optical_info["pixels_per_ml"]
         lenslet_jones = self.calc_cummulative_JM_lenslet(
@@ -2558,6 +2559,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 setting=setting, swing=swing
             )
             pol_hor = polarizer @ JonesVectorGenerators.horizonal()
+            pol_hor = np.flip(pol_hor).copy()
             if self.backend == BackEnds.NUMPY:
                 E_out = analyzer @ lenslet_jones @ pol_hor
                 intensity = np.linalg.norm(E_out, axis=2) ** 2
