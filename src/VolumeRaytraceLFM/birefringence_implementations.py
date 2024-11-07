@@ -269,6 +269,47 @@ class BirefringentVolume(BirefringentElement):
             valid_mask = mags > 0
             self.optic_axis[:, valid_mask] /= mags[valid_mask]
 
+    def set_delta_n(self, new_value=None, scale=None):
+        """Sets Delta_n to a new value or scales it by a specified factor.
+        Args:
+            new_value (float, array, or None): If provided, sets Delta_n to this value. 
+                Can be a scalar or an array matching the volume shape.
+            scale (float or None): If provided, scales Delta_n by this factor instead 
+                of replacing it.
+        Raises:
+            ValueError: If both new_value and scale are provided, or if neither is.
+        """
+        # Ensure only one of new_value or scale is provided
+        if new_value is not None and scale is not None:
+            raise ValueError("Specify only one of new_value or scale, not both.")
+        elif new_value is None and scale is None:
+            raise ValueError("You must provide either new_value or scale.")
+
+        if scale is not None:
+            # Scale Delta_n by the given factor
+            if self.backend == BackEnds.PYTORCH:
+                with torch.no_grad():
+                    self.Delta_n.mul_(scale)
+            elif self.backend == BackEnds.NUMPY:
+                self.Delta_n *= scale
+        else:
+            # Set Delta_n to a new value
+            if self.backend == BackEnds.PYTORCH:
+                with torch.no_grad():
+                    # Ensure new_value is a tensor with the correct shape
+                    if isinstance(new_value, (int, float)):
+                        new_value = torch.full(self.volume_shape, new_value, dtype=self.Delta_n.dtype)
+                    elif new_value.shape != self.volume_shape:
+                        raise ValueError(f"The shape of new_value {new_value.shape} does not match the volume shape {self.volume_shape}.")
+                    self.Delta_n.copy_(new_value.flatten())
+            elif self.backend == BackEnds.NUMPY:
+                # Ensure new_value is a numpy array with the correct shape
+                if isinstance(new_value, (int, float)):
+                    new_value = np.full(self.volume_shape, new_value)
+                elif new_value.shape != self.volume_shape:
+                    new_value = np.broadcast_to(new_value, self.volume_shape)
+                self.Delta_n = new_value
+
     def __iadd__(self, other):
         """Overload the += operator to sum volumes."""
         # Ensure shapes are compatible
