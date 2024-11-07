@@ -9,6 +9,7 @@ import time
 import torch
 import numpy as np
 import pickle
+import copy
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds, RayTraceLFM
@@ -122,9 +123,16 @@ class BirefringentVolume(BirefringentElement):
         if optic_axis is None:
             optic_axis = [1.0, 0.0, 0.0]
 
+        backend_enum = copy.deepcopy(backend)
         super().__init__(
-            backend=backend, torch_args=torch_args, optical_info=optical_info
+            backend=backend_enum, torch_args=torch_args, optical_info=optical_info
         )
+        backend_str = self._get_backend_str()  # Converts to string if needed
+        if backend_str not in ["numpy", "torch"]:
+            raise ValueError("Invalid backend. Choose 'numpy' or 'torch'.")
+        # Use the standardized string for the rest of the methods
+        self.backend = backend_str
+
         self._initialize_volume_attributes(optical_info, Delta_n, optic_axis)
         self.indices_active = None
         self.optic_axis_planar = None
@@ -137,9 +145,9 @@ class BirefringentVolume(BirefringentElement):
 
     def _initialize_volume_attributes(self, optical_info, Delta_n, optic_axis):
         self.volume_shape = optical_info["volume_shape"]
-        if self.backend == BackEnds.NUMPY:
+        if self.backend == "numpy":
             self._initialize_numpy_backend(Delta_n, optic_axis)
-        elif self.backend == BackEnds.PYTORCH:
+        elif self.backend == "torch":
             self._initialize_pytorch_backend(Delta_n, optic_axis)
         else:
             raise ValueError(f"Unsupported backend type: {self.backend}")
@@ -238,14 +246,14 @@ class BirefringentVolume(BirefringentElement):
 
     def get_delta_n(self):
         """Retrieves the birefringence as a 3D array"""
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             return self.Delta_n.view(self.optical_info["volume_shape"])
         else:
             return self.Delta_n
 
     def get_optic_axis(self):
         """Retrieves the optic axis as a 4D array"""
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             return self.optic_axis.view(
                 3,
                 self.optical_info["volume_shape"][0],
@@ -257,14 +265,14 @@ class BirefringentVolume(BirefringentElement):
 
     def normalize_optic_axis(self):
         """Normalize the optic axis per voxel."""
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             with torch.no_grad():
                 self.optic_axis.requires_grad = False
                 mags = torch.linalg.norm(self.optic_axis, axis=0)
                 valid_mask = mags > 0
                 self.optic_axis[:, valid_mask].data /= mags[valid_mask]
                 self.optic_axis.requires_grad = True
-        elif self.backend == BackEnds.NUMPY:
+        elif self.backend == "numpy":
             mags = np.linalg.norm(self.optic_axis, axis=0)
             valid_mask = mags > 0
             self.optic_axis[:, valid_mask] /= mags[valid_mask]
@@ -287,14 +295,14 @@ class BirefringentVolume(BirefringentElement):
 
         if scale is not None:
             # Scale Delta_n by the given factor
-            if self.backend == BackEnds.PYTORCH:
+            if self.backend == "torch":
                 with torch.no_grad():
                     self.Delta_n.mul_(scale)
-            elif self.backend == BackEnds.NUMPY:
+            elif self.backend == "numpy":
                 self.Delta_n *= scale
         else:
             # Set Delta_n to a new value
-            if self.backend == BackEnds.PYTORCH:
+            if self.backend == "torch":
                 with torch.no_grad():
                     # Ensure new_value is a tensor with the correct shape
                     if isinstance(new_value, (int, float)):
@@ -302,7 +310,7 @@ class BirefringentVolume(BirefringentElement):
                     elif new_value.shape != self.volume_shape:
                         raise ValueError(f"The shape of new_value {new_value.shape} does not match the volume shape {self.volume_shape}.")
                     self.Delta_n.copy_(new_value.flatten())
-            elif self.backend == BackEnds.NUMPY:
+            elif self.backend == "numpy":
                 # Ensure new_value is a numpy array with the correct shape
                 if isinstance(new_value, (int, float)):
                     new_value = np.full(self.volume_shape, new_value)
@@ -632,16 +640,22 @@ class BirefringentVolume(BirefringentElement):
         """Converts delta_n and optic_axis based on backend"""
         delta_n = self.get_delta_n()
         optic_axis = self.get_optic_axis()
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             delta_n = delta_n.detach().cpu().numpy()
             optic_axis = optic_axis.detach().cpu().numpy()
         return delta_n, optic_axis
 
     def _get_backend_str(self):
         """Returns the string representation of the backend type."""
-        backend_map = {BackEnds.PYTORCH: "pytorch", BackEnds.NUMPY: "numpy"}
-        if self.backend in backend_map:
-            return backend_map[self.backend]
+        backend_map = {BackEnds.PYTORCH: "torch", BackEnds.NUMPY: "numpy"}
+        # Check if backend is already a string and validate it
+        if isinstance(self.backend, str):
+            if self.backend in backend_map.values():
+                return self.backend  # Return as-is if it's "numpy" or "pytorch"
+            else:
+                raise ValueError(f"Unsupported backend string: {self.backend}")
+        elif isinstance(self.backend, BackEnds):
+            return backend_map.get(self.backend)
         else:
             raise ValueError(f"Backend type {self.backend} is not supported.")
 
@@ -665,9 +679,9 @@ class BirefringentVolume(BirefringentElement):
 
     def _init_zeros(self, volume_shape):
         shape = [4] + volume_shape
-        if self.backend == BackEnds.NUMPY:
+        if self.backend == "numpy":
             self.voxel_parameters = np.zeros(shape)
-        elif self.backend == BackEnds.PYTORCH:
+        elif self.backend == "torch":
             self.voxel_parameters = torch.zeros(shape)
 
     def _init_single_voxel(self, volume_shape, init_args):
@@ -767,14 +781,16 @@ class BirefringentVolume(BirefringentElement):
             )
 
     def _set_volume_ref(self):
-        volume_ref = BirefringentVolume(
-            backend=self.backend,
+        if self.backend == "torch":
+            if 'optic_axis' in self._parameters:
+                del self._parameters['optic_axis']
+            if 'Delta_n' in self._parameters:
+                del self._parameters['Delta_n']
+        self._initialize_volume_attributes(
             optical_info=self.optical_info,
             Delta_n=self.voxel_parameters[0, ...],
-            optic_axis=self.voxel_parameters[1:, ...],
+            optic_axis=self.voxel_parameters[1:, ...]
         )
-        self.Delta_n = volume_ref.Delta_n
-        self.optic_axis = volume_ref.optic_axis
         self.optic_axis = adjust_optic_axis_positive_axial(self.optic_axis)
         if 'voxel_parameters' in self.__dict__:
             self.__dict__.pop('voxel_parameters')

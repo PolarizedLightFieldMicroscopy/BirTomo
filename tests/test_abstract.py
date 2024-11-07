@@ -26,7 +26,7 @@ def test_rays_through_vol(
     assert pixels_per_ml == rays_shape[1] == rays_shape[2]
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
     """Test that the voxel span is computed correctly.
     The sample ray_diff is created with pixels_per_ml = 5.
@@ -77,7 +77,7 @@ def test_compute_lateral_ray_length_and_voxel_span(ray_trace_lfm_instance):
     ), f"Expected {expected_voxel_span}, got {voxel_span}"
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_compute_rays_geometry_no_file(ray_trace_lfm_instance):
     filename = None
     rays = ray_trace_lfm_instance
@@ -130,7 +130,7 @@ def create_array_with_set_nonzero(size, num_nonzero):
     return array
 
 
-@pytest.mark.parametrize("backend_fixture", ["pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["torch"], indirect=True)
 def test_filter_nonzero_rays_single_lenslet(backend_fixture):
     optical_info = OpticalElement.get_optical_info_template()
     optical_info["volume_shape"] = [3, 5, 5]
@@ -164,7 +164,7 @@ def test_filter_nonzero_rays_single_lenslet(backend_fixture):
         assert var == num_nonzero
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_identify_rays_from_pixels_mla(ray_trace_lfm_instance):
     rays = ray_trace_lfm_instance
     for num_lenslets in [1, 3]:

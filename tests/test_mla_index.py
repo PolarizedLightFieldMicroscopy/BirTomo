@@ -10,7 +10,7 @@ from VolumeRaytraceLFM.simulations import (
 )
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_mla_index(forward_model_fixture, backend_fixture):
     assert forward_model_fixture.backend == backend_fixture
     optical_info = set_optical_info([3, 7, 7], 17, 1)

@@ -14,47 +14,47 @@ from VolumeRaytraceLFM.simulations import (
 )
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_backend(forward_model_fixture, backend_fixture):
     assert forward_model_fixture.backend == backend_fixture
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_is_pytorch_backend(forward_model_fixture, backend_fixture):
     assert forward_model_fixture.is_pytorch_backend() == (
         backend_fixture == BackEnds.PYTORCH
     )
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_is_numpy_backend(forward_model_fixture, backend_fixture):
     assert forward_model_fixture.is_numpy_backend() == (
         backend_fixture == BackEnds.NUMPY
     )
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_convert_to_numpy(forward_model_fixture, backend_fixture):
     # TODO: use backend_fixture to test both numpy and pytorch
     data = np.array([1, 2, 3])
     np.testing.assert_array_equal(forward_model_fixture.convert_to_numpy(data), data)
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_is_pytorch_tensor(forward_model_fixture, backend_fixture):
     # TODO: use backend_fixture to test both numpy and pytorch
     data = np.array([1, 2, 3])
     assert not forward_model_fixture.is_pytorch_tensor(data)
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_setup_raytracer(forward_model_fixture, backend_fixture):
     # TODO: use backend_fixture to test both numpy and pytorch
     rays = forward_model_fixture.setup_raytracer()
     assert isinstance(rays, BirefringentRaytraceLFM)
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_forward_model(forward_model_fixture, backend_fixture):
     assert forward_model_fixture.backend == backend_fixture
     optical_info = set_optical_info([3, 7, 7], 17, 1)
