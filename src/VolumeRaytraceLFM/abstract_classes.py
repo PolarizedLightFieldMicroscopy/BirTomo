@@ -413,9 +413,10 @@ class RayTraceLFM(OpticalElement):
         Rinv = RayTraceLFM.rotation_matrix(normal_vec, -theta)
         # Extracting basis vectors that are orthogonal to the ray and will be parallel
         # to the laboratory axes that are not the optic axis after a rotation.
-        # Note: If scope_perp1 if the y-axis, then ray_perp1 if the 2nd column of Rinv.
+        # Note: If scope_perp1 is the y-axis, then ray_perp1 is the 2nd column of Rinv.
         ray_perp1 = np.dot(Rinv, scope_perp1)
         ray_perp2 = -np.dot(Rinv, scope_perp2)
+        # Verify right-handedness: ray_perp2 dot product with the cross product of ray_perp1 and ray should be positive
         return [ray, ray_perp1, ray_perp2]
 
     @staticmethod
