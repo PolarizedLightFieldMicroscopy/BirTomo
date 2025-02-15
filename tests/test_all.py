@@ -993,8 +993,7 @@ def test_retardance_and_azimuth_from_intensity(global_data):
     local_data = copy.deepcopy(global_data)
 
     # Select backend methods to compare
-    # backends = [BackEnds.NUMPY, BackEnds.PYTORCH]
-    backends = [BackEnds.NUMPY]
+    backends = [BackEnds.NUMPY, BackEnds.PYTORCH]
     results = []
     swing = 0.03  # Polarizer swing value used in the LC-PolScope setup
 
