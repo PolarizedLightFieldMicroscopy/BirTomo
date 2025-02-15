@@ -365,7 +365,7 @@ def test_compute_retardance_and_azimuth_images(global_data, iteration):
     assert np.all(
         np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
-    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
+    check_azimuth_images(to_numpy(azi_img_numpy), to_numpy(azi_img_torch))
 
 
 @pytest.mark.parametrize(
@@ -447,7 +447,7 @@ def test_forward_projection_lenslet_grid_random_volumes(global_data, volume_shap
     assert np.all(
         np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
-    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy())
+    check_azimuth_images(to_numpy(azi_img_numpy), to_numpy(azi_img_torch))
 
 
 @pytest.mark.parametrize(
@@ -520,7 +520,7 @@ def test_forward_projection_different_volumes(global_data, volume_init_mode):
     assert np.all(
         np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
-    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-5)
+    check_azimuth_images(to_numpy(azi_img_numpy), to_numpy(azi_img_torch), atol=1e-5)
 
 
 @pytest.mark.parametrize("n_voxels_per_ml", [1, 3, 4])
@@ -594,7 +594,7 @@ def test_forward_projection_different_super_samplings(global_data, n_voxels_per_
         np.isclose(ret_img_numpy.astype(np.float32), ret_img_torch.numpy(), atol=1e-7)
     ), "Error when comparing retardance computations"
 
-    check_azimuth_images(azi_img_numpy.astype(np.float32), azi_img_torch.numpy(), atol=1e-6)
+    check_azimuth_images(to_numpy(azi_img_numpy), to_numpy(azi_img_torch), atol=1e-6)
 
 
 @pytest.mark.parametrize(
@@ -910,8 +910,8 @@ def test_azimuth_neg_birefringence(global_data):
         np.isclose(ret_img_pos.numpy(), ret_img_neg.numpy(), atol=1e-7)
     ), "Retardance depends on the sign of the birefrigence."
     check_azimuth_images(
-        azi_img_pos.numpy(),
-        rotated_azi_img_neg.numpy(),
+        to_numpy(azi_img_pos),
+        to_numpy(rotated_azi_img_neg),
         atol=1e-6,
         message="Flipping the sign of the birefringence does not simply rotate the azimuth.",
     )
@@ -934,8 +934,8 @@ def test_azimuth_neg_birefringence(global_data):
         )
     ), "Retardance depends on the sign of the birefrigence."
     check_azimuth_images(
-        azi_img_pos.astype(np.float32),
-        rotated_azi_img_neg.astype(np.float32),
+        to_numpy(azi_img_pos),
+        to_numpy(rotated_azi_img_neg),
         atol=1e-6,
         message="Flipping the sign of the birefringence does not simply rotate the azimuth.",
     )
@@ -1060,11 +1060,20 @@ def main():
     # Objective configuration
 
 
+def to_numpy(x):
+    # Convert torch tensors to numpy arrays if needed
+    if hasattr(x, "detach"):
+        return x.detach().cpu().numpy()
+    return np.asarray(x)
+
+
 def check_azimuth_images(
     img1, img2, atol=1e-7, message="Error when comparing azimuth computations"
 ):
     """Compares two azimuth images, taking into account that atan2 output
     of 0 and pi is equivalent"""
+    img1 = to_numpy(img1)
+    img2 = to_numpy(img2)
     if not np.all(np.isclose(img1, img2, atol=atol)):
         diff = np.abs(img1 - img2)
         # Check if the difference is a multiple of pi

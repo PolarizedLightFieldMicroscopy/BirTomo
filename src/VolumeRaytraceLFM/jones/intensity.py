@@ -15,7 +15,7 @@ def ret_and_azim_from_intensity(image_list, swing):
     ret = np.where(den == 0, np.pi / 2, tmp)
     ret = np.where(den < 0, np.pi - tmp, ret)
 
-    azim = np.zeros_like(a)
-    azim = np.where((a == 0) & (b == 0), 0, (0.5 * (np.arctan2(-a / 2, b) + np.pi)) % np.pi)
+    zero_mask = np.isclose(a, 0, atol=1e-7) & np.isclose(b, 0, atol=1e-7)
+    azim = np.where(zero_mask, 0, (0.5 * (np.arctan2(-a / 2, b) + np.pi)) % np.pi)
 
     return [ret, azim]

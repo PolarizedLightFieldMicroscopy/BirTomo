@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "bir-tomo"
 version = "0.1.0"
 description = "Birefringence tomography"
-authors = [{ name = "Geneva Schlafly", email = "gschlafly@uchicago.edu" }]
+authors = [{ name = "Geneva Anderberg", email = "gsa@uchicago.edu" }]
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
