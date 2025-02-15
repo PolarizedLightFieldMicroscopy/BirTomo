@@ -59,6 +59,13 @@ def check_for_negative_values_dict(my_dict):
         print("All entries are nonnegative.")
 
 
+def check_for_negative_values_list_of_lists(my_list):
+    if any(value < 0 for sublist in my_list for value in sublist):
+        raise ValueError("The list of lists contains negative values.")
+    else:
+        print("All entries are nonnegative.")
+
+
 def replace_nans_in_optic_axis(volume):
     """Used in response to an error message."""
     with torch.no_grad():

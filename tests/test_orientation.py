@@ -89,8 +89,8 @@ def create_birefringent_volume(optical_system_fixture, optic_axis, delta_n=-0.05
         ([-1, 0, 0], -0.05, torch.tensor([[0]])),              # azim = 0
         ([0, 1, 0], -0.05, torch.tensor([[0]])),               # azim flipped to 0
         ([0, -1, 0], -0.05, torch.tensor([[0]])),              # azim flipped to 0
-        ([0, 0, 1], -0.05, torch.tensor([[math.pi/2]])),       # azim = pi/2
-        ([0, 0, -1], -0.05, torch.tensor([[math.pi/2]])),      # azim = pi/2
+        ([0, 0, 1], -0.05, torch.tensor([[math.pi/2]])),       # azim flipped to pi/2
+        ([0, 0, -1], -0.05, torch.tensor([[math.pi/2]])),      # azim flipped to pi/2
         ([0, 1, 1], -0.05, torch.tensor([[3*math.pi/4]])),      # azim flipped to 3pi/4
         ([0, -1, -1], -0.05, torch.tensor([[3*math.pi/4]])),    # azim flipped to 3pi/4
         ([0, -1, 1], -0.05, torch.tensor([[math.pi/4]])),       # azim flipped to pi/4

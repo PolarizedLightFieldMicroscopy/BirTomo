@@ -91,6 +91,9 @@ def plot_hue_map(
     enhance_contrast=False,
     save_path=None,
     dpi=300,
+    max_retardance=None,
+    gamma=1.0,
+    data_scale=None
 ):
     """Plots the overlay of the retardance and orientation images with
     colorbars and optionally saves the image with high DPI."""
@@ -104,12 +107,20 @@ def plot_hue_map(
     if enhance_contrast:
         retardance_img = contrast_stretching(retardance_img)
 
+    # If user doesn't provide a max, we derive it from the data
+    if max_retardance is None:
+        max_retardance = retardance_img.max()
+    if max_retardance == 0:
+        max_retardance = 1e-8  # avoid division by zero if image is all zeros
+
     # Get pixel coords
     colors = np.zeros([azimuth_img.shape[0], azimuth_img.shape[1], 3])
     A = azimuth_img * 1
     colors[:, :, 0] = A / A.max()
     colors[:, :, 1] = 0.5
-    colors[:, :, 2] = retardance_img / retardance_img.max()
+    val_channel = retardance_img / max_retardance
+    val_channel = val_channel ** gamma
+    colors[:, :, 2] = val_channel
     colors[np.isnan(colors)] = 0
 
     rgb = hsv_to_rgb(colors)
@@ -158,10 +169,24 @@ def plot_hue_map(
     cb2.set_label("Retardance", rotation=270, labelpad=15)
     # Assuming the data for azimuth ranges from 0 to 2π, we normalize this range to 0-1 for the colorbar.
     cb2.set_ticks([0, 0.5, 1])
-    cb2.set_ticklabels(
-        ["0", round(retardance_img.max() / 2, 1), round(retardance_img.max(), 1)]
-    )
-    axins2.set_title("Value", fontsize=8)
+    max_val = max_retardance
+    if not data_scale:
+        cb2.set_ticklabels(
+            ["0", round(max_val / 2, 1), round(max_val, 1)]
+        )
+        cb2.set_ticklabels([
+            "0",
+            f"{max_val / 2:.2e}",  # scientific notation with 2 decimal places
+            f"{max_val:.2e}"
+        ])
+        axins2.set_title("Value", fontsize=8)
+    else:
+        tick_vals = [0 * max_val, 0.5 * max_val, 1.0 * max_val]
+        tick_labels = [f"{tv * data_scale:.2f}" for tv in tick_vals]
+        cb2.set_ticklabels(tick_labels)
+
+        # Now label the colorbar to indicate the factor:
+        axins2.set_title(r"Value $(\times 10^{-3})$", fontsize=8)
 
     if save_path is not None:
         plt.savefig(save_path, dpi=dpi, bbox_inches="tight")
@@ -211,7 +236,7 @@ def plot_retardance_orientation(
             plt.yticks([])
             plot_birefringence_colorized(ret_image, azim_image)
     plt.rcParams.update({"text.usetex": False, "font.family": "sans-serif"})
-    plt.subplots_adjust(wspace=0.3, hspace=0)
+    plt.subplots_adjust(left=0.03, wspace=0.3, hspace=0)
     return fig
 
 

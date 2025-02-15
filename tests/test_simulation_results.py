@@ -58,7 +58,7 @@ def run_simulation(vol_type, vol_shape, pixels_per_ml, n_lenslets):
         simulator.rays.prepare_for_all_rays_at_once()
         simulator.forward_model(volume, all_lenslets=True)
         # simulator.view_images()
-        images = simulator.ret_img, simulator.azim_img
+        images = simulator.ret_img.to(torch.float32), simulator.azim_img.to(torch.float32)
     return images
 
 
@@ -74,7 +74,7 @@ def save_images(images, filename):
 
 def compare_images(generated_images, saved_images):
     assert torch.allclose(
-        generated_images[0], saved_images[0], atol=5e-4
+        generated_images[0], saved_images[0], atol=1e-7
     ), "Retardance images differ"
     check_azimuth_images(generated_images[1], saved_images[1])
     print("Images match the saved images.")

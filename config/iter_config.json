@@ -55,6 +55,7 @@
     "misc": {
         "from_simulation": true,
         "save_ray_geometry": true,
+        "min_num_zero_ret_pixels": 5,
         "optimizer": "Nadam",
         "datafidelity": "euler",
         "warmup_iterations": 10,

@@ -8,6 +8,8 @@ from tqdm import tqdm
 import time
 import torch
 import numpy as np
+import pickle
+import copy
 from collections import Counter
 from VolumeRaytraceLFM.abstract_classes import *
 from VolumeRaytraceLFM.abstract_classes import BackEnds, RayTraceLFM
@@ -42,12 +44,14 @@ from VolumeRaytraceLFM.jones.eigenanalysis import (
     azimuth_from_jones_numpy,
 )
 from VolumeRaytraceLFM.jones import jones_matrix
-from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors
-from VolumeRaytraceLFM.utils.error_handling import check_for_negative_values_dict
+from VolumeRaytraceLFM.utils.dict_utils import filter_keys_by_count, convert_to_tensors, torch_precision_map
+from VolumeRaytraceLFM.utils.error_handling import check_for_negative_values_dict, check_for_negative_values_list_of_lists
 from VolumeRaytraceLFM.utils.orientation_utils import transpose_and_flip
 from VolumeRaytraceLFM.combine_lenslets import (
     gather_voxels_of_rays_pytorch_batch,
     calculate_offsets_vectorized,
+    vectorized_offset_calculation,
+    pad_and_convert_to_tensor,
 )
 from VolumeRaytraceLFM.utils.mask_utils import get_bool_mask_for_ray_indices
 from VolumeRaytraceLFM.visualization.prep_plotly import (
@@ -119,9 +123,16 @@ class BirefringentVolume(BirefringentElement):
         if optic_axis is None:
             optic_axis = [1.0, 0.0, 0.0]
 
+        backend_enum = copy.deepcopy(backend)
         super().__init__(
-            backend=backend, torch_args=torch_args, optical_info=optical_info
+            backend=backend_enum, torch_args=torch_args, optical_info=optical_info
         )
+        backend_str = self._get_backend_str()  # Converts to string if needed
+        if backend_str not in ["numpy", "torch"]:
+            raise ValueError("Invalid backend. Choose 'numpy' or 'torch'.")
+        # Use the standardized string for the rest of the methods
+        self.backend = backend_str
+
         self._initialize_volume_attributes(optical_info, Delta_n, optic_axis)
         self.indices_active = None
         self.optic_axis_planar = None
@@ -134,9 +145,9 @@ class BirefringentVolume(BirefringentElement):
 
     def _initialize_volume_attributes(self, optical_info, Delta_n, optic_axis):
         self.volume_shape = optical_info["volume_shape"]
-        if self.backend == BackEnds.NUMPY:
+        if self.backend == "numpy":
             self._initialize_numpy_backend(Delta_n, optic_axis)
-        elif self.backend == BackEnds.PYTORCH:
+        elif self.backend == "torch":
             self._initialize_pytorch_backend(Delta_n, optic_axis)
         else:
             raise ValueError(f"Unsupported backend type: {self.backend}")
@@ -176,10 +187,10 @@ class BirefringentVolume(BirefringentElement):
         self.Delta_n[torch.isnan(self.Delta_n)] = 0
         self.optic_axis[torch.isnan(self.optic_axis)] = 0
         # Store the data as pytorch parameters
-        self.optic_axis = nn.Parameter(self.optic_axis.reshape(3, -1)).type(
+        self.optic_axis = torch.nn.Parameter(self.optic_axis.reshape(3, -1)).type(
             torch.get_default_dtype()
         )
-        self.Delta_n = nn.Parameter(self.Delta_n.flatten()).type(
+        self.Delta_n = torch.nn.Parameter(self.Delta_n.flatten()).type(
             torch.get_default_dtype()
         )
 
@@ -235,14 +246,14 @@ class BirefringentVolume(BirefringentElement):
 
     def get_delta_n(self):
         """Retrieves the birefringence as a 3D array"""
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             return self.Delta_n.view(self.optical_info["volume_shape"])
         else:
             return self.Delta_n
 
     def get_optic_axis(self):
         """Retrieves the optic axis as a 4D array"""
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             return self.optic_axis.view(
                 3,
                 self.optical_info["volume_shape"][0],
@@ -254,17 +265,58 @@ class BirefringentVolume(BirefringentElement):
 
     def normalize_optic_axis(self):
         """Normalize the optic axis per voxel."""
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             with torch.no_grad():
                 self.optic_axis.requires_grad = False
                 mags = torch.linalg.norm(self.optic_axis, axis=0)
                 valid_mask = mags > 0
                 self.optic_axis[:, valid_mask].data /= mags[valid_mask]
                 self.optic_axis.requires_grad = True
-        elif self.backend == BackEnds.NUMPY:
+        elif self.backend == "numpy":
             mags = np.linalg.norm(self.optic_axis, axis=0)
             valid_mask = mags > 0
             self.optic_axis[:, valid_mask] /= mags[valid_mask]
+
+    def set_delta_n(self, new_value=None, scale=None):
+        """Sets Delta_n to a new value or scales it by a specified factor.
+        Args:
+            new_value (float, array, or None): If provided, sets Delta_n to this value. 
+                Can be a scalar or an array matching the volume shape.
+            scale (float or None): If provided, scales Delta_n by this factor instead 
+                of replacing it.
+        Raises:
+            ValueError: If both new_value and scale are provided, or if neither is.
+        """
+        # Ensure only one of new_value or scale is provided
+        if new_value is not None and scale is not None:
+            raise ValueError("Specify only one of new_value or scale, not both.")
+        elif new_value is None and scale is None:
+            raise ValueError("You must provide either new_value or scale.")
+
+        if scale is not None:
+            # Scale Delta_n by the given factor
+            if self.backend == "torch":
+                with torch.no_grad():
+                    self.Delta_n.mul_(scale)
+            elif self.backend == "numpy":
+                self.Delta_n *= scale
+        else:
+            # Set Delta_n to a new value
+            if self.backend == "torch":
+                with torch.no_grad():
+                    # Ensure new_value is a tensor with the correct shape
+                    if isinstance(new_value, (int, float)):
+                        new_value = torch.full(self.volume_shape, new_value, dtype=self.Delta_n.dtype)
+                    elif new_value.shape != self.volume_shape:
+                        raise ValueError(f"The shape of new_value {new_value.shape} does not match the volume shape {self.volume_shape}.")
+                    self.Delta_n.copy_(new_value.flatten())
+            elif self.backend == "numpy":
+                # Ensure new_value is a numpy array with the correct shape
+                if isinstance(new_value, (int, float)):
+                    new_value = np.full(self.volume_shape, new_value)
+                elif new_value.shape != self.volume_shape:
+                    new_value = np.broadcast_to(new_value, self.volume_shape)
+                self.Delta_n = new_value
 
     def __iadd__(self, other):
         """Overload the += operator to sum volumes."""
@@ -588,16 +640,22 @@ class BirefringentVolume(BirefringentElement):
         """Converts delta_n and optic_axis based on backend"""
         delta_n = self.get_delta_n()
         optic_axis = self.get_optic_axis()
-        if self.backend == BackEnds.PYTORCH:
+        if self.backend == "torch":
             delta_n = delta_n.detach().cpu().numpy()
             optic_axis = optic_axis.detach().cpu().numpy()
         return delta_n, optic_axis
 
     def _get_backend_str(self):
         """Returns the string representation of the backend type."""
-        backend_map = {BackEnds.PYTORCH: "pytorch", BackEnds.NUMPY: "numpy"}
-        if self.backend in backend_map:
-            return backend_map[self.backend]
+        backend_map = {BackEnds.PYTORCH: "torch", BackEnds.NUMPY: "numpy"}
+        # Check if backend is already a string and validate it
+        if isinstance(self.backend, str):
+            if self.backend in backend_map.values():
+                return self.backend  # Return as-is if it's "numpy" or "pytorch"
+            else:
+                raise ValueError(f"Unsupported backend string: {self.backend}")
+        elif isinstance(self.backend, BackEnds):
+            return backend_map.get(self.backend)
         else:
             raise ValueError(f"Backend type {self.backend} is not supported.")
 
@@ -621,9 +679,9 @@ class BirefringentVolume(BirefringentElement):
 
     def _init_zeros(self, volume_shape):
         shape = [4] + volume_shape
-        if self.backend == BackEnds.NUMPY:
+        if self.backend == "numpy":
             self.voxel_parameters = np.zeros(shape)
-        elif self.backend == BackEnds.PYTORCH:
+        elif self.backend == "torch":
             self.voxel_parameters = torch.zeros(shape)
 
     def _init_single_voxel(self, volume_shape, init_args):
@@ -723,14 +781,16 @@ class BirefringentVolume(BirefringentElement):
             )
 
     def _set_volume_ref(self):
-        volume_ref = BirefringentVolume(
-            backend=self.backend,
+        if self.backend == "torch":
+            if 'optic_axis' in self._parameters:
+                del self._parameters['optic_axis']
+            if 'Delta_n' in self._parameters:
+                del self._parameters['Delta_n']
+        self._initialize_volume_attributes(
             optical_info=self.optical_info,
             Delta_n=self.voxel_parameters[0, ...],
-            optic_axis=self.voxel_parameters[1:, ...],
+            optic_axis=self.voxel_parameters[1:, ...]
         )
-        self.Delta_n = volume_ref.Delta_n
-        self.optic_axis = volume_ref.optic_axis
         self.optic_axis = adjust_optic_axis_positive_axial(self.optic_axis)
         if 'voxel_parameters' in self.__dict__:
             self.__dict__.pop('voxel_parameters')
@@ -1051,6 +1111,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def save(self, filepath):
         """Save the BirefringentRaytraceLFM instance to a file"""
+        print("Saving rays...")
         time0 = time.time()
         with open(filepath, "wb") as file:
             pickle.dump(self, file)
@@ -1182,15 +1243,24 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             print("The geometry for the MLA is already prepared.")
         else:
             self.use_lenslet_based_filtering = False
-            if self.vox_indices_by_mla_idx == {}:
-                self.store_shifted_vox_indices()
-                # self.store_shifted_vox_indices_all() # in progress
-            self.store_vox_indices_by_mla_idx()
+            tensor_method = True
+            if tensor_method:
+                # We can store the voxel indices by mla index in a tensorized manner
+                # Then we do not need the for loop in store_shifted_vox_indices()
+                # and we can delete the vox_indices_by_mla_idx dictionary
+                # and do not need self.store_vox_indices_by_mla_idx()
+                self.check_if_volume_shape_is_too_small()
+                self.store_shifted_vox_indices_all()
+            else:
+                if self.vox_indices_by_mla_idx == {}:
+                    self.store_shifted_vox_indices()
+                self.store_vox_indices_by_mla_idx()
+
             self.create_colli_indices_all()
             self.create_ray_valid_indices_all()
             self.replicate_ray_info_each_microlens()
             self.MLA_volume_geometry_ready = True
-            print(f"Prepared geometry for all rays at once.")
+            print("Prepared geometry for all rays at once.")
         self.del_arr_unnecessary_for_all_rays_at_once()
 
     def del_arr_unnecessary_for_all_rays_at_once(self):
@@ -1201,6 +1271,18 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             self.vox_indices_ml_shifted = None
         if hasattr(self, "ray_vol_colli_indices"):
             self.ray_vol_colli_indices = None
+        if hasattr(self, "vox_indices_by_mla_idx_tensors"):
+            self.vox_indices_by_mla_idx_tensors = None
+
+    def check_if_volume_shape_is_too_small(self):
+        """Check if the volume shape is too small for the microlenses to fit."""
+        n_micro_lenses = self.optical_info["n_micro_lenses"]
+        n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
+        vox1_min, vox2_min = self._calculate_min_shifted_indices(n_micro_lenses, n_voxels_per_ml, self.ray_vol_colli_indices)
+        if vox1_min < 0 or vox2_min < 0:
+            print("Voxel indices are negative. Try increasing the non-axial volume dimensions.")
+            print(f"Vox1 min shifted: {vox1_min}, Vox2 min shifted: {vox2_min}")
+            raise ValueError(f"Try increasing the non-axial volume dimensions by {[int(-2 * vox1_min), int(-2 * vox2_min)]}.")
 
     def store_shifted_vox_indices(self):
         """Store the shifted voxel indices for each microlens in a
@@ -1227,30 +1309,53 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
         n_ml_half = floor(n_micro_lenses / 2.0)
         collision_indices = self.ray_vol_colli_indices
-        if self.verbose:
-            print("Storing shifted voxel indices for each microlens:")
-            row_iterable = tqdm(
-                range(n_micro_lenses),
-                desc="Computing rows of microlenses for storing voxel indices",
-                position=1,
-                leave=True,
-            )
+        vox1_min, vox2_min = self._calculate_min_shifted_indices(n_micro_lenses, n_voxels_per_ml, collision_indices)
+        if vox1_min < 0 or vox2_min < 0:
+            print("Voxel indices are negative. Try increasing the non-axial volume dimensions.")
+            print(f"Vox1 min shifted: {vox1_min}, Vox2 min shifted: {vox2_min}")
+            raise ValueError(f"Try increasing the non-axial volume dimensions by {[int(-2 * vox1_min), int(-2 * vox2_min)]}.")
+
+        tensor_method = False
+        if tensor_method:
+            self.vox_indices_by_mla_idx = self.gather_voxels_for_all_offsets(collision_indices, n_micro_lenses, n_voxels_per_ml, self.vox_ctr_idx)
         else:
-            row_iterable = range(n_micro_lenses)
-        for ml_ii_idx in row_iterable:
-            ml_ii = ml_ii_idx - n_ml_half
-            for ml_jj_idx in range(n_micro_lenses):
-                ml_jj = ml_jj_idx - n_ml_half
-                current_offset = self._calculate_current_offset(
-                    ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
+            if self.verbose:
+                print("Storing shifted voxel indices for each microlens:")
+                row_iterable = tqdm(
+                    range(n_micro_lenses),
+                    desc="Computing rows of microlenses for storing voxel indices",
+                    position=1,
+                    leave=True,
                 )
-                mla_index = (ml_jj_idx, ml_ii_idx)
-                vox_list = self._gather_voxels_of_rays_pytorch(
-                    current_offset, collision_indices
-                )
-                if mla_index not in self.vox_indices_by_mla_idx.keys():
-                    self.vox_indices_by_mla_idx[mla_index] = vox_list
+            else:
+                row_iterable = range(n_micro_lenses)
+            for ml_ii_idx in row_iterable:
+                ml_ii = ml_ii_idx - n_ml_half
+                for ml_jj_idx in range(n_micro_lenses):
+                    ml_jj = ml_jj_idx - n_ml_half
+                    current_offset = self._calculate_current_offset(
+                        ml_ii, ml_jj, n_voxels_per_ml, n_micro_lenses
+                    )
+                    mla_index = (ml_jj_idx, ml_ii_idx)
+                    vox_list = self._gather_voxels_of_rays_pytorch(
+                        current_offset, collision_indices
+                    )
+                    if DEBUG and ml_ii_idx == 0 and ml_jj_idx == 0:
+                        try:
+                            print("Confirming for the first microlens that all voxel indices are nonnegative...")
+                            check_for_negative_values_list_of_lists(vox_list)
+                        except ValueError as e:
+                            print(f"Error storing shifted voxel indices at mla_index {ml_ii_idx}, {ml_jj_idx}: {e}")
+                            flattened = [coord for ray in vox_list for coord in ray]
+                            tensor = torch.tensor(flattened)
+                            print(f"Min: {tensor.min()}, Max: {tensor.max()}")
+                            raise
+
+                    if mla_index not in self.vox_indices_by_mla_idx.keys():
+                        self.vox_indices_by_mla_idx[mla_index] = vox_list
+        print("Confirming that all voxel indices are nonnegative...")
         check_for_negative_values_dict(self.vox_indices_by_mla_idx)
+
         return self.vox_indices_by_mla_idx
 
     def store_shifted_vox_indices_all(self):
@@ -1260,16 +1365,51 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_micro_lenses = self.optical_info["n_micro_lenses"]
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
         collision_indices = self.ray_vol_colli_indices
+        # offsets should also be negative
         offsets, mla_indices = calculate_offsets_vectorized(
             n_micro_lenses, n_voxels_per_ml, self.vox_ctr_idx
         )
-        vox_lists = gather_voxels_of_rays_pytorch_batch(
+        vox_tensor = gather_voxels_of_rays_pytorch_batch(
             offsets, collision_indices, self.optical_info["volume_shape"], self.backend
         )
         for idx, mla_index in enumerate(map(tuple, mla_indices)):
-            self.vox_indices_by_mla_idx[mla_index] = vox_lists[idx]
-        check_for_negative_values_dict(self.vox_indices_by_mla_idx)
+            jj_idx, ii_idx = int(mla_index[0]), int(mla_index[1])
+            self.vox_indices_by_mla_idx_tensors[(jj_idx, ii_idx)] = vox_tensor[idx]
+            # self.vox_indices_by_mla_idx[mla_index] = vox_lists[idx]
+        # check_for_negative_values_dict(self.vox_indices_by_mla_idx)
         return self.vox_indices_by_mla_idx
+
+    def gather_voxels_for_all_offsets(self, collision_indices, n_micro_lenses, n_voxels_per_ml, vox_ctr_idx):
+        """Gathers voxel indices for all microlens offsets in a vectorized manner and stores them."""
+
+        # Step 1: Vectorized calculation of offsets
+        offsets = vectorized_offset_calculation(n_micro_lenses, n_voxels_per_ml, vox_ctr_idx)
+
+        # Create grid of indices for ml_ii_idx and ml_jj_idx (for the mla_index mapping)
+        ml_half = n_micro_lenses // 2
+        indices = torch.arange(-ml_half, ml_half + 1)
+        ml_ii_grid, ml_jj_grid = torch.meshgrid(indices, indices, indexing="ij")
+
+        # Step 2: Flatten the grids and offsets for batch processing
+        ml_ii_flat = ml_ii_grid.flatten()
+        ml_jj_flat = ml_jj_grid.flatten()
+        offsets_flat = offsets.view(-1, 2)  # Flatten offsets
+
+        my_dict = {}
+        # Step 3: Iterate over each offset and gather voxel indices
+        for i, current_offset in enumerate(offsets_flat):
+            # Create mla_index for storage
+            ml_ii_idx = ml_ii_flat[i].item() + ml_half  # Adjust index back to positive
+            ml_jj_idx = ml_jj_flat[i].item() + ml_half  # Adjust index back to positive
+            mla_index = (ml_jj_idx, ml_ii_idx)
+
+            # Gather voxels using the calculated current offset
+            vox_list = self._gather_voxels_of_rays_pytorch(current_offset, collision_indices)
+
+            # Step 4: Store the voxel list in the dictionary if not already present
+            if mla_index not in my_dict.keys():
+                my_dict[mla_index] = vox_list
+        return my_dict
 
     def create_colli_indices_all(self):
         """Gather the collision indices for all microlenses at once."""
@@ -1486,6 +1626,27 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         # Calculate and return the final offset for the current microlens
         return scaled_indices + central_offset - half_voxel_span
 
+    def _min_offset_possible(self, num_microlenses, num_voxels_per_ml):
+        n_ml_half = floor(num_microlenses / 2.0)
+        scaled_indices = np.array([num_voxels_per_ml * (-n_ml_half), num_voxels_per_ml * (-n_ml_half)])
+        central_offset = np.array(self.vox_ctr_idx[1:])
+        half_voxel_span = floor(num_voxels_per_ml * num_microlenses / 2.0)
+        min_offset = scaled_indices + central_offset - half_voxel_span
+        return min_offset
+
+    def _calculate_min_shifted_indices(self, num_microlenses, num_voxels_per_ml, collision_indices):
+        min_offset = self._min_offset_possible(num_microlenses, num_voxels_per_ml)
+        flattened_indices = [coord for ray in collision_indices for coord in ray]
+        flat_np = np.array(flattened_indices)
+        vox1_min = flat_np[:, 1].min()
+        vox2_min = flat_np[:, 2].min()
+        
+        # Calculate the shifted minimum voxel values
+        vox1_min_shifted = vox1_min + min_offset[0]
+        vox2_min_shifted = vox2_min + min_offset[1]
+
+        return vox1_min_shifted, vox2_min_shifted
+
     def generate_images(self, volume, offset, intensity, mla_index=(0, 0)):
         """Generates images for a single microlens, by passing an offset
         to the ray tracing process. The offset shifts the volume indices
@@ -1534,7 +1695,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if self.backend == BackEnds.NUMPY:
             retardance, duration = self._measure_time(retardance_from_su2_numpy, jones)
         elif self.backend == BackEnds.PYTORCH:
-            retardance, duration = self._measure_time(retardance_from_su2, jones)
+            clamp_eps_bool = self.optical_info.get("precision", {}).get("clamp_eps", False)
+            retardance, duration = self._measure_time(retardance_from_su2, jones, clamp_eps=clamp_eps_bool)
             if DEBUG:
                 assert not torch.isnan(
                     retardance
@@ -1682,7 +1844,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             )
             assert len(voxels_of_segs) == len(collision_indices), err_message
             if not voxels_of_segs:
-                # print("The list 'voxels_of_segs' is empty.")
                 max_length = 0
                 padded_voxels_of_segs = []
             else:
@@ -1710,11 +1871,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     voxels_of_segs = self.vox_indices_by_mla_idx[mla_index]
                     max_length = max(len(inner_list) for inner_list in voxels_of_segs)
                     # Pad shorter lists with a specific value (e.g., -1 if -1 is not a valid data point)
-                    padded_voxels_of_segs = [
+                    voxels_of_segs_tensor = torch.tensor([
                         inner_list + [-1] * (max_length - len(inner_list))
                         for inner_list in voxels_of_segs
-                    ]
-                    voxels_of_segs_tensor = torch.tensor(padded_voxels_of_segs)
+                    ])
                     self.vox_indices_by_mla_idx_tensors[mla_index] = (
                         voxels_of_segs_tensor
                     )
@@ -1723,11 +1883,12 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.times["prep_for_cummulative_jones"] += end_time_prep - start_time_prep
 
         device = ell_in_voxels.device
-        voxels_of_segs_tensor = voxels_of_segs.to(device)
+        voxels_of_segs_tensor = torch.nan_to_num(voxels_of_segs, nan=-1).to(torch.int32).to(device)
         if voxels_of_segs_tensor.numel() == 0:
             print("The tensor is empty.")
             valid_voxels_count = torch.tensor([], dtype=torch.int, device=device)
         else:
+            # May only need to check for -1, as nans were replaced with -1
             valid_voxels_mask = voxels_of_segs_tensor != -1
             valid_voxels_count = valid_voxels_mask.sum(dim=1)
 
@@ -1752,7 +1913,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 )
             else:
                 Delta_n, opticAxis = self.retrieve_properties_from_vox_idx(
-                    volume_in, voxels_of_segs_tensor.long(), active_props_only=alt_props
+                    volume_in, voxels_of_segs_tensor, active_props_only=alt_props
                 )
             end_time_gather_params = time.perf_counter()
             self.times["gather_params_for_voxRayJM"] += (
@@ -1760,12 +1921,15 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             )
 
             # Compute the interaction from the rays with their corresponding voxels
+            precision_jones = self.optical_info.get("precision", {}).get("jones", "float64")
+            torch_dtype = torch_precision_map[precision_jones]
             jones = self.voxRayJM(
                 Delta_n=Delta_n,
                 opticAxis=opticAxis,
                 rayDir=ray_dir_basis,
                 ell=ell_in_voxels,
                 wavelength=self.optical_info["wavelength"],
+                precision=torch_dtype
             )
 
             start_time_mloop = time.perf_counter()
@@ -1810,9 +1974,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         if active_props_only:
             device = volume.birefringence_active.device
             idx_tensor = volume.active_idx2spatial_idx_tensor  # .to(device)
-            indices = idx_tensor[vox]
-            safe_indices = torch.clamp(indices, min=0)
-            mask = indices >= 0
+            indices = idx_tensor[vox.long()]  # NaN will not be excluded on the later step
+            safe_indices = torch.clamp(indices, min=0).long()
+            mask = (indices >= 0) & (~torch.isnan(indices))
             Delta_n = torch.where(
                 mask,
                 volume.birefringence_active[safe_indices],
@@ -1840,8 +2004,19 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                     torch.tensor(0.0, device=device),
                 )
         else:
-            Delta_n = volume.Delta_n[vox]
-            opticAxis = volume.optic_axis[:, vox]
+            valid_mask = (vox >= 0) & (~torch.isnan(vox))
+            # Replace -1 and NaN values with a default valid index (e.g., 0), just for safe indexing
+            safe_vox = torch.where(valid_mask, vox, torch.tensor(0.0, device=vox.device)).long()
+            Delta_n = torch.where(
+                valid_mask,  # Apply the mask to choose between valid and invalid
+                volume.Delta_n[safe_vox],  # Use safe indices for valid positions
+                torch.tensor(0.0, device=vox.device)  # Use 0.0 or any other value for invalid entries
+            )
+            opticAxis = torch.where(
+                valid_mask.unsqueeze(0),  # Apply the mask to choose between valid and invalid
+                volume.optic_axis[:, safe_vox],  # Use safe indices for valid positions
+                torch.tensor(0.0, device=vox.device)  # Use 0.0 or any other value for invalid entries
+            )
 
         return Delta_n, opticAxis.permute(1, 0, 2)
 
@@ -1957,6 +2132,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         assert self.backend == BackEnds.PYTORCH, err_msg
         vol_shape = self.optical_info["volume_shape"]
 
+        microlens_offset = (int(microlens_offset[0]), int(microlens_offset[1]))
         # TODO: test tensor_method to see if equivalent
         tensor_method = False
         if tensor_method:
@@ -2003,6 +2179,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 )
                 for vox in collision_indices
             ]
+            collision_indices_tensor = pad_and_convert_to_tensor(collision_indices)
 
             # Create offsets tensor
             offsets = torch.zeros(
@@ -2026,9 +2203,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             raveled_indices = [
                 ravel_index_tensor(shifted, vol_shape) for shifted in shifted_vox
             ]
-            assert (
-                list_of_voxel_lists == list_of_voxel_lists_og
-            ), "The tensor method does not match the original method."
+            
+            # Check if the tensor method matches the original method
+            # Step 1: Convert PyTorch tensors to NumPy arrays
+            raveled_indices_np = [raveled.cpu().numpy() for raveled in raveled_indices]
+
+            # Step 2: Compare each element in both lists
+            for raveled_np, voxel_list in zip(raveled_indices_np, list_of_voxel_lists_og):
+                # Convert the voxel_list (which is a list of np.int64 values) to a NumPy array
+                voxel_list_np = np.array(voxel_list)
+                
+                # Step 3: Use np.array_equal to compare the two arrays
+                if not np.array_equal(raveled_np, voxel_list_np):
+                    print(f"Mismatch found! Raveled Tensor: {raveled_np}, Original List: {voxel_list_np}")
+                else:
+                    print(f"Match found for Raveled Tensor: {raveled_np}")
+
             return raveled_indices
         else:
             if DEBUG:
@@ -2266,19 +2456,22 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         effective_jones = self.calc_cummulative_JM_of_ray_torch(
             volume_in, all_rays_at_once=True
         )
+
         # Calculate retardance and azimuth
-        retardance = self.retardance(effective_jones).to(torch.float32)
-        azimuth = self.azimuth(effective_jones).to(torch.float32)
+        precision_ret_azim = self.optical_info.get("precision", {}).get("ret_azim_final", "float32")
+        precision_dtype = torch_precision_map[precision_ret_azim]
+        retardance = self.retardance(effective_jones).to(precision_dtype)
+        azimuth = self.azimuth(effective_jones).to(precision_dtype)
 
         # Create output images
         ret_image = torch.zeros(
             (pixels_per_mla, pixels_per_mla),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=retardance.device,
         )
         azim_image = torch.zeros(
             (pixels_per_mla, pixels_per_mla),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=azimuth.device,
         )
 
@@ -2289,7 +2482,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return [ret_image, azim_image]
 
     def ret_and_azim_images_torch(
-        self, volume_in: BirefringentVolume, microlens_offset=[0, 0], mla_index=(0, 0)
+        self, volume_in: BirefringentVolume, microlens_offset=[0, 0],
+        mla_index=(0, 0)
     ):
         """Computes the retardance and azimuth images for a given volume
         and microlens offset using PyTorch.
@@ -2318,18 +2512,20 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         )
 
         # Calculate retardance and azimuth from the effective Jones Matrices
-        retardance = self.retardance(effective_jones).to(torch.float32)
-        azimuth = self.azimuth(effective_jones).to(torch.float32)
+        precision_ret_azim = self.optical_info.get("precision", {}).get("ret_azim_final", "float32")
+        precision_dtype = torch_precision_map[precision_ret_azim]
+        retardance = self.retardance(effective_jones).to(precision_dtype)
+        azimuth = self.azimuth(effective_jones).to(precision_dtype)
 
         # Initialize output images
         ret_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=retardance.device,
         )
         azim_image = torch.zeros(
             (pixels_per_ml, pixels_per_ml),
-            dtype=torch.float32,
+            dtype=precision_dtype,
             device=azimuth.device,
         )
 
@@ -2401,11 +2597,13 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         return mask
 
     def intensity_images(
-        self, volume_in: BirefringentVolume, microlens_offset=[0, 0], mla_index=(0, 0)
+        self, volume_in: BirefringentVolume, microlens_offset=[0, 0],
+        mla_index=(0, 0)
     ):
         """Calculate intensity images using Jones Calculus. The polarizer and
         analyzer are applied to the cummulated Jones matrices."""
         analyzer = self.optical_info["analyzer"]
+        analyzer = np.flip(analyzer, (0, 1)).copy()
         swing = self.optical_info["polarizer_swing"]
         pixels_per_ml = self.optical_info["pixels_per_ml"]
         lenslet_jones = self.calc_cummulative_JM_lenslet(
@@ -2418,19 +2616,26 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 setting=setting, swing=swing
             )
             pol_hor = polarizer @ JonesVectorGenerators.horizonal()
+            pol_hor = np.flip(pol_hor).copy()
             if self.backend == BackEnds.NUMPY:
                 E_out = analyzer @ lenslet_jones @ pol_hor
                 intensity = np.linalg.norm(E_out, axis=2) ** 2
                 intensity_image_list[setting] = intensity
             else:
+                precision_intensity = self.optical_info.get("precision", {}).get("intensity", "float64")
+                precision_dtype = torch_precision_map[precision_intensity]
                 intensity_image_list[setting] = torch.zeros(
                     (pixels_per_ml, pixels_per_ml),
-                    dtype=torch.float32,
+                    dtype=precision_dtype,
                     device=lenslet_jones.device,
                 )
-                pol_torch = torch.from_numpy(pol_hor).type(torch.complex64)
-                ana_torch = torch.from_numpy(analyzer).type(torch.complex64)
-                E_out = ana_torch @ lenslet_jones @ pol_torch
+                if precision_dtype == torch.float64:
+                    complex_dtype = torch.complex128
+                else:
+                    complex_dtype = torch.complex64
+                pol_torch = torch.from_numpy(pol_hor).type(complex_dtype)
+                ana_torch = torch.from_numpy(analyzer).type(complex_dtype)
+                E_out = ana_torch @ lenslet_jones.to(complex_dtype) @ pol_torch
                 intensity = torch.linalg.norm(E_out, axis=1) ** 2
                 intensity_image_list[setting][
                     self.ray_valid_indices[0, :], self.ray_valid_indices[1, :]
@@ -2462,11 +2667,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                         )
         return lenslet
 
-    def voxRayJM(self, Delta_n, opticAxis, rayDir, ell, wavelength):
+    def voxRayJM(self, Delta_n, opticAxis, rayDir, ell, wavelength, precision=torch.float64):
         """Compute Jones matrix associated with a particular ray and voxel combination"""
         start_time_voxRayJM = time.perf_counter()
         ret, azim = self.vox_ray_ret_azim(Delta_n, opticAxis, rayDir, ell, wavelength)
-        jones = self.vox_ray_matrix(ret, azim)
+        jones = self.vox_ray_matrix(ret, azim, precision=precision)
         end_time_voxRayJM = time.perf_counter()
         self.times["voxRayJM"] += end_time_voxRayJM - start_time_voxRayJM
         return jones
@@ -2485,9 +2690,6 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 Delta_n, opticAxis, rayDir, ell, wavelength
             )
         else:
-            if DEBUG:
-                if not torch.is_tensor(opticAxis):
-                    opticAxis = torch.from_numpy(opticAxis).to(Delta_n.device)
             ret, azim = jones_matrix.calculate_vox_ray_ret_azim_torch(
                 Delta_n,
                 opticAxis,
@@ -2501,7 +2703,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         self.times["calc_ret_azim_for_jones"] += end_time - start_time
         return ret, azim
 
-    def vox_ray_matrix(self, ret, azim):
+    def vox_ray_matrix(self, ret, azim, precision=torch.float64):
         """Calculate the Jones matrix from a given retardance and
         azimuth angle."""
         start_time = time.perf_counter()
@@ -2522,7 +2724,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
                 self.times["Stacking"] += jones_time_end - diag_time_end
             else:
                 jones = jones_matrix.calculate_jones_torch(
-                    ret, azim, nonzeros_only=self.only_nonzero_for_jones
+                    ret, azim, nonzeros_only=self.only_nonzero_for_jones, precision=precision
                 )
                 # self.times["Diag-Offdiag"] = 0
                 # self.times["Stacking"] = 0

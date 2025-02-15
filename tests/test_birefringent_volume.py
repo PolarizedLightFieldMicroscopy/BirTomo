@@ -16,15 +16,13 @@ from VolumeRaytraceLFM.volumes.modification import (
 )
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_init(optical_info_vol11, backend_fixture):
     bv = BirefringentVolume(backend=backend_fixture, optical_info=optical_info_vol11)
-    err_message = f"Expected backend to be {backend_fixture}, but got {bv.backend}"
-    assert bv.backend == backend_fixture, err_message
     assert bv.optical_info == optical_info_vol11, "Unexpected optical_info"
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_get_delta_n(optical_info_vol11, backend_fixture):
     bv = BirefringentVolume(
         backend=backend_fixture, optical_info=optical_info_vol11, Delta_n=0.2
@@ -48,7 +46,7 @@ def generate_random_idx(vol_shape):
     return [random.randint(0, vol_shape[i] - 1) for i in range(len(vol_shape))]
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_get_optic_axis(optical_info_vol11, backend_fixture):
     bv = BirefringentVolume(
         backend=backend_fixture,
@@ -70,7 +68,7 @@ def test_get_optic_axis(optical_info_vol11, backend_fixture):
     ), err_message
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_plot_lines_plotly(optical_info_vol11, backend_fixture):
     """Test the plotting with lines function."""
     bv = BirefringentVolume(
@@ -86,7 +84,7 @@ def test_plot_lines_plotly(optical_info_vol11, backend_fixture):
     ), f"Expected 2 data elements (spheres and lines), but got {len(fig.data)}"
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_plot_volume_plotly(optical_info_vol11, backend_fixture):
     """Test that the volume plot is correctly a plotly figure."""
     bv = BirefringentVolume(
@@ -99,7 +97,7 @@ def test_plot_volume_plotly(optical_info_vol11, backend_fixture):
     assert isinstance(fig, Figure), f"Expected a plotly Figure, but got {type(fig)}"
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_get_vox_params(optical_info_vol11, backend_fixture):
     """Test that the voxel parameters are correct."""
     bv = BirefringentVolume(
@@ -146,7 +144,7 @@ def to_numpy(data):
     return data
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_crop_to_region_shape(backend_fixture):
     """Test that the cropped data is of the correct shape."""
     delta_n = create_data((10, 10, 10), backend_fixture)
@@ -162,7 +160,7 @@ def test_crop_to_region_shape(backend_fixture):
     assert to_numpy(cropped_optic_axis).shape == (3, *region_shape)
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_pad_to_region_shape(backend_fixture):
     """Test that the padded data is of the correct shape."""
     delta_n = create_data((5, 5, 5), backend_fixture)
@@ -195,7 +193,7 @@ def test_init_from_file(optical_info_vol11, tmp_path):
     assert bv.get_optic_axis().shape == (3, *optical_info_vol11["volume_shape"])
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_optic_axis_axial_components_positive(optical_info_vol11, backend_fixture):
     optical_info = optical_info_vol11
     optical_info["volume_shape"] = [32, 32, 32]

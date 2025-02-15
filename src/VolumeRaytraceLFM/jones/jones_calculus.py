@@ -38,7 +38,7 @@ class JonesMatrixGenerators(BirefringentElement):
         """Linear retarder
         Args:
             ret (float): retardance [radians]
-            azim (float): azimuth angle of fast axis [radians]
+            azim (float): azimuth angle of slow axis [radians]
         Return: Jones matrix
         """
         retarder_azim0 = JonesMatrixGenerators.linear_retarder_azim0(
@@ -54,7 +54,7 @@ class JonesMatrixGenerators(BirefringentElement):
 
     @staticmethod
     def linear_retarder_azim0(ret, backend=BackEnds.NUMPY):
-        """todo"""
+        """Linear retarder with slow axis along the positive x-axis"""
         if backend == BackEnds.NUMPY:
             return np.array([[np.exp(1j * ret / 2), 0], [0, np.exp(-1j * ret / 2)]])
         else:

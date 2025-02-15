@@ -63,7 +63,7 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
 from VolumeRaytraceLFM.utils.gradient_utils import monitor_gradients, clip_gradient_norms_nerf, print_grad_info
-from utils.logging import redirect_output_to_log, restore_output
+from utils.logging_output import redirect_output_to_log, restore_output
 from VolumeRaytraceLFM.volumes.compare import compare_volumes
 
 DEBUG = False
@@ -280,39 +280,10 @@ class Reconstructor:
         apply_volume_mask (bool): whether to apply a mask to the volume
         """
         start_time = time.perf_counter()
+        self._initialize_attributes(recon_info, output_dir, device, apply_volume_mask)
+        log_file_handle = self._setup_logging()
         print(f"\nInitializing a Reconstructor, using computing device {device}")
-        self.optical_info = recon_info.optical_info
-        self.ret_img_meas = recon_info.retardance_image
-        self.azim_img_meas = recon_info.azimuth_image
-        # if initial_volume is not None else self._initialize_volume()
-        self.volume_initial_guess = recon_info.initial_volume
-        self.iteration_params = recon_info.interation_parameters
-        self.volume_ground_truth = recon_info.gt_volume
-        self.intensity_imgs_meas = recon_info.intensity_img_list
-        self.recon_directory = recon_info.recon_directory
-        if self.volume_ground_truth is not None:
-            birefringence_simulated = (
-                self.volume_ground_truth.get_delta_n().detach()
-            )   
-            vol_size_um = self.volume_ground_truth.optical_info["voxel_size_um"]
-            rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
-            mip_image = convert_volume_to_2d_mip(
-                birefringence_simulated.unsqueeze(0),
-                scaling_factors=(1, 1, rel_scaling_factor)
-            )
-            self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
-        else:
-            # Use the initial volume as a placeholder for plotting purposes
-            birefringence_initial = (
-                self.volume_initial_guess.get_delta_n().detach()
-            )
-            vol_size_um = self.volume_initial_guess.optical_info["voxel_size_um"]
-            rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
-            mip_image = convert_volume_to_2d_mip(
-                birefringence_initial.unsqueeze(0),
-                scaling_factors=(1, 1, rel_scaling_factor)
-            )
-            self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
+        self._prepare_birefringence_mip()
         if self.intensity_imgs_meas:
             print("Intensity images were provided.")
         if output_dir is None:
@@ -320,103 +291,15 @@ class Reconstructor:
         else:
             self.recon_directory = output_dir
 
-        image_for_rays = None
-        if omit_rays_based_on_pixels:
-            image_for_rays = self.ret_img_meas
-            print("Omitting rays based on pixels with zero retardance.")
-        saved_ray_path = self.iteration_params.get("file_paths", {}).get("saved_rays", None)
-        self.rays = self.setup_raytracer(
-            image=image_for_rays, filepath=saved_ray_path, device=device
-        )
-        self.rays.verbose = False
-        self.nerf_mode = self.iteration_params.get("nerf", {}).get("enabled", False)
-        self.initialize_nerf_mode(use_nerf=self.nerf_mode)
-        self.from_simulation = self.iteration_params.get("misc", {}).get("from_simulation", False)
-        self.apply_volume_mask = apply_volume_mask
-        self.mask = torch.ones(
-            self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool, device=device
-        )
-
-        # Volume that will be updated after each iteration
-        self.volume_pred = copy.deepcopy(self.volume_initial_guess)
-
-        self.remove_large_arrs = self.iteration_params.get("misc", {}).get(
-            "free_memory_by_del_large_arrays", False
-        )
-        if self.remove_large_arrs and self.apply_volume_mask:
-            raise ValueError(
-                "Cannot remove large arrays and apply mask to"
-                "volume gradient at the same time."
-            )
-        self.two_optic_axis_components = self.iteration_params.get(
-            "learnables", {}).get("two_optic_axis_components", True)
-
-        self.mla_rays_at_once = self.iteration_params.get("misc", {}).get("mla_rays_at_once", False)
-        if self.mla_rays_at_once and not self.rays.MLA_volume_geometry_ready:
-            print("Preparing rays for all rays at once...")
-            self.rays.prepare_for_all_rays_at_once()
-            if not self.from_simulation:
-                radiometry_path = self.iteration_params.get("file_paths", {}).get("radiometry", None)
-                if radiometry_path:
-                    num_rays_og = self.rays.ray_valid_indices_all.shape[1]
-                    radiometry = torch.tensor(recon_info.radiometry)
-                    self.rays.filter_from_radiometry(radiometry)
-                    num_rays = self.rays.ray_valid_indices_all.shape[1]
-                    print(
-                        f"Radiometry used for filtering rays from {num_rays_og} to {num_rays} rays."
-                    )
-                else:
-                    print("No radiometry provided for filtering rays.")
-
-        save_indices = False
-        if save_indices:
-            vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
-            dict_save_dir = os.path.join(self.recon_directory, "config_parameters")
-            if not os.path.exists(dict_save_dir):
-                os.makedirs(dict_save_dir)
-            dict_save_path = os.path.join(dict_save_dir, "vox_indices_by_mla_idx.pkl")
-            with open(dict_save_path, "wb") as f:
-                pickle.dump(vox_indices_by_mla_idx, f)
-            print(f"Saving voxel indices by MLA index to {dict_save_path}")
-
-        try:
-            self.mask = self.rays.mask
-        except AttributeError:
-            self.voxel_mask_setup()
-
-        save_rays = self.iteration_params.get("misc", {}).get("save_ray_geometry", False)
-        # Ray saving should be done after self.rays.prepare_for_all_rays_at_once()
-        if save_rays:
-            rays_save_path = os.path.join(
-                self.recon_directory, "config_parameters", "rays.pkl"
-            )
-            self.rays.save(rays_save_path)
-
-        # Mask initial guess of volume
-        self.apply_mask_to_volume(self.volume_pred)
-
-        if self.remove_large_arrs:
-            pass
-            gc.collect()
-
-        datafidelity_method = self.iteration_params.get("misc", {}).get("datafidelity", "euler")
-        first_word = datafidelity_method.split()[0]
-        if first_word == "intensity":
-            self.intensity_bool = True
-            print("Using intensity images for data-fidelity term.")
-        else:
-            self.intensity_bool = False
-            print("Using retardance and azimuth images for data-fidelity term.")
-
-        # Lists to store the loss after each iteration
-        self.loss_total_list = []
-        self.loss_data_term_list = []
-        self.loss_reg_term_list = []
-        self.adjusted_lrs_list = []
-        self.volume_discrepancy_list = []
+        self._setup_raytracer(omit_rays_based_on_pixels, device=device)
+        self._save_ray_data()
+        self._initialize_volume()
+        self._setup_data_loss_lists()
         self.to_device(device)
         end_time = time.perf_counter()
         print(f"Reconstructor initialized in {end_time - start_time:.2f} seconds\n")
+        if log_file_handle:
+            restore_output(log_file_handle)
 
     def _initialize_volume(self):
         """
@@ -447,6 +330,40 @@ class Reconstructor:
         self.mask = self.mask.to(device)
         self.volume_pred = self.volume_pred.to(device)
 
+    def _initialize_attributes(self, recon_info, output_dir, device, apply_volume_mask):
+        """Initialize basic attributes."""
+        self.recon_directory = output_dir or create_unique_directory("reconstructions")
+        self.iteration_params = recon_info.interation_parameters
+        self.optical_info = recon_info.optical_info
+        self.ret_img_meas = recon_info.retardance_image
+        self.azim_img_meas = recon_info.azimuth_image
+        self.radiometry = recon_info.radiometry
+        self.volume_initial_guess = recon_info.initial_volume
+        self.volume_ground_truth = recon_info.gt_volume
+        self.intensity_imgs_meas = recon_info.intensity_img_list
+        self.apply_volume_mask = apply_volume_mask
+        self.volume_pred = copy.deepcopy(self.volume_initial_guess)
+        self.remove_large_arrs = self.iteration_params.get("misc", {}).get("free_memory_by_del_large_arrays", False)
+        self.two_optic_axis_components = self.iteration_params.get("learnables", {}).get("two_optic_axis_components", True)
+        self.mla_rays_at_once = self.iteration_params.get("misc", {}).get("mla_rays_at_once", False)
+        self.nerf_mode = self.iteration_params.get("nerf", {}).get("enabled", False)
+        self.from_simulation = self.iteration_params.get("misc", {}).get("from_simulation", False)
+        self.mask = torch.ones(self.volume_initial_guess.Delta_n.shape[0], dtype=torch.bool, device=device)
+
+    def _prepare_birefringence_mip(self):
+        """Prepare the MIP image for birefringence."""
+        if self.volume_ground_truth is not None:
+            # TODO: Adjust for non-cube voxels appropriately
+            birefringence_simulated = self.volume_ground_truth.get_delta_n().detach()
+            vol_size_um = self.volume_ground_truth.optical_info["voxel_size_um"]
+        else:
+            birefringence_simulated = self.volume_initial_guess.get_delta_n().detach()
+            vol_size_um = self.volume_initial_guess.optical_info["voxel_size_um"]
+
+        rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
+        mip_image = convert_volume_to_2d_mip(birefringence_simulated.unsqueeze(0), scaling_factors=(rel_scaling_factor, 1, 1))
+        self.birefringence_mip_sim = prepare_plot_mip(mip_image, plot=False)
+
     def save_parameters(self, output_dir, volume_type):
         """In progress.
         Args:
@@ -461,24 +378,103 @@ class Reconstructor:
             f"{output_dir}/parameters.pt",
         )
 
-    def setup_raytracer(self, image=None, filepath=None, device="cpu"):
-        """Initialize Birefringent Raytracer."""
-        if filepath:
-            print(f"Loading rays from {filepath}")
+    def _initialize_volume(self):
+        """Initialize the volume for reconstruction. This is the volume
+        that will be updated after each iteration."""
+        self.volume_pred = copy.deepcopy(self.volume_initial_guess)
+
+        if self.remove_large_arrs and self.apply_volume_mask:
+            raise ValueError("Cannot remove large arrays and apply mask to volume gradient at the same time.")
+
+        try:
+            self.mask = self.rays.mask
+        except AttributeError:
+            self.voxel_mask_setup()
+
+        self.apply_mask_to_volume(self.volume_pred)
+
+    def _setup_data_loss_lists(self):
+        """Setup data fidelity method."""
+        datafidelity_method = self.iteration_params.get("misc", {}).get("datafidelity", "euler")
+        first_word = datafidelity_method.split()[0]
+        self.intensity_bool = first_word == "intensity"
+        print(f"Using {'intensity' if self.intensity_bool else 'retardance and azimuth'} images for data-fidelity term.")
+
+        # Initialize lists to store the loss after each iteration
+        self.loss_total_list = []
+        self.loss_data_term_list = []
+        self.loss_reg_term_list = []
+        self.adjusted_lrs_list = []
+        self.volume_discrepancy_list = []
+
+    def _save_ray_data(self):
+        """Save ray data and voxel indices if required."""
+        save_indices = False
+        if save_indices:
+            vox_indices_by_mla_idx = self.rays.vox_indices_by_mla_idx
+            dict_save_dir = os.path.join(self.recon_directory, "config_parameters")
+            if not os.path.exists(dict_save_dir):
+                os.makedirs(dict_save_dir)
+            dict_save_path = os.path.join(dict_save_dir, "vox_indices_by_mla_idx.pkl")
+            with open(dict_save_path, "wb") as f:
+                pickle.dump(vox_indices_by_mla_idx, f)
+            print(f"Saving voxel indices by MLA index to {dict_save_path}")
+
+        # Ray saving should be done after self.rays.prepare_for_all_rays_at_once()
+        save_rays = self.iteration_params.get("misc", {}).get("save_ray_geometry", False)
+        if save_rays:
+            rays_save_path = os.path.join(self.recon_directory, "config_parameters", "rays.pkl")
+            self.rays.save(rays_save_path)
+
+    def _setup_raytracer(self, omit_rays_based_on_pixels=True, device="cpu"):
+        """Initialize and configure the Birefringent Raytracer."""
+        image_for_rays = None
+        if omit_rays_based_on_pixels:
+            image_for_rays = undo_transpose_and_flip(self.ret_img_meas)
+            print("Omitting rays based on pixels with zero retardance.")
+        saved_ray_path = self.iteration_params.get("file_paths", {}).get("saved_rays", None)
+        if saved_ray_path:
+            print(f"Loading rays from {saved_ray_path}")
             time0 = time.time()
-            with open(filepath, "rb") as file:
-                rays = pickle.load(file)
-            # rays.MLA_volume_geometry_ready = True
+            with open(saved_ray_path, "rb") as file:
+                self.rays = pickle.load(file)
             print(f"Loaded rays in {time.time() - time0:.0f} seconds")
+            if self.rays.optical_info["volume_shape"] != self.optical_info["volume_shape"]:
+                raise ValueError(
+                    f"Mismatch in volume shape: Loaded rays have shape {self.rays.optical_info['volume_shape']}, "
+                    f"but current setup has shape {self.optical_info['volume_shape']}."
+                )
         else:
             print(f"For raytracing, using computing device {device}")
-            rays = BirefringentRaytraceLFM(
+            self.rays = BirefringentRaytraceLFM(
                 backend=Reconstructor.backend, optical_info=self.optical_info
             )
             start_time = time.time()
-            rays.compute_rays_geometry(filename=None, image=image)
+            self.rays.compute_rays_geometry(filename=None, image=image_for_rays)
             print(f"Raytracing time in seconds: {time.time() - start_time:.2f}")
-        return rays
+
+        self.rays.verbose = False
+        self.initialize_nerf_mode(use_nerf=self.nerf_mode)
+
+        if self.mla_rays_at_once and not self.rays.MLA_volume_geometry_ready:
+            self._prepare_rays_for_all_at_once()
+
+    def _prepare_rays_for_all_at_once(self):
+        """Prepare rays for simulating all MLA rays at once."""
+        print("Preparing rays for all rays at once...")
+        verbose_bool = self.rays.verbose
+        self.rays.verbose = True
+        self.rays.prepare_for_all_rays_at_once()
+        self.rays.verbose = verbose_bool
+
+        if not self.from_simulation and self.radiometry is not None:
+            num_rays_og = self.rays.ray_valid_indices_all.shape[1]
+            radiometry = undo_transpose_and_flip(torch.tensor(self.radiometry))
+            self.rays.filter_from_radiometry(radiometry)
+            num_rays = self.rays.ray_valid_indices_all.shape[1]
+            print(f"Radiometry used for filtering rays from {num_rays_og} to {num_rays} rays.")
+        else:
+            print("No radiometry provided for filtering rays.")
 
     def initialize_nerf_mode(self, use_nerf=True):
         nerf_params_dict = self.iteration_params.get("nerf", {}).get("MLP", {})
@@ -523,10 +519,11 @@ class Reconstructor:
         This includes cropping the volume are creating a new ray geometry
         """
         self.crop_pred_volume_to_reachable_region()
-        self.rays = self.setup_raytracer()
+        self._setup_raytracer()
 
     def _turn_off_initial_volume_gradients(self):
-        """Turn off the gradients for the initial volume guess."""
+        """Turn off the gradients for the initial volume guess.
+        Note: Not relevant if the initial guess is deleted before reconstruction."""
         self.volume_initial_guess.set_requires_grad(False)
 
     def _specify_variables_to_learn(self):
@@ -589,6 +586,7 @@ class Reconstructor:
 
     def voxel_mask_setup(self):
         """Extract volume voxel related information."""
+        print("Setting up the voxel mask...")
         if self.rays.MLA_volume_geometry_ready:
             num_vox_in_volume = self.volume_pred.Delta_n.shape[0]
             print(
@@ -596,14 +594,19 @@ class Reconstructor:
             )
 
             start_time = time.perf_counter()
+            num_ret_pixels = self.iteration_params.get("misc", {}).get("min_num_zero_ret_pixels", 2)
             filtered_voxels = filter_voxels_using_retardance(
                 self.rays.vox_indices_ml_shifted_all,
                 self.rays.ray_valid_indices_all,
-                undo_transpose_and_flip(self.ret_img_meas)
+                undo_transpose_and_flip(self.ret_img_meas),
+                num_ret_pixels
             )
 
             mask = torch.zeros(num_vox_in_volume, dtype=torch.bool)
-            mask[filtered_voxels] = True
+            if filtered_voxels.numel() > 0:
+                mask[filtered_voxels] = True
+            else:
+                print("Warning: filtered_voxels is empty. No indices to update in mask.")
             self.mask = mask
             self.rays.mask = mask  # Created as a rays arribute for saving purposes
 
@@ -611,7 +614,7 @@ class Reconstructor:
             print(f"Voxel mask created in {end_time - start_time:.2f} seconds")
         else:
             try:
-                vox_indices_path = self.iteration_params["file_paths"]["vox_indices_by_mla_idx"]
+                vox_indices_path = self.iteration_params.get("file_paths", {}).get("vox_indices_by_mla_idx", None)
                 if not vox_indices_path:
                     raise ValueError("Vox indices path is empty.")
                 start_time = time.perf_counter()
@@ -991,7 +994,7 @@ class Reconstructor:
             vol_size_um = self.optical_info["voxel_size_um"]
             rel_scaling_factor = vol_size_um[0] / vol_size_um[2]
             mip_image = convert_volume_to_2d_mip(
-                Delta_n, scaling_factors=(1, 1, rel_scaling_factor)
+                Delta_n, scaling_factors=(rel_scaling_factor, 1, 1)
             )
             mip_image_np = prepare_plot_mip(mip_image, plot=False)
             plot_iteration_update_gridspec(
@@ -1192,6 +1195,8 @@ class Reconstructor:
     def _setup_logging(self):
         log_file = self.iteration_params.get("misc", {}).get("save_to_logfile", True)
         if log_file:
+            if self.recon_directory is None:
+                raise ValueError("recon_directory is not set")
             log_file_path = os.path.join(self.recon_directory, "output_log.txt")
             return redirect_output_to_log(log_file_path)
         return None
@@ -1207,14 +1212,33 @@ class Reconstructor:
             }
         return None
 
+    def _delete_attributes_unnecessary_for_recon(self):
+        print("Deleting unnecessary attributes to save memory...")
+        if hasattr(self.rays, "nonzero_pixels_dict"):
+            del self.rays.nonzero_pixels_dict
+            print("\tDeleted nonzero pixels dict")
+        if hasattr(self.rays, "ray_valid_indices_by_ray_num"):
+            del self.rays.ray_valid_indices_by_ray_num
+            print("\tDeleted ray valid indices by ray num")
+        if hasattr(self.rays, "mask") and not self.nerf_mode:
+            del self.rays.mask
+            print("\tDeleted mask from rays class")
+        if hasattr(self, "radiometry"):
+            del self.radiometry
+            print("\tDeleted radiometry")
+        if hasattr(self, "volume_initial_guess"):
+            del self.volume_initial_guess
+            print("\tDeleted volume initial guess")
+        torch.cuda.empty_cache()
+
     def reconstruct(self, use_streamlit=False):
         """Method to perform the actual reconstruction based on the
         provided parameters.
         """
         log_file_handle = self._setup_logging()
+        self._delete_attributes_unnecessary_for_recon()
         print("Beginning reconstruction...")
         self._create_results_subdirectory()
-        self._turn_off_initial_volume_gradients()
         self._specify_variables_to_learn()
 
         print("Setting up optimizer and scheduler...")
@@ -1234,13 +1258,13 @@ class Reconstructor:
             trainable_vars_names = volume_estimation.get_names_of_trainable_variables()
             parameters_optic_axis = [{
                 "params": trainable_parameters[0],
-                "lr": training_params["learning_rates"]["optic_axis"],
+                "lr": training_params.get("learning_rates", {}).get("optic_axis", 1e-1),
                 "name": trainable_vars_names[0],
             }]
             optimizer_opticaxis = self.optimizer_setup(parameters_optic_axis, training_params)
             parameters_birefringence = [{
                 "params": trainable_parameters[1],
-                "lr": training_params["learning_rates"]["birefringence"],
+                "lr": training_params.get("learning_rates", {}).get("birefringence", 1e-4),
                 "name": trainable_vars_names[1],
             }]
             optimizer_birefringence = self.optimizer_setup(parameters_birefringence, training_params)

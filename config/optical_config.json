@@ -13,5 +13,11 @@
     "axial_voxel_size_um"     : 1.0,
     "polarizer"         : [[1, 0], [0, 1]],
     "analyzer"          : [[1, 0], [0, 1]],
-    "polarizer_swing"   : 0.03
+    "polarizer_swing"   : 0.03,
+    "precision"         : {
+        "jones": "float64",
+        "ret_azim_final": "float32",
+        "intensity": "float32",
+        "clamp_eps": true
+    }
 }

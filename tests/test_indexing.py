@@ -8,7 +8,7 @@ from tests.fixtures_backend import backend_fixture
 from tests.fixtures_optical_info import set_optical_info
 
 
-@pytest.mark.parametrize("backend_fixture", ["numpy", "pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["numpy", "torch"], indirect=True)
 def test_forward_projection_exception_raising(backend_fixture):
     """Assures that forward projection works without indexing error."""
     torch.set_grad_enabled(False)
@@ -30,7 +30,7 @@ def test_forward_projection_exception_raising(backend_fixture):
     BF_raytrace.ray_trace_through_volume(voxel_volume)
 
 
-@pytest.mark.parametrize("backend_fixture", ["pytorch"], indirect=True)
+@pytest.mark.parametrize("backend_fixture", ["torch"], indirect=True)
 def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
     """Test the identify_voxels_repeated_zero_ret method.
     We test with and with out a volume, and different numbers of microlenses.
