@@ -63,7 +63,7 @@ from VolumeRaytraceLFM.volumes.optic_axis import (
 from VolumeRaytraceLFM.utils.mask_utils import filter_voxels_using_retardance
 from VolumeRaytraceLFM.nerf import setup_optimizer_nerf, predict_voxel_properties
 from VolumeRaytraceLFM.utils.gradient_utils import monitor_gradients, clip_gradient_norms_nerf, print_grad_info
-from utils.logging import redirect_output_to_log, restore_output
+from utils.logging_output import redirect_output_to_log, restore_output
 from VolumeRaytraceLFM.volumes.compare import compare_volumes
 
 DEBUG = False
