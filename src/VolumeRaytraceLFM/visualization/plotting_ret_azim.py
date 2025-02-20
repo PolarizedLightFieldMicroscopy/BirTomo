@@ -174,11 +174,11 @@ def plot_hue_map(
         cb2.set_ticklabels(
             ["0", round(max_val / 2, 1), round(max_val, 1)]
         )
-        cb2.set_ticklabels([
-            "0",
-            f"{max_val / 2:.2e}",  # scientific notation with 2 decimal places
-            f"{max_val:.2e}"
-        ])
+        # cb2.set_ticklabels([
+        #     "0",
+        #     f"{max_val / 2:.2e}",  # scientific notation with 2 decimal places
+        #     f"{max_val:.2e}"
+        # ])
         axins2.set_title("Value", fontsize=8)
     else:
         tick_vals = [0 * max_val, 0.5 * max_val, 1.0 * max_val]
@@ -234,7 +234,7 @@ def plot_retardance_orientation(
             plt.title("Retardance & Orientation")
             plt.xticks([])
             plt.yticks([])
-            plot_birefringence_colorized(ret_image, azim_image)
+            plot_birefringence_colorized(ret_image, azim_image, gamma=4)
     plt.rcParams.update({"text.usetex": False, "font.family": "sans-serif"})
     plt.subplots_adjust(left=0.03, wspace=0.3, hspace=0)
     return fig
