@@ -3,7 +3,6 @@
 .ipynb_checkpoints/*
 reconstructions/*
 playground/*
-data/*
 *.pkl
 src/bir_tomo.egg-info/*
 assets/style.css
