@@ -24,7 +24,7 @@ def save_as_tif(file_path, data, metadata):
         if key in metadata["Optical info"]:
             del metadata["Optical info"][key]
     with tifffile.TiffWriter(file_path) as tif:
-        tif.save(data.astype("float32"), metadata=metadata)
+        tif.write(data.astype("float32"), metadata=metadata)
     return
 
 

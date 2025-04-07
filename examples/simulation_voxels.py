@@ -11,7 +11,7 @@ from VolumeRaytraceLFM.utils.file_utils import save_as_tif
 
 # %% Setting up the optical system
 BACKEND = BackEnds.PYTORCH
-optical_info = setup_optical_parameters(r"C:\Users\OldenbourgLab2\Code\forward-model\config\Voxels\optical_config.json")
+optical_info = setup_optical_parameters('/Users/rudolfo/Software/GitHub/BirTomo/config/optical_config_voxels.json')
 optical_system = {"optical_info": optical_info}
 print(optical_info)
 
@@ -25,7 +25,7 @@ volume = BirefringentVolume(
 # plotly_figure.show()
 
 # %% Create a volume from a h5 file
-volume_file_path = r"C:\Users\OldenbourgLab2\Code\forward-model\data\2025_02\Voxels\Simulation Data\ThreeVoxBirCtrPosXPosYPosZ_Feb20.h5"
+volume_file_path = '/Users/rudolfo/Software/GitHub/BirTomo/data/2025_02/Voxels/Simulation Data/ThreeVoxBirCtrPosXPosYPosZ_Feb20.h5'
 volume = BirefringentVolume.init_from_file(
     volume_file_path, BACKEND, optical_info)
 
@@ -46,12 +46,12 @@ simulator.view_images()
 images = simulator.ret_img, simulator.azim_img
 
 # %% Save images as TIF - added on 2025-02-14 by Geneva
-save_dir = r"C:\Users\OldenbourgLab2\Code\forward-model\data\2025_02\Voxels\Simulation Data\LF Images forward model"
-save_as_tif(os.path.join(save_dir, "ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Feb25_60x12Ret.tif"),
+save_dir = '/Users/rudolfo/Software/GitHub/BirTomo/data/2025_04/Voxels/Simulation Data/LF Images BirTomo'
+save_as_tif(os.path.join(save_dir, 'ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Apr05_20x04_75_17Ret.tif'),
             simulator.ret_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
-save_as_tif(os.path.join(save_dir, "ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Feb25_60x12Azim.tif"),
+save_as_tif(os.path.join(save_dir, 'ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Apr05_20x04_75_17Azim.tif'),
             simulator.azim_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
