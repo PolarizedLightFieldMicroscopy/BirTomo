@@ -1,4 +1,5 @@
 {
+    "python.defaultInterpreterPath": "~\\anaconda3\\envs\\bir-tomo\\python.exe",
     "python.testing.pytestArgs": [
         "tests"
     ],
