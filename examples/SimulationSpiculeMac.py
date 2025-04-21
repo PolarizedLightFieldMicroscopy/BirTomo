@@ -14,7 +14,7 @@ from VolumeRaytraceLFM.utils.file_utils import save_as_tif
 
 # %% Setting up the optical system
 BACKEND = BackEnds.PYTORCH
-optical_info = setup_optical_parameters(r"C:\Users\OldenbourgLab2\Code\BirTomo\config\optical_config_spicule.json")
+optical_info = setup_optical_parameters("/Users/rudolfo/Software/GitHub/BirTomo/config/OpticalConfigSpiculeMac.json")
 optical_system = {"optical_info": optical_info}
 print(optical_info)
 
@@ -28,7 +28,7 @@ volume = BirefringentVolume(
 # plotly_figure.show()
 
 # %% Create a volume from a h5 file
-volume_file_path = r"C:\Users\OldenbourgLab2\Code\BirTomo\data\2025_04\SpiculeA Experim&Simulation\Simulation Data\Spicule1248April9_RevX.h5"
+volume_file_path = "/Users/rudolfo/Software/GitHub/BirTomo/data/2025_04/SpiculeA Experim&Simulation/Simulation Data/Spicule1248April9_RevX.h5"
 volume = BirefringentVolume.init_from_file(
     volume_file_path, BACKEND, optical_info)
 
@@ -49,12 +49,12 @@ simulator.view_images()
 images = simulator.ret_img, simulator.azim_img
 
 # %% Save images as TIF - added on 2025-02-14 by Geneva
-save_dir = r"C:\Users\OldenbourgLab2\Code\BirTomo\data\2025_04\SpiculeA Experim&Simulation\Simulation Data\LF Images BirTomo"
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April10BirTomoWinLFRet.tif"),
+save_dir = r"/Users/rudolfo/Software/GitHub/BirTomo/data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April21BirTomoMacLFRet.tif"),
             simulator.ret_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April10BirTomoWinLFAzim.tif"),
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April21BirTomoMacLFAzim.tif"),
             simulator.azim_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
