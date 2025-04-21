@@ -1,28 +1,78 @@
-{\rtf1\ansi\ansicpg1252\cocoartf2821
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica-Bold;\f1\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
-{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
-\margl1440\margr1440\vieww17760\viewh13060\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+{\rtf1\ansi\deff3\adeflang1025
+{\fonttbl{\f0\froman\fprq2\fcharset0 Times New Roman;}{\f1\froman\fprq2\fcharset2 Symbol;}{\f2\fswiss\fprq2\fcharset0 Arial;}{\f3\fswiss\fprq0\fcharset0 Helvetica-Bold;}{\f4\fswiss\fprq0\fcharset0 Helvetica{\*\falt Arial};}{\f5\fnil\fprq2\fcharset0 Microsoft YaHei;}{\f6\fnil\fprq2\fcharset0 Arial;}{\f7\fswiss\fprq0\fcharset128 Arial;}}
+{\colortbl;\red0\green0\blue0;\red128\green128\blue128;}
+{\stylesheet{\s0\snext0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033 Default;}
+{\s15\sbasedon0\snext16\sb240\sa120\keepn\hich\af5\dbch\af6\afs28\loch\f2\fs28 Heading;}
+{\s16\sbasedon0\snext16\sb0\sa120 Text body;}
+{\s17\sbasedon16\snext17\sb0\sa120\dbch\af7 List;}
+{\s18\sbasedon0\snext18\sb120\sa120\noline\i\dbch\af7\afs24\ai\fs24 Caption;}
+{\s19\sbasedon0\snext19\noline\dbch\af7 Index;}
+}{\info{\creatim\yr0\mo0\dy0\hr0\min0}{\revtim\yr0\mo0\dy0\hr0\min0}{\printim\yr0\mo0\dy0\hr0\min0}{\comment OpenOffice}{\vern4170}}\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720\deftab720
 
-\f0\b\fs24 \cf2 9 April 2025:\
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
-
-\f1\b0 \cf2 optical_config_spicule\
-    "volume_shape"      : [43, 123, 123],\
-    "n_micro_lenses"    : 111,\
-    "pixels_per_ml"     : 16,\
-    "n_voxels_per_ml"   : 1,\
-    "M_obj"             : 20,\
-    "na_obj"            : 0.4,\
-    "n_medium"          : 1.35,\
-    "wavelength"        : 0.550,\
-    "camera_pix_pitch"  : 6.5,\
-    "aperture_radius_px": 7.5,\
-    "cube_voxels"       : true,\
-In Mathematica, before saving a TIFF file of the slow axis orientations or azimuth values for use with PolScope graphics functions in ImageJ, the azimuth values need to be subtracted from Pi or 3.1416 to conform to the conventions in OpenPolScope graphics. Those transformed values generate the correct line orientations when using the "Display  azim lines" macro in ImageJ.\
-\
-Spicule1248Feb17-h5_April9BirTomoLFRet.tif; Spicule1248Feb17-h5_April9BirTomoLFAzim.tif\
-\
-In ImageJ, before converting to an 8-bit PolStack, the pixel values of the retardance image are multiplied by a factor that is equal to 255 divided by the retardance ceiling value, e.g 1.2 radian.  The pixel values in the azimuth image, given in radian, are multiplied by 180 divided by Pi, or 3,1416, to convert the azimuth angles to degree.     -> 255/1.2=212.5;  180/3.1416=57.3;\
+{\*\pgdsctbl
+{\pgdsc0\pgdscuse195\pgwsxn12240\pghsxn15840\marglsxn1440\margrsxn1440\margtsxn1440\margbsxn1440\pgdscnxt0 Default;}}
+\formshade{\*\pgdscno0}\paperh15840\paperw12240\margl1440\margr1440\margt1440\margb1440\sectd\sbknone\sectunlocked1\pgndec\pgwsxn12240\pghsxn15840\marglsxn1440\margrsxn1440\margtsxn1440\margbsxn1440\ftnbj\ftnstart1\ftnrstcont\ftnnar\aenddoc\aftnrstcont\aftnstart1\aftnnrlc
+\pgndec\pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\b\ab\rtlch \ltrch\loch
+9 April 2025:}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+optical_config_spicule}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"volume_shape"      : [43, 123, 123],}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"n_micro_lenses"    : 111,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"pixels_per_ml"     : 16,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"n_voxels_per_ml"   : 1,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"M_obj"             : 20,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"na_obj"            : 0.4,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"n_medium"          : 1.35,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"wavelength"        : 0.550,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"camera_pix_pitch"  : 6.5,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"aperture_radius_px": 7.5,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\f4
+    }{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+"cube_voxels"       : true,}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+In Mathematica, before saving a TIFF file of the slow axis orientations or azimuth values for use with PolScope graphics functions in ImageJ, the azimuth values need to be subtracted from Pi or 3.1416 to conform to the conventions in OpenPolScope graphics. Those transformed values generate the correct line orientations when using the "Display  azim lines" macro in ImageJ.}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
 }
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+Calculated with BirTomo code on Rudolf's MacBook Pro}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+Spicule1248Feb17-h5_April9BirTomoMacLFRet.tif; }
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+Spicule1248Feb17-h5_April9BirTomoMacLFAzim.tif}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+In ImageJ, before converting to an 8-bit PolStack, the pixel values of the retardance image are multiplied by a factor that is equal to 255 divided by the retardance ceiling value, e.g 1.2 radian.  The pixel values in the azimuth image, given in radian, are multiplied by 180 divided by Pi, or 3,1416, to convert the azimuth angles to degree.     -> 255/1.2=212.5;  180/3.1416=57.3;}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{{\*\bkmkstart __DdeLink__0_50887014}\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4{\*\bkmkend __DdeLink__0_50887014}
+Calculated with BirTomo code on Windows workstation near inverted microscope stand}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+Spicule1248April9_RevX-h5_April10BirTomoWinLFRet.tif}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+Spicule1248April9_RevX-h5_April10BirTomoWinLFAzim.tif}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+}
+\par \pard\plain \s0\nowidctlpar{\*\hyphen2\hyphlead2\hyphtrail2\hyphmax0}\cf0\hich\af3\langfe2052\dbch\af3\afs24\lang1081\loch\f3\fs24\lang1033\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640{\cf1\hich\af4\dbch\af4\rtlch \ltrch\loch\loch\f4
+The difference of values in Ret and Azim files calculated with Mac and Windows computers are of the order 10^-8}
+\par }
