@@ -14,7 +14,7 @@ from VolumeRaytraceLFM.utils.file_utils import save_as_tif
 
 # %% Setting up the optical system
 BACKEND = BackEnds.PYTORCH
-optical_info = setup_optical_parameters(r"C:\Users\OldenbourgLab2\Code\BirTomo\config\optical_config_spicule.json")
+optical_info = setup_optical_parameters(r"C:\Users\OldenbourgLab2\Code\BirTomo\config\OpticalConfigSpiculeWin.json")
 optical_system = {"optical_info": optical_info}
 print(optical_info)
 
@@ -50,11 +50,11 @@ images = simulator.ret_img, simulator.azim_img
 
 # %% Save images as TIF - added on 2025-02-14 by Geneva
 save_dir = r"C:\Users\OldenbourgLab2\Code\BirTomo\data\2025_04\SpiculeA Experim&Simulation\Simulation Data\LF Images BirTomo"
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April10BirTomoWinLFRet.tif"),
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April21BirTomoWinLFRet.tif"),
             simulator.ret_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April10BirTomoWinLFAzim.tif"),
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April21BirTomoWinLFAzim.tif"),
             simulator.azim_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
