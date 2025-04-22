@@ -11,7 +11,7 @@ from VolumeRaytraceLFM.utils.file_utils import save_as_tif
 
 # %% Setting up the optical system
 BACKEND = BackEnds.PYTORCH
-optical_info = setup_optical_parameters(r"C:\Users\OldenbourgLab2\Code\BirTomo\config\optical_config_voxels.json")
+optical_info = setup_optical_parameters("/Users/rudolfo/Software/GitHub/BirTomo/config/OpticalConfigVoxelsMac.json")
 optical_system = {"optical_info": optical_info}
 print(optical_info)
 
