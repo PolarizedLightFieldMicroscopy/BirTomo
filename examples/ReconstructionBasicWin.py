@@ -1,4 +1,5 @@
-# %% Importing necessary libraries
+# %%
+# Importing necessary libraries
 import os
 import numpy as np
 import torch
@@ -15,19 +16,20 @@ from VolumeRaytraceLFM.utils.file_utils import (
     create_unique_directory,
 )
 
-# %% Configuration paramters to be changed
+# %%
+# Configuration paramters to be changed
 simulate = True
 
 # Volume creation arguments, see src/VolumeRaytraceLFM/volumes/volume_args.py for more options
 volume_gt_creation_args = volume_args.voxel_args
-volume_initial_creation_args = volume_args.random_pos_args
+volume_initial_creation_args = volume_args.random_args1
 
 # Paths to the optical and iteration configuration files
-optical_config_file = os.path.join("..", "config", "optical_config_voxel.json")
-iter_config_file = os.path.join("..", "config", "iter_config_reg.json")
+optical_config_file = os.path.join("..", "config", "voxel_basic", "optical_config.json")
+iter_config_file = os.path.join("..", "config", "voxel_basic", "iter_config.json")
 
 # Path to the directory where the reconstruction will be saved
-recon_output_dir = os.path.join("..", "reconstructions", "voxel")
+recon_output_dir = os.path.join("..", "reconstructions", "voxel_basic")
 
 # Whether to continue a previous reconstruction
 continue_recon = False
@@ -41,7 +43,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print(f"Using device: {DEVICE}")
 
-# %% Simulate or load forward images
+# %%
+# Simulate or load forward images
 optical_info = setup_optical_parameters(optical_config_file)
 
 if simulate:
@@ -61,7 +64,8 @@ else:
     azim_image_meas = np.load(os.path.join(measurement_dir, "azim_image.npy"))
     volume_GT = None
 
-# %% Run reconstruction
+# %%
+# Run reconstruction
 recon_optical_info = optical_info.copy()
 iteration_params = setup_iteration_parameters(iter_config_file)
 recon_dir_postfix = iteration_params["general"]["output_directory_postfix"]
