@@ -1,7 +1,7 @@
 {
     "general": {
-        "num_iterations": 100,
-        "save_freq": 20,
+        "num_iterations": 10,
+        "save_freq": 1,
         "output_directory_postfix": "regularization",
         "notes": ""
     },
@@ -15,8 +15,8 @@
     "regularization": {
         "weight": 1,
         "functions": [
-            ["birefringence active L2", 100],
-            ["birefringence active negative penalty", 100]
+            ["birefringence active L2", 50],
+            ["birefringence active negative penalty", 0]
         ]
     },
     "schedulers": {

@@ -1,7 +1,7 @@
 {
     "general": {
-        "num_iterations": 1000,
-        "save_freq": 100,
+        "num_iterations": 100,
+        "save_freq": 10,
         "output_directory_postfix": "",
         "notes": ""
     },
