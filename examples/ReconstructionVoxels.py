@@ -19,7 +19,7 @@ from VolumeRaytraceLFM.utils.file_utils import (
 from VolumeRaytraceLFM.utils.file_utils import save_as_tif
 
 # %%
-# Configuration paramters to be changed
+# Configuration parameters
 simulate = False
 
 # Volume creation arguments, see src/VolumeRaytraceLFM/volumes/volume_args.py for more options
@@ -62,9 +62,9 @@ if simulate:
     ret_image_meas = simulator.ret_img.detach().numpy()
     azim_image_meas = simulator.azim_img.detach().numpy()
 else:
-    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "OneVoxBirBot6OaZ_April27-h5_Apr27_60x12_Ret.tif"))
+    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Apr04_60x12Ret.tif"))
     ret_image_meas = np.array(ret_image_meas_tiff)
-    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "OneVoxBirBot6OaZ_April27-h5_Apr27_60x12_Azim.tif"))
+    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Apr04_60x12Azim.tif"))
     azim_image_meas = np.array(azim_image_meas_tiff)
     volume_GT = None
 

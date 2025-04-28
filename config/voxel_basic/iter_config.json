@@ -2,7 +2,7 @@
     "general": {
         "num_iterations": 10,
         "save_freq": 1,
-        "output_directory_postfix": "regularization",
+        "output_directory_postfix": "40x",
         "notes": ""
     },
     "learning_rates": {

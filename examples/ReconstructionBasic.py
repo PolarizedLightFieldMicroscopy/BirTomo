@@ -17,7 +17,7 @@ from VolumeRaytraceLFM.utils.file_utils import (
 )
 
 # %%
-# Configuration paramters to be changed
+# Configuration paramters
 simulate = True
 
 # Volume creation arguments, see src/VolumeRaytraceLFM/volumes/volume_args.py for more options

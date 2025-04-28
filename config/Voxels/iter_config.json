@@ -2,7 +2,7 @@
     "general": {
         "num_iterations": 10,
         "save_freq": 5,
-        "output_directory_postfix": "Bot",
+        "output_directory_postfix": "3VoxCtrX",
         "notes": ""
     },
     "learning_rates": {

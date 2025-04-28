@@ -19,7 +19,7 @@ from VolumeRaytraceLFM.utils.file_utils import (
 from VolumeRaytraceLFM.utils.file_utils import save_as_tif
 
 # %%
-# Configuration paramters to be changed
+# Configuration parameters
 simulate = False
 
 # Volume creation arguments, see src/VolumeRaytraceLFM/volumes/volume_args.py for more options
@@ -69,7 +69,7 @@ else:
     azim_image_meas = np.array(azim_image_meas_tiff)
     volume_GT = None
 
-# %% 
+ # %% 
 # Save images as TIF
 save_dir = r"/Users/rudolfo/Software/GitHub/BirTomo/data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
 save_as_tif(os.path.join(save_dir, "ret_image_meas.tif"),

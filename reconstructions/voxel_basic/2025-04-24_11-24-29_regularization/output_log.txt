@@ -1,0 +1,41 @@
+
+Initializing a Reconstructor, using computing device cuda
+Omitting rays based on pixels with zero retardance.
+For raytracing, using computing device cuda
+Raytracing time in seconds: 0.10
+Preparing rays for all rays at once...
+Prepared geometry for all rays at once.
+No radiometry provided for filtering rays.
+Saving rays...
+Rays saved in 0 seconds to ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\config_parameters\rays.pkl
+Setting up the voxel mask...
+Identifying the voxels that are reached by the rays out of the 1183 voxels.
+Number of voxels reached by the rays: 266
+	Included in nonzero retardance pixels: 34
+	Included in zero retardance pixels: 263
+		For 2 or more rays: 239
+Masking out voxels except for 3 voxels. First, at most, 20 voxels are tensor([422, 591, 760], dtype=torch.int32)
+Voxel mask created in 0.27 seconds
+Using retardance and azimuth images for data-fidelity term.
+Reconstructor initialized in 0.40 seconds
+
+Deleting unnecessary attributes to save memory...
+	Deleted nonzero pixels dict
+	Deleted ray valid indices by ray num
+	Deleted mask from rays class
+	Deleted radiometry
+	Deleted volume initial guess
+Beginning reconstruction...
+Setting up optimizer and scheduler...
+Using optimizer: Nadam
+Using optimizer: Nadam
+Starting iterations...
+Saving volume to h5 file: ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\results_in_progress\volume_iter_0020.h5
+Saving volume to h5 file: ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\results_in_progress\volume_iter_0040.h5
+Saving volume to h5 file: ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\results_in_progress\volume_iter_0060.h5
+Learning rates changed at iteration 76:
+Iteration 75: 1.00e-01, 1.00e-04 -> Iteration 76: 1.00e-01, 8.00e-05
+Saving volume to h5 file: ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\results_in_progress\volume_iter_0080.h5
+Saving volume to h5 file: ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\results_in_progress\volume_iter_0100.h5
+Saving volume to h5 file: ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\volume.h5
+Saved the final volume estimation to ..\reconstructions\voxel_basic\2025-04-24_11-24-29_regularization\volume.h5
