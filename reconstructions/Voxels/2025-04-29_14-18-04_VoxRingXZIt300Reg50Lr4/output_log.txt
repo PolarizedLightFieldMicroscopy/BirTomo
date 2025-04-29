@@ -1,0 +1,137 @@
+
+Initializing a Reconstructor, using computing device cuda
+Omitting rays based on pixels with zero retardance.
+For raytracing, using computing device cuda
+Raytracing time in seconds: 0.22
+Preparing rays for all rays at once...
+Prepared geometry for all rays at once.
+No radiometry provided for filtering rays.
+Saving rays...
+Rays saved in 0 seconds to ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\config_parameters\rays.pkl
+Setting up the voxel mask...
+Identifying the voxels that are reached by the rays out of the 3757 voxels.
+Number of voxels reached by the rays: 3,241
+	Included in nonzero retardance pixels: 2,819
+	Included in zero retardance pixels: 3,219
+		For 2 or more rays: 3,138
+Masking out voxels except for 40 voxels. First, at most, 20 voxels are tensor([1160, 1168, 1224, 1240, 1241, 1257, 1258, 1274, 1299, 1301, 1302, 1326,
+        1342, 1343, 1359, 1360, 1376, 1432, 1440, 1587], dtype=torch.int32)
+Voxel mask created in 0.29 seconds
+Using retardance and azimuth images for data-fidelity term.
+Reconstructor initialized in 0.60 seconds
+
+Deleting unnecessary attributes to save memory...
+	Deleted nonzero pixels dict
+	Deleted ray valid indices by ray num
+	Deleted mask from rays class
+	Deleted radiometry
+	Deleted volume initial guess
+Beginning reconstruction...
+Setting up optimizer and scheduler...
+Using optimizer: Nadam
+Using optimizer: Nadam
+Starting iterations...
+Saving volume to h5 file: ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\results_in_progress\volume_iter_0050.h5
+Saving volume to h5 file: ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\results_in_progress\volume_iter_0100.h5
+Learning rates changed at iteration 104:
+Iteration 103: 1.00e-01, 1.00e-04 -> Iteration 104: 1.00e-01, 8.00e-05
+Learning rates changed at iteration 109:
+Iteration 108: 1.00e-01, 8.00e-05 -> Iteration 109: 8.00e-02, 8.00e-05
+Learning rates changed at iteration 110:
+Iteration 109: 8.00e-02, 8.00e-05 -> Iteration 110: 8.00e-02, 6.40e-05
+Learning rates changed at iteration 116:
+Iteration 115: 8.00e-02, 6.40e-05 -> Iteration 116: 8.00e-02, 5.12e-05
+Learning rates changed at iteration 120:
+Iteration 119: 8.00e-02, 5.12e-05 -> Iteration 120: 6.40e-02, 5.12e-05
+Learning rates changed at iteration 122:
+Iteration 121: 6.40e-02, 5.12e-05 -> Iteration 122: 6.40e-02, 4.10e-05
+Learning rates changed at iteration 128:
+Iteration 127: 6.40e-02, 4.10e-05 -> Iteration 128: 6.40e-02, 3.28e-05
+Learning rates changed at iteration 131:
+Iteration 130: 6.40e-02, 3.28e-05 -> Iteration 131: 5.12e-02, 3.28e-05
+Learning rates changed at iteration 134:
+Iteration 133: 5.12e-02, 3.28e-05 -> Iteration 134: 5.12e-02, 2.62e-05
+Learning rates changed at iteration 140:
+Iteration 139: 5.12e-02, 2.62e-05 -> Iteration 140: 5.12e-02, 2.10e-05
+Learning rates changed at iteration 142:
+Iteration 141: 5.12e-02, 2.10e-05 -> Iteration 142: 4.10e-02, 2.10e-05
+Learning rates changed at iteration 146:
+Iteration 145: 4.10e-02, 2.10e-05 -> Iteration 146: 4.10e-02, 1.68e-05
+Saving volume to h5 file: ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\results_in_progress\volume_iter_0150.h5
+Learning rates changed at iteration 152:
+Iteration 151: 4.10e-02, 1.68e-05 -> Iteration 152: 4.10e-02, 1.34e-05
+Learning rates changed at iteration 153:
+Iteration 152: 4.10e-02, 1.34e-05 -> Iteration 153: 3.28e-02, 1.34e-05
+Learning rates changed at iteration 158:
+Iteration 157: 3.28e-02, 1.34e-05 -> Iteration 158: 3.28e-02, 1.07e-05
+Learning rates changed at iteration 164:
+Iteration 163: 3.28e-02, 1.07e-05 -> Iteration 164: 2.62e-02, 8.59e-06
+Learning rates changed at iteration 170:
+Iteration 169: 2.62e-02, 8.59e-06 -> Iteration 170: 2.62e-02, 6.87e-06
+Learning rates changed at iteration 175:
+Iteration 174: 2.62e-02, 6.87e-06 -> Iteration 175: 2.10e-02, 6.87e-06
+Learning rates changed at iteration 176:
+Iteration 175: 2.10e-02, 6.87e-06 -> Iteration 176: 2.10e-02, 5.50e-06
+Learning rates changed at iteration 182:
+Iteration 181: 2.10e-02, 5.50e-06 -> Iteration 182: 2.10e-02, 4.40e-06
+Learning rates changed at iteration 186:
+Iteration 185: 2.10e-02, 4.40e-06 -> Iteration 186: 1.68e-02, 4.40e-06
+Learning rates changed at iteration 188:
+Iteration 187: 1.68e-02, 4.40e-06 -> Iteration 188: 1.68e-02, 3.52e-06
+Learning rates changed at iteration 194:
+Iteration 193: 1.68e-02, 3.52e-06 -> Iteration 194: 1.68e-02, 2.81e-06
+Learning rates changed at iteration 197:
+Iteration 196: 1.68e-02, 2.81e-06 -> Iteration 197: 1.34e-02, 2.81e-06
+Learning rates changed at iteration 200:
+Iteration 199: 1.34e-02, 2.81e-06 -> Iteration 200: 1.34e-02, 2.25e-06
+Saving volume to h5 file: ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\results_in_progress\volume_iter_0200.h5
+Learning rates changed at iteration 206:
+Iteration 205: 1.34e-02, 2.25e-06 -> Iteration 206: 1.34e-02, 1.80e-06
+Learning rates changed at iteration 208:
+Iteration 207: 1.34e-02, 1.80e-06 -> Iteration 208: 1.07e-02, 1.80e-06
+Learning rates changed at iteration 212:
+Iteration 211: 1.07e-02, 1.80e-06 -> Iteration 212: 1.07e-02, 1.44e-06
+Learning rates changed at iteration 218:
+Iteration 217: 1.07e-02, 1.44e-06 -> Iteration 218: 1.07e-02, 1.15e-06
+Learning rates changed at iteration 219:
+Iteration 218: 1.07e-02, 1.15e-06 -> Iteration 219: 8.59e-03, 1.15e-06
+Learning rates changed at iteration 224:
+Iteration 223: 8.59e-03, 1.15e-06 -> Iteration 224: 8.59e-03, 9.22e-07
+Learning rates changed at iteration 230:
+Iteration 229: 8.59e-03, 9.22e-07 -> Iteration 230: 6.87e-03, 7.38e-07
+Learning rates changed at iteration 236:
+Iteration 235: 6.87e-03, 7.38e-07 -> Iteration 236: 6.87e-03, 5.90e-07
+Learning rates changed at iteration 241:
+Iteration 240: 6.87e-03, 5.90e-07 -> Iteration 241: 5.50e-03, 5.90e-07
+Learning rates changed at iteration 242:
+Iteration 241: 5.50e-03, 5.90e-07 -> Iteration 242: 5.50e-03, 4.72e-07
+Learning rates changed at iteration 248:
+Iteration 247: 5.50e-03, 4.72e-07 -> Iteration 248: 5.50e-03, 3.78e-07
+Saving volume to h5 file: ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\results_in_progress\volume_iter_0250.h5
+Learning rates changed at iteration 252:
+Iteration 251: 5.50e-03, 3.78e-07 -> Iteration 252: 4.40e-03, 3.78e-07
+Learning rates changed at iteration 254:
+Iteration 253: 4.40e-03, 3.78e-07 -> Iteration 254: 4.40e-03, 3.02e-07
+Learning rates changed at iteration 260:
+Iteration 259: 4.40e-03, 3.02e-07 -> Iteration 260: 4.40e-03, 2.42e-07
+Learning rates changed at iteration 263:
+Iteration 262: 4.40e-03, 2.42e-07 -> Iteration 263: 3.52e-03, 2.42e-07
+Learning rates changed at iteration 266:
+Iteration 265: 3.52e-03, 2.42e-07 -> Iteration 266: 3.52e-03, 1.93e-07
+Learning rates changed at iteration 272:
+Iteration 271: 3.52e-03, 1.93e-07 -> Iteration 272: 3.52e-03, 1.55e-07
+Learning rates changed at iteration 274:
+Iteration 273: 3.52e-03, 1.55e-07 -> Iteration 274: 2.81e-03, 1.55e-07
+Learning rates changed at iteration 278:
+Iteration 277: 2.81e-03, 1.55e-07 -> Iteration 278: 2.81e-03, 1.24e-07
+Learning rates changed at iteration 284:
+Iteration 283: 2.81e-03, 1.24e-07 -> Iteration 284: 2.81e-03, 9.90e-08
+Learning rates changed at iteration 285:
+Iteration 284: 2.81e-03, 9.90e-08 -> Iteration 285: 2.25e-03, 9.90e-08
+Learning rates changed at iteration 290:
+Iteration 289: 2.25e-03, 9.90e-08 -> Iteration 290: 2.25e-03, 7.92e-08
+Learning rates changed at iteration 296:
+Iteration 295: 2.25e-03, 7.92e-08 -> Iteration 296: 1.80e-03, 6.34e-08
+Saving volume to h5 file: ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\results_in_progress\volume_iter_0300.h5
+Saving volume to h5 file: ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\volume.h5
+Saved the final volume estimation to ..\reconstructions\Voxels\2025-04-29_14-18-04_VoxRingXZ300\volume.h5
