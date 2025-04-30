@@ -29,7 +29,7 @@ volume = BirefringentVolume(
 
 # %% 
 # Create a volume from a h5 file
-volume_file_path = r"../data/2025_04/Voxels/Simulation Data/VoxelRingXY.h5"
+volume_file_path = r"../data/2025_04/Voxels/Simulation Data/ThreeVoxBirCtrPosXPosYPosZ_Feb20.h5"
 volume = BirefringentVolume.init_from_file(
     volume_file_path, BACKEND, optical_info)
 
@@ -54,11 +54,11 @@ images = simulator.ret_img, simulator.azim_img
 # %% 
 # Save images as TIFF
 save_dir = r"../data/2025_04/Voxels/Simulation Data/LF Images BirTomo"
-save_as_tif(os.path.join(save_dir, 'VoxelRingXY-h5_Apr29_60x12_Ret.tif'),
+save_as_tif(os.path.join(save_dir, 'ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Apr29_20x04_75_16Ret.tif'),
             simulator.ret_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
-save_as_tif(os.path.join(save_dir, 'VoxelRingXY-h5_Apr29_60x12_Azim.tif'),
+save_as_tif(os.path.join(save_dir, 'ThreeVoxBirCtrPosXPosYPosZ_Feb20-h5_Apr29_20x04_75_16Azim.tif'),
             simulator.azim_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
