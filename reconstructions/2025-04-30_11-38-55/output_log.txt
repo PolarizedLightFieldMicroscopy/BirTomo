@@ -1,0 +1,17 @@
+
+Initializing a Reconstructor, using computing device cpu
+Created the unique output directory reconstructions\2025-04-30_11-38-55
+Omitting rays based on pixels with zero retardance.
+For raytracing, using computing device cpu
+Raytracing time in seconds: 0.02
+Setting up the voxel mask...
+KeyError, FileNotFoundError, or ValueError occured: Vox indices path is empty.
+Confirming that all voxel indices are nonnegative...
+All entries are nonnegative.
+Saving voxel indices by MLA index to reconstructions\2025-04-30_11-38-55\config_parameters\vox_indices_by_mla_idx.pkl
+Collecting the set of voxels that are reached by the rays.
+Masking out voxels except for 3 voxels. First, at most, 20 voxels are [np.int64(12), np.int64(37), np.int64(62)]
+Voxel mask created in 0.00 seconds
+Using retardance and azimuth images for data-fidelity term.
+Reconstructor initialized in 0.04 seconds
+
