@@ -2,7 +2,7 @@
     "general": {
         "num_iterations": 100,
         "save_freq": 10,
-        "output_directory_postfix": "VoxRingXZRand2It100Reg50Lr4",
+        "output_directory_postfix": "VoxRingXZRand2It100Reg50Lr4Mac",
         "notes": ""
     },
     "learning_rates": {

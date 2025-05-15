@@ -69,7 +69,7 @@ else:
     volume_GT = None
 
 # %%
-# Run reconstruction
+# Run reconstructions
 recon_optical_info = optical_info.copy()
 iteration_params = setup_iteration_parameters(iter_config_file)
 recon_dir_postfix = iteration_params["general"]["output_directory_postfix"]

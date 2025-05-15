@@ -1,0 +1,38 @@
+
+Initializing a Reconstructor, using computing device cpu
+Omitting rays based on pixels with zero retardance.
+For raytracing, using computing device cpu
+Raytracing time in seconds: 12.65
+Preparing rays for all rays at once...
+Prepared geometry for all rays at once.
+No radiometry provided for filtering rays.
+Saving rays...
+Rays saved in 1 seconds to ../GitHubReconstructions/Xylem/2025-05-14_07-56-16_Test/config_parameters/rays.pkl
+Setting up the voxel mask...
+Identifying the voxels that are reached by the rays out of the 2418025 voxels.
+Number of voxels reached by the rays: 395,425
+	Included in nonzero retardance pixels: 395,425
+	Included in zero retardance pixels: 440
+		For 5 or more rays: 0
+Masking out voxels except for 395425 voxels. First, at most, 20 voxels are tensor([26839, 26840, 26841, 26842, 26843, 26844, 26845, 26846, 26847, 26848,
+        26849, 26850, 26851, 26852, 26853, 26854, 26855, 26856, 26857, 26858],
+       dtype=torch.int32)
+Voxel mask created in 14.18 seconds
+Using retardance and azimuth images for data-fidelity term.
+Reconstructor initialized in 46.39 seconds
+
+Deleting unnecessary attributes to save memory...
+	Deleted nonzero pixels dict
+	Deleted ray valid indices by ray num
+	Deleted mask from rays class
+	Deleted radiometry
+	Deleted volume initial guess
+Beginning reconstruction...
+Setting up optimizer and scheduler...
+Using optimizer: Nadam
+Using optimizer: Nadam
+Starting iterations...
+Saving volume to h5 file: ../GitHubReconstructions/Xylem/2025-05-14_07-56-16_Test/results_in_progress/volume_iter_0001.h5
+Saving volume to h5 file: ../GitHubReconstructions/Xylem/2025-05-14_07-56-16_Test/results_in_progress/volume_iter_0002.h5
+Saving volume to h5 file: ../GitHubReconstructions/Xylem/2025-05-14_07-56-16_Test/volume.h5
+Saved the final volume estimation to ../GitHubReconstructions/Xylem/2025-05-14_07-56-16_Test/volume.h5
