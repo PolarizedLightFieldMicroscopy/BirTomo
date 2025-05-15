@@ -1295,6 +1295,7 @@ class Reconstructor:
         print("Starting iterations...")
         # Iterations
         for ep in tqdm(range(1, n_iterations + 1), "Minimizing"):
+            torch.cuda.empty_cache()
             self.ep = ep
             if ep <= warmup_iterations:
                 warmup_factor = warmup_start_proportion + (1 - warmup_start_proportion) * (ep / warmup_iterations)
@@ -1354,3 +1355,4 @@ class Reconstructor:
         if log_file_handle:
             restore_output(log_file_handle)
         print("Reconstruction complete.")
+        torch.cuda.empty_cache()

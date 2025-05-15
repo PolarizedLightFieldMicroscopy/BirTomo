@@ -1,8 +1,8 @@
 {
     "general": {
-        "num_iterations": 2,
-        "save_freq": 1,
-        "output_directory_postfix": "Test",
+        "num_iterations": 300,
+        "save_freq": 30,
+        "output_directory_postfix": "Iter400 ",
         "notes": ""
     },
     "learning_rates": {
