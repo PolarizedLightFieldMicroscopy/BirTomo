@@ -1,7 +1,8 @@
 *.pyc
 */__pycache__/*
 .ipynb_checkpoints/*
-# reconstructions/*
+reconstructions/*
+data/*
 playground/*
 *.pkl
 src/bir_tomo.egg-info/*
