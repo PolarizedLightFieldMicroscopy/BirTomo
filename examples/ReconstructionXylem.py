@@ -31,14 +31,14 @@ optical_config_file = os.path.join("..", "config", "Xylem", "optical_config.json
 iter_config_file = os.path.join("..", "config", "Xylem", "iter_config.json")
 
 # Path to the directory where the reconstruction will be saved
-recon_output_dir = os.path.join("..", "SharedReconstructions", "Xylem")
+recon_output_dir = os.path.join("..", "reconstructionsGitHub", "Xylem")
 
 # Whether to continue a previous reconstruction or start from a given volume
 continue_recon = True
-recon_init_file_path = os.path.join(r"../SharedData/2025_05/XylemA Experim&Simulation/Simulation Data/InitialXylemRandom1.h5")
+recon_init_file_path = os.path.join(r"../dataGitHub/2025_05/XylemA Experim&Simulation/Simulation Data/InitialXylemRandom1.h5")
 
 # For loading forward images that were saved in a previous reconstruction folder
-measurement_dir = os.path.join(r"../SharedData/2025_05/XylemA Experim&Simulation/Experimental Data")
+measurement_dir = os.path.join(r"../dataGitHub/2025_05/XylemA Experim&Simulation/Experimental Data")
 # measurement_dir = os.path.join(r"../data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo")
 
 BACKEND = BackEnds.PYTORCH

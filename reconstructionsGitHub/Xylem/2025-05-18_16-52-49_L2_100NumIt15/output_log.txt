@@ -1,0 +1,48 @@
+
+Initializing a Reconstructor, using computing device cpu
+Omitting rays based on pixels with zero retardance.
+For raytracing, using computing device cpu
+Raytracing time in seconds: 12.61
+Preparing rays for all rays at once...
+Prepared geometry for all rays at once.
+No radiometry provided for filtering rays.
+Saving rays...
+Rays saved in 1 seconds to ../reconstructionsGitHub/Xylem/2025-05-18_16-52-49_L2_100NumIt15/config_parameters/rays.pkl
+Setting up the voxel mask...
+Identifying the voxels that are reached by the rays out of the 570025 voxels.
+Number of voxels reached by the rays: 395,425
+	Included in nonzero retardance pixels: 395,425
+	Included in zero retardance pixels: 440
+		For 5 or more rays: 0
+Masking out voxels except for 395425 voxels. First, at most, 20 voxels are tensor([919, 920, 921, 922, 923, 924, 925, 926, 927, 928, 929, 930, 931, 932,
+        933, 934, 935, 936, 937, 938], dtype=torch.int32)
+Voxel mask created in 14.06 seconds
+Using retardance and azimuth images for data-fidelity term.
+Reconstructor initialized in 45.75 seconds
+
+Deleting unnecessary attributes to save memory...
+	Deleted nonzero pixels dict
+	Deleted ray valid indices by ray num
+	Deleted mask from rays class
+	Deleted radiometry
+	Deleted volume initial guess
+Beginning reconstruction...
+Setting up optimizer and scheduler...
+Using optimizer: Nadam
+Using optimizer: Nadam
+Starting iterations...
+Saving volume to h5 file: ../reconstructionsGitHub/Xylem/2025-05-18_16-52-49_L2_100NumIt15/results_in_progress/volume_iter_0005.h5
+Saving volume to h5 file: ../reconstructionsGitHub/Xylem/2025-05-18_16-52-49_L2_100NumIt15/results_in_progress/volume_iter_0010.h5
+Learning rates changed at iteration 11:
+Iteration 10: 1.00e-01, 1.00e-04 -> Iteration 11: 5.01e-02, 1.00e-04
+Learning rates changed at iteration 12:
+Iteration 11: 5.01e-02, 1.00e-04 -> Iteration 12: 4.22e-02, 1.00e-04
+Learning rates changed at iteration 13:
+Iteration 12: 4.22e-02, 1.00e-04 -> Iteration 13: 3.46e-02, 1.00e-04
+Learning rates changed at iteration 14:
+Iteration 13: 3.46e-02, 1.00e-04 -> Iteration 14: 2.74e-02, 1.00e-04
+Learning rates changed at iteration 15:
+Iteration 14: 2.74e-02, 1.00e-04 -> Iteration 15: 2.07e-02, 1.00e-04
+Saving volume to h5 file: ../reconstructionsGitHub/Xylem/2025-05-18_16-52-49_L2_100NumIt15/results_in_progress/volume_iter_0015.h5
+Saving volume to h5 file: ../reconstructionsGitHub/Xylem/2025-05-18_16-52-49_L2_100NumIt15/volume.h5
+Saved the final volume estimation to ../reconstructionsGitHub/Xylem/2025-05-18_16-52-49_L2_100NumIt15/volume.h5
