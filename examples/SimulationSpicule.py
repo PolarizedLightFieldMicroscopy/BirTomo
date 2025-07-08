@@ -31,8 +31,8 @@ volume = BirefringentVolume(
 # plotly_figure.show()
 
 # %% 
-# Create a volume from a h5 file
-volume_file_path = r"C:../data/2025_04/SpiculeA Experim&Simulation/Simulation Data/Spicule1248April9_RevX.h5"
+# Load a volume from an h5 file
+volume_file_path = r"../data/2025_07/SpiculeA Experim&Simulation/Simulation Data/Spicule1248April9_RevX.h5"
 volume = BirefringentVolume.init_from_file(
     volume_file_path, BACKEND, optical_info)
 
@@ -57,12 +57,12 @@ images = simulator.ret_img, simulator.azim_img
 
 # %% 
 # Save images as TIF - added on 2025-02-14 by Geneva
-save_dir = r"../data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April28BirTomoWinLFRet.tif"),
+save_dir = r"../data/2025_07/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_July6BirTomoMacLFRet.tif"),
             simulator.ret_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_April28BirTomoWinLFAzim.tif"),
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_July6BirTomoMacLFAzim.tif"),
             simulator.azim_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )

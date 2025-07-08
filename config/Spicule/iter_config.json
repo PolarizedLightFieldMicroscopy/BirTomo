@@ -1,8 +1,8 @@
 {
     "general": {
-        "num_iterations": 300,
-        "save_freq": 30,
-        "output_directory_postfix": "Iter400 ",
+        "num_iterations": 10,
+        "save_freq": 5,
+        "output_directory_postfix": "Ss1L2_100RevXRandAllNumIt12",
         "notes": ""
     },
     "learning_rates": {
@@ -12,7 +12,7 @@
     "regularization": {
         "weight": 1.0,
         "functions": [
-            ["birefringence active L2", 50],
+            ["birefringence active L2", 100],
             ["birefringence active negative penalty", 0]
         ]
     },

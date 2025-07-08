@@ -35,12 +35,12 @@ recon_output_dir = os.path.join("..", "reconstructions", "Spicule")
 
 # Whether to continue a previous reconstruction or start from a given volume
 continue_recon = True
-recon_init_file_path = os.path.join(r"../reconstructions/Spicule/2025-05-03_00-15-39_Iter100/volume.h5")
-# recon_init_file_path = os.path.join(r"../data/2025_04/SpiculeA Experim&Simulation/Simulation Data/SpiculeInitRandom1.h5")
+recon_init_file_path = os.path.join(r"../reconstructions/Spicule/2025-07-07_08-36-27_Ss1L2_100RevXRandAllNumIt2/volume.h5")
+# recon_init_file_path = os.path.join(r"../data/2025_07/SpiculeA Experim&Simulation/Simulation Data/SpiculeInitRandom1.h5")
 
 # For loading forward images that were saved in a previous reconstruction folder
-measurement_dir = os.path.join(r"../data/2025_04/SpiculeA Experim&Simulation/Experimental Data")
-# measurement_dir = os.path.join(r"../data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo")
+measurement_dir = os.path.join(r"../data/2025_07/SpiculeA Experim&Simulation/Experimental Data")
+# measurement_dir = os.path.join(r"../data/2025_07/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo")
 
 BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -64,15 +64,15 @@ if simulate:
     ret_image_meas = simulator.ret_img.detach().numpy()
     azim_image_meas = simulator.azim_img.detach().numpy()
 else:
-    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "SMS1248LFRetRectCrop32bit.tif"))
+    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "SMS1248Sl11LFRetRectCrop32bit.tif"))
     ret_image_meas = np.array(ret_image_meas_tiff)
-    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "SMS1248LFAzimRectCrop32bit.tif"))
+    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "SMS1248Sl11LFAzimRectCrop32bit.tif"))
     azim_image_meas = np.array(azim_image_meas_tiff)
     volume_GT = None
 
  # %% 
 # Save images as TIF
-save_dir = r"/Users/rudolfo/Software/GitHub/BirTomo/data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
+save_dir = r"/Users/rudolfo/Software/GitHub/BirTomo/data/2025_07/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
 save_as_tif(os.path.join(save_dir, "ret_image_meas.tif"),
             ret_image_meas,
             {"Optical info": optical_info}
