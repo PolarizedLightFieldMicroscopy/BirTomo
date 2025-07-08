@@ -31,13 +31,14 @@ optical_config_file = os.path.join("..", "config", "Xylem", "optical_config.json
 iter_config_file = os.path.join("..", "config", "Xylem", "iter_config.json")
 
 # Path to the directory where the reconstruction will be saved
-recon_output_dir = os.path.join("..", "reconstructionsGitHub", "Xylem")
+recon_output_dir = os.path.join("..", "reconstructions", "Xylem")
 
 # Whether to continue a previous reconstruction or start from a given volume
 continue_recon = True
-recon_init_file_path = os.path.join(r"../dataGitHub/2025_05/XylemA Experim&Simulation/Simulation Data/InitialXylemRandom1.h5")
+recon_init_file_path = os.path.join(r"../reconstructions/Xylem/2025-05-20_09-50-02_L2_100NumIt100/volume.h5")
+# recon_init_file_path = os.path.join(r"../dataGitHub/2025_05/XylemA Experim&Simulation/Simulation Data/XylemACrop2Random.h5")
 
-# For loading forward images that were saved in a previous reconstruction folder
+# For loading forward images that were saved in a previous reconstruction folder or in a data folder
 measurement_dir = os.path.join(r"../dataGitHub/2025_05/XylemA Experim&Simulation/Experimental Data")
 # measurement_dir = os.path.join(r"../data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo")
 
@@ -63,9 +64,9 @@ if simulate:
     ret_image_meas = simulator.ret_img.detach().numpy()
     azim_image_meas = simulator.azim_img.detach().numpy()
 else:
-    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "XylemACropFloat32bitRet.tif"))
+    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "XylemACrop2Float32bitRet.tif"))
     ret_image_meas = np.array(ret_image_meas_tiff)
-    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "XylemACropFloat32bitAzim.tif"))
+    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "XylemACrop2Float32bitAzim.tif"))
     azim_image_meas = np.array(azim_image_meas_tiff)
     volume_GT = None
 
@@ -100,7 +101,7 @@ reconstructor = Reconstructor(
 reconstructor.reconstruct()
 print("Reconstruction complete")
 
- # %% 
+     # %% 
 # Save images as TIF
 save_dir = r"/Users/rudolfo/Software/GitHub/BirTomo/data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
 save_as_tif(os.path.join(save_dir, "ret_image_meas.tif"),
