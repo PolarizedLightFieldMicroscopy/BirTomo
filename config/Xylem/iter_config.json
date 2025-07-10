@@ -1,14 +1,8 @@
 {
     "general": {
-<<<<<<< Updated upstream
-        "num_iterations": 100,
-        "save_freq": 10,
-        "output_directory_postfix": "L2_100NumIt100",
-=======
         "num_iterations": 2,
         "save_freq": 1,
-        "output_directory_postfix": "L2_100Crop2Ss1RandomIt2",
->>>>>>> Stashed changes
+        "output_directory_postfix": "Mac_Corn0_L2_100Crop2Ss1RandomIt2",
         "notes": ""
     },
     "learning_rates": {

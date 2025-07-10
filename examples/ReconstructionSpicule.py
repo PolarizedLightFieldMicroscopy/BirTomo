@@ -35,8 +35,8 @@ recon_output_dir = os.path.join("..", "reconstructions", "Spicule")
 
 # Whether to continue a previous reconstruction or start from a given volume
 continue_recon = True
-recon_init_file_path = os.path.join(r"../reconstructions/Spicule/2025-07-07_08-36-27_Ss1L2_100RevXRandAllNumIt2/volume.h5")
-# recon_init_file_path = os.path.join(r"../data/2025_07/SpiculeA Experim&Simulation/Simulation Data/SpiculeInitRandom1.h5")
+# recon_init_file_path = os.path.join(r"../reconstructions/Spicule/2025-07-07_08-36-27_Ss1L2_100RevXRandAllNumIt2/volume.h5")
+recon_init_file_path = os.path.join(r"../data/2025_07/SpiculeA Experim&Simulation/Simulation Data/SpiculeInitRandom1.h5")
 
 # For loading forward images that were saved in a previous reconstruction folder
 measurement_dir = os.path.join(r"../data/2025_07/SpiculeA Experim&Simulation/Experimental Data")

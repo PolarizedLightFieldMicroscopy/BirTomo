@@ -1,15 +1,11 @@
 {
-<<<<<<< Updated upstream
     "volume_shape"      : [25, 121, 121],
-=======
-    "volume_shape"      : [25,121,121],
->>>>>>> Stashed changes
     "n_micro_lenses"    : 81,
     "pixels_per_ml"     : 16,
     "n_voxels_per_ml"   : 1,
-    "M_obj"             : 60,
-    "na_obj"            : 1.2,
-    "n_medium"          : 1.52,
+    "M_obj"             : 20,
+    "na_obj"            : 0.4,
+    "n_medium"          : 1.35,
     "wavelength"        : 0.546,
     "camera_pix_pitch"  : 6.5,
     "aperture_radius_px": 7.5,

@@ -58,11 +58,11 @@ images = simulator.ret_img, simulator.azim_img
 # %% 
 # Save images as TIF - added on 2025-02-14 by Geneva
 save_dir = r"../data/2025_07/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo"
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_July6BirTomoMacLFRet.tif"),
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_July10BirTomoMacLFRet.tif"),
             simulator.ret_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )
-save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_July6BirTomoMacLFAzim.tif"),
+save_as_tif(os.path.join(save_dir, "Spicule1248April9_RevX-h5_July10BirTomoMacLFAzim.tif"),
             simulator.azim_img.detach().cpu().numpy(),
             {"Optical info": optical_info}
             )

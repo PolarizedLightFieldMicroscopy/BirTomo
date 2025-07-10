@@ -1,13 +1,13 @@
 {
     "general": {
-        "num_iterations": 10,
-        "save_freq": 5,
-        "output_directory_postfix": "Ss1L2_100RevXRandAllNumIt12",
+        "num_iterations": 2,
+        "save_freq": 1,
+        "output_directory_postfix": "Mac_Ss1L2_100RevXRandAllNumIt2",
         "notes": ""
     },
     "learning_rates": {
-        "birefringence": 1e-4,
-        "optic_axis": 1e-1
+        "birefringence": 0.0001,
+        "optic_axis": 0.1
     },
     "regularization": {
         "weight": 1.0,
@@ -31,8 +31,8 @@
                 "mode": "min",
                 "factor": 0.8,
                 "patience": 5,
-                "threshold": 1e-6,
-                "min_lr": 1e-8
+                "threshold": 1e-06,
+                "min_lr": 1e-08
             }
         },
         "optic_axis": {
@@ -40,7 +40,7 @@
             "params": {
                 "T_0": 20,
                 "T_mult": 2,
-                "eta_min": 1e-4
+                "eta_min": 0.0001
             }
         }
     },
