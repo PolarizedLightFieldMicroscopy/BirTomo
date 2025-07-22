@@ -1,0 +1,37 @@
+
+Initializing a Reconstructor, using computing device cpu
+Omitting rays based on pixels with zero retardance.
+For raytracing, using computing device cpu
+Raytracing time in seconds: 5.72
+Preparing rays for all rays at once...
+Prepared geometry for all rays at once.
+No radiometry provided for filtering rays.
+Saving rays...
+Rays saved in 0 seconds to ../reconstructionsGitHub/Xylem/2025-07-09_08-02-41__Mac_Corn0_L2_100Crop2Ss1RandomIt2/config_parameters/rays.pkl
+Setting up the voxel mask...
+Identifying the voxels that are reached by the rays out of the 366025 voxels.
+Number of voxels reached by the rays: 178,283
+	Included in nonzero retardance pixels: 119,099
+	Included in zero retardance pixels: 77,971
+		For 5 or more rays: 76,760
+Masking out voxels except for 101480 voxels. First, at most, 20 voxels are tensor([2075, 2076, 2077, 2078, 2079, 2080, 2081, 2082, 2083, 2084, 2085, 2086,
+        2087, 2088, 2089, 2090, 2091, 2092, 2093, 2094], dtype=torch.int32)
+Voxel mask created in 5.55 seconds
+Using retardance and azimuth images for data-fidelity term.
+Reconstructor initialized in 16.62 seconds
+
+Deleting unnecessary attributes to save memory...
+	Deleted nonzero pixels dict
+	Deleted ray valid indices by ray num
+	Deleted mask from rays class
+	Deleted radiometry
+	Deleted volume initial guess
+Beginning reconstruction...
+Setting up optimizer and scheduler...
+Using optimizer: Nadam
+Using optimizer: Nadam
+Starting iterations...
+Saving volume to h5 file: ../reconstructionsGitHub/Xylem/2025-07-09_08-02-41__Mac_Corn0_L2_100Crop2Ss1RandomIt2/results_in_progress/volume_iter_0001.h5
+Saving volume to h5 file: ../reconstructionsGitHub/Xylem/2025-07-09_08-02-41__Mac_Corn0_L2_100Crop2Ss1RandomIt2/results_in_progress/volume_iter_0002.h5
+Saving volume to h5 file: ../reconstructionsGitHub/Xylem/2025-07-09_08-02-41__Mac_Corn0_L2_100Crop2Ss1RandomIt2/volume.h5
+Saved the final volume estimation to ../reconstructionsGitHub/Xylem/2025-07-09_08-02-41__Mac_Corn0_L2_100Crop2Ss1RandomIt2/volume.h5

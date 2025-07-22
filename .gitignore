@@ -1,11 +1,13 @@
 *.pyc
 */__pycache__/*
 .ipynb_checkpoints/*
+config
+examples
+data/*
 reconstructions/*
 playground/*
-data/*
 *.pkl
 src/bir_tomo.egg-info/*
 assets/style.css
 in_progress/*
-config/*/
+# config/*/
