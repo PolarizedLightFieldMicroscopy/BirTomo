@@ -318,6 +318,324 @@ class BirefringentVolume(BirefringentElement):
                     new_value = np.broadcast_to(new_value, self.volume_shape)
                 self.Delta_n = new_value
 
+    def set_voxel_properties(
+        self,
+        voxel_indices,
+        new_delta_ns,
+        new_optic_axes,
+        subgrid_size=None,
+        expand_in_3D=False
+    ):
+        """
+        Update both the birefringence (Delta_n) and the optic axis for specific voxels,
+        optionally supersampling into a neighborhood block (2D or 3D).
+
+        Args:
+            voxel_indices (tuple or list of tuples):
+                A single voxel index (z, y, x) or a list of voxel indices.
+            new_delta_ns (float or list of floats):
+                The birefringence value(s) to assign. If a single float is provided,
+                it is applied to all specified voxels.
+            new_optic_axes (list or tuple or list of lists/tuples):
+                A 3-element vector or a list of 3-element vectors defining the new optic axis
+                for each voxel. If a single vector is provided, it is applied to all voxels.
+            subgrid_size (int, optional):
+                If provided (e.g., 3), each "center" voxel index expands to a
+                subgrid_size×subgrid_size (or subgrid_size×subgrid_size×subgrid_size,
+                if expand_in_3D=True) block of voxels. Defaults to None,
+                meaning no supersampling (assign only the exact voxels).
+            expand_in_3D (bool, optional):
+                If True, the expansion is in z, y, and x. If False, expansion is only
+                in y and x. Defaults to False.
+        """
+        # --- 1) Normalize inputs ---
+        # Ensure voxel_indices is a list
+        if isinstance(voxel_indices, tuple):
+            voxel_indices = [voxel_indices]
+
+        # If new_delta_ns is a single float, make it a list of the same length
+        if not isinstance(new_delta_ns, list):
+            new_delta_ns = [new_delta_ns] * len(voxel_indices)
+
+        # If new_optic_axes is a single axis, replicate it for each voxel
+        first_axis = new_optic_axes[0] if isinstance(new_optic_axes, (list, tuple)) else None
+        if first_axis is not None and not isinstance(first_axis, (list, tuple, np.ndarray)):
+            new_optic_axes = [new_optic_axes] * len(voxel_indices)
+        elif isinstance(new_optic_axes, list) and \
+            len(new_optic_axes) == len(voxel_indices) and \
+            not isinstance(new_optic_axes[0], (list, tuple, np.ndarray)):
+            # handles case new_optic_axes = [ [1,0,0], ... ] or similar
+            pass
+
+        # subgrid_size < 2 => no supersampling
+        if subgrid_size is None or subgrid_size < 2:
+            # Just update the exact voxels
+            for idx, delta, axis in zip(voxel_indices, new_delta_ns, new_optic_axes):
+                self._assign_single_voxel(idx, delta, axis)
+            return
+
+        # --- 2) Supersampling scenario ---
+        for idx, delta, axis in zip(voxel_indices, new_delta_ns, new_optic_axes):
+            # Get all valid (z, y, x) within the subgrid block
+            subgrid_positions = self._get_subgrid_indices(
+                idx=idx,
+                subgrid_size=subgrid_size,
+                expand_in_3D=expand_in_3D
+            )
+            # Update each voxel in that subgrid
+            for pos in subgrid_positions:
+                self._assign_single_voxel(pos, delta, axis)
+
+    def _assign_single_voxel(self, idx, delta, axis):
+        """
+        Assign birefringence (Delta_n) and a (normalized) optic axis to a single voxel.
+        Handles both 'numpy' and 'torch' backends.
+        """
+        z, y, x = idx
+        if self.backend == "numpy":
+            # Normalize the axis (as a NumPy array)
+            axis_arr = np.array(axis, dtype=np.float64)
+            norm = np.linalg.norm(axis_arr)
+            if norm > 0:
+                axis_arr = axis_arr / norm
+
+            # Update Delta_n
+            self.Delta_n[z, y, x] = delta
+            # Update optic_axis
+            self.optic_axis[:, z, y, x] = axis_arr
+
+        elif self.backend == "torch":
+            # Convert 3D index to flat index
+            flat_index = np.ravel_multi_index((z, y, x), self.volume_shape)
+
+            with torch.no_grad():
+                # Update Delta_n
+                self.Delta_n.view(-1)[flat_index] = delta
+
+                # Prepare axis tensor and normalize
+                axis_tensor = torch.as_tensor(axis, dtype=self.optic_axis.dtype, device=self.optic_axis.device)
+                norm = torch.norm(axis_tensor)
+                if norm > 0:
+                    axis_tensor = axis_tensor / norm
+
+                # Update optic_axis
+                self.optic_axis.data[:, flat_index] = axis_tensor
+
+    def _get_subgrid_indices(self, idx, subgrid_size, expand_in_3D):
+        """
+        Given a center voxel 'idx = (z, y, x)', return a list of valid voxel positions
+        within a subgrid_size×subgrid_size (or subgrid_size×subgrid_size×subgrid_size)
+        neighborhood. Check boundaries so we don't go out of volume.
+        """
+        zc, yc, xc = idx
+        half = subgrid_size // 2
+
+        # Prepare a list of (z, y, x) positions
+        positions = []
+        if expand_in_3D:
+            # Expand in z, y, x
+            for dz in range(-half, half + 1):
+                znew = zc + dz
+                if znew < 0 or znew >= self.volume_shape[0]:
+                    continue
+                for dy in range(-half, half + 1):
+                    ynew = yc + dy
+                    if ynew < 0 or ynew >= self.volume_shape[1]:
+                        continue
+                    for dx in range(-half, half + 1):
+                        xnew = xc + dx
+                        if xnew < 0 or xnew >= self.volume_shape[2]:
+                            continue
+                        positions.append((znew, ynew, xnew))
+        else:
+            # Expand only in y, x
+            for dy in range(-half, half + 1):
+                ynew = yc + dy
+                if ynew < 0 or ynew >= self.volume_shape[1]:
+                    continue
+                for dx in range(-half, half + 1):
+                    xnew = xc + dx
+                    if xnew < 0 or xnew >= self.volume_shape[2]:
+                        continue
+                    positions.append((zc, ynew, xnew))
+
+        return positions
+
+    def get_4d_volume_representation(self):
+        """
+        Returns a 4D representation of the volume:
+        - Dimension 0: birefringence (Delta_n)
+        - Dimensions 1..3: optic axis components (Oz, Oy, Ox)
+
+        The shape of the returned array/tensor is (4, Z, Y, X).
+        """
+        if self.backend == "numpy":
+            # self.Delta_n.shape = (Z, Y, X)
+            # self.optic_axis.shape = (3, Z, Y, X)
+            # Concatenate along axis=0 to create (4, Z, Y, X)
+            delta_n_3d = self.Delta_n  # shape (Z, Y, X)
+            optic_axis_4d = self.optic_axis  # shape (3, Z, Y, X)
+            
+            # Add an extra dimension to Delta_n, then concatenate
+            combined_4d = np.concatenate(
+                [delta_n_3d[np.newaxis, ...], optic_axis_4d],
+                axis=0
+            )
+            return combined_4d
+
+        elif self.backend == "torch":
+            # self.Delta_n is a flattened Parameter of shape (Z*Y*X,)
+            # self.optic_axis is a flattened Parameter of shape (3, Z*Y*X)
+            # We need to reshape them to 3D/4D
+            delta_n_3d = self.Delta_n.view(*self.volume_shape)  # (Z, Y, X)
+            optic_axis_4d = self.optic_axis.view(
+                3, *self.volume_shape
+            )  # (3, Z, Y, X)
+
+            # Expand Delta_n to (1, Z, Y, X) and concatenate
+            combined_4d = torch.cat(
+                [delta_n_3d.unsqueeze(0), optic_axis_4d], dim=0
+            )
+            return combined_4d
+
+        else:
+            raise ValueError(f"Unsupported backend type: {self.backend}")
+
+    def get_nonzero_birefringent_voxels(self, threshold=1e-8):
+        """
+        Returns a list of voxel indices (z, y, x) where Delta_n is above the given threshold,
+        along with their Delta_n values and optic axes.
+
+        Args:
+            threshold (float): Minimum absolute value of Delta_n considered as nonzero.
+
+        Returns:
+            A list of dictionaries with:
+            [
+            {
+                'index': (z, y, x),
+                'Delta_n': ...,
+                'optic_axis': (Ox, Oy, Oz)
+            },
+            ...
+            ]
+        """
+        # Get the 4D representation: (4, Z, Y, X)
+        volume_4d = self.get_4d_volume_representation()
+
+        # Extract Delta_n channel (shape: (Z, Y, X))
+        delta_n_tensor = volume_4d[0]
+
+        # Find nonzero (or above-threshold) voxels
+        nonzero_mask = torch.abs(delta_n_tensor) > threshold
+        nonzero_indices = torch.nonzero(nonzero_mask)
+
+        voxels = []
+        for idx in nonzero_indices:
+            z, y, x = idx.tolist()
+            # Read the corresponding values
+            delta_n_val = delta_n_tensor[z, y, x].item()
+            oz = volume_4d[1, z, y, x].item()
+            oy = volume_4d[2, z, y, x].item()
+            ox = volume_4d[3, z, y, x].item()
+
+            voxels.append({
+                'index': (z, y, x),
+                'Delta_n': delta_n_val,
+                'optic_axis': (oz, oy, ox)
+            })
+
+        return voxels
+
+    def set_voxel_properties_supersampled(
+        self, 
+        voxel_indices, 
+        new_delta_ns, 
+        new_optic_axes, 
+        subgrid_size=3,
+        expand_in_3D=False
+    ):
+        """
+        Similar to set_voxel_properties, but each voxel index is expanded into
+        a subgrid of size subgrid_size x subgrid_size (x subgrid_size if expand_in_3D=True).
+        """
+
+        if isinstance(voxel_indices, tuple):
+            voxel_indices = [voxel_indices]
+        if not isinstance(new_delta_ns, list):
+            new_delta_ns = [new_delta_ns] * len(voxel_indices)
+        if not isinstance(new_optic_axes[0], (list, tuple, np.ndarray)):
+            new_optic_axes = [new_optic_axes] * len(voxel_indices)
+
+        # Calculate half-width of the subgrid
+        half = subgrid_size // 2
+
+        for idx, delta, axis in zip(voxel_indices, new_delta_ns, new_optic_axes):
+
+            z_center, y_center, x_center = idx
+
+            # Normalize the axis once here
+            axis = np.array(axis, dtype=np.float64)
+            norm = np.linalg.norm(axis)
+            if norm > 0:
+                axis = axis / norm
+
+            if expand_in_3D:
+                # 3D: the neighborhood is [z_center - half ... z_center + half],
+                #                     [y_center - half ... y_center + half],
+                #                     [x_center - half ... x_center + half]
+                for dz in range(-half, half + 1):
+                    z_new = z_center + dz
+                    if z_new < 0 or z_new >= self.volume_shape[0]:
+                        continue
+
+                    for dy in range(-half, half + 1):
+                        y_new = y_center + dy
+                        if y_new < 0 or y_new >= self.volume_shape[1]:
+                            continue
+
+                        for dx in range(-half, half + 1):
+                            x_new = x_center + dx
+                            if x_new < 0 or x_new >= self.volume_shape[2]:
+                                continue
+
+                            # Assign values
+                            self._assign_values(z_new, y_new, x_new, delta, axis)
+
+            else:
+                # 2D in-plane: the neighborhood is [y_center - half ... y_center + half],
+                #                           [x_center - half ... x_center + half]
+                # with z fixed
+                for dy in range(-half, half + 1):
+                    y_new = y_center + dy
+                    if y_new < 0 or y_new >= self.volume_shape[1]:
+                        continue
+                    for dx in range(-half, half + 1):
+                        x_new = x_center + dx
+                        if x_new < 0 or x_new >= self.volume_shape[2]:
+                            continue
+
+                        # Assign values
+                        self._assign_values(z_center, y_new, x_new, delta, axis)
+
+    def _assign_values(self, z, y, x, delta, axis):
+        """
+        Helper function to assign Delta_n and optic_axis for a single voxel (z,y,x).
+        This is just to avoid repeated code in the main loop.
+        """
+        if self.backend == "numpy":
+            self.Delta_n[z, y, x] = delta
+            self.optic_axis[:, z, y, x] = axis
+
+        elif self.backend == "torch":
+            flat_index = np.ravel_multi_index((z, y, x), self.volume_shape)
+            with torch.no_grad():
+                # update Delta_n
+                self.Delta_n.view(-1)[flat_index] = delta
+                # update optic_axis
+                axis_tensor = torch.tensor(axis, dtype=self.optic_axis.dtype, device=self.optic_axis.device)
+                self.optic_axis.data[:, flat_index] = axis_tensor
+
     def __iadd__(self, other):
         """Overload the += operator to sum volumes."""
         # Ensure shapes are compatible

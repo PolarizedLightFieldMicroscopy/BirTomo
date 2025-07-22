@@ -375,7 +375,8 @@ class RayTraceLFM(OpticalElement):
                 C = torch.linalg.cross(
                     v1[invalid_indices, :], non_par_vec[invalid_indices, :]
                 )
-                normal_vec[invalid_indices, :] = C / torch.linalg.norm(C, dim=1)
+                C_norm = torch.linalg.norm(C, dim=1, keepdim=True)
+                normal_vec[invalid_indices, :] = C / C_norm
 
         # Compute the valid normal_vectors
         normal_vec[valid_indices] = torch.linalg.cross(
