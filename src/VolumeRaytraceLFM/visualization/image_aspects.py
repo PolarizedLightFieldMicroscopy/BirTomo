@@ -337,7 +337,7 @@ class ImageVisualizer:
         azim_image = self.azim_img
 
         plt.ioff()  # Prevents interactive popup in some environments
-        fig = plt.figure(figsize=(12, 3))
+        fig = plt.figure(figsize=(24, 6))
         plt.rcParams["image.origin"] = "upper"
 
         # (1) Retardance
@@ -385,7 +385,7 @@ class ImageVisualizer:
         plt.subplots_adjust(left=0.03, wspace=0.3, hspace=0)
         return fig
 
-    def plot_intensity_images(self, cmap="gray", show_colorbar=True):
+    def plot_intensity_images(self, cmap="gray", show_colorbar=True, vertical=False):
         """
         Plot intensity images stored in self.intensity_imgs with a shared colorbar.
 
@@ -398,11 +398,15 @@ class ImageVisualizer:
         num_imgs = len(self.intensity_imgs)
         plt.ioff()  # Prevent interactive popup in some environments
 
-        fig, axes = plt.subplots(1, num_imgs, figsize=(4 * num_imgs, 4))
+        if vertical:
+            fig, axes = plt.subplots(num_imgs, 1, figsize=(4, 4 * num_imgs))
+        else:
+            fig, axes = plt.subplots(1, num_imgs, figsize=(4 * num_imgs, 4))
         plt.rcParams["image.origin"] = "upper"
 
-        vmin = min(img.min() for img in self.intensity_imgs)
-        vmax = max(img.max() for img in self.intensity_imgs) * 0.5
+        all_pixels = np.concatenate([img.flatten() for img in self.intensity_imgs])
+        vmin = np.percentile(all_pixels, 0)
+        vmax = np.percentile(all_pixels, 99)
 
         ims = []
         for idx, img in enumerate(self.intensity_imgs):
@@ -411,7 +415,8 @@ class ImageVisualizer:
             ims.append(im)
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.set_title(f"$\\Sigma_{{{idx + 1}}}$")
+            if not vertical:
+                ax.set_title(f"$\\Sigma_{{{idx + 1}}}$")
 
         if show_colorbar:
             # Single shared colorbar
@@ -420,7 +425,10 @@ class ImageVisualizer:
             cbar = fig.colorbar(ims[-1], cax=cax, orientation='vertical')
             cbar.set_label("Intensity")
 
-        plt.subplots_adjust(wspace=0.1, hspace=0)
+        if vertical:
+            plt.subplots_adjust(wspace=0, hspace=0.1)
+        else:
+            plt.subplots_adjust(wspace=0.1, hspace=0)
         plt.rcParams.update({"text.usetex": False, "font.family": "sans-serif"})
 
         # created_new_figure = True
@@ -428,4 +436,39 @@ class ImageVisualizer:
         #     plt.show()
         # plt.ion()
         # plt.show()
+        return fig
+
+    def plot_intensity_images_mosaic(self, cmap="gray"):
+        """
+        Plot intensity images stored in self.intensity_imgs using a mosaic layout
+        arranged in rows of 1, 2, and 2. The first row is centered by spanning two columns.
+        Assumes self.intensity_imgs has exactly 5 images.
+        """
+        mosaic = [
+            ["A", "A"],  # First row spans both columns, centering the image.
+            ["B", "C"],  # Second row: two images.
+            ["D", "E"]   # Third row: two images.
+        ]
+
+        # Create the figure and axes using subplot_mosaic
+        fig, axes = plt.subplot_mosaic(mosaic, figsize=(8, 12))
+
+        # Set the figure and axes background to transparent
+        fig.patch.set_alpha(0)
+        for ax in axes.values():
+            ax.patch.set_alpha(0)
+        
+        # Calculate global contrast limits using the 5th and 95th percentiles
+        all_pixels = np.concatenate([img.flatten() for img in self.intensity_imgs])
+        vmin = 0
+        vmax = np.percentile(all_pixels, 99)
+        
+        # Map each image to its corresponding axis; no titles or colorbar
+        keys = ["A", "B", "C", "D", "E"]
+        for idx, key in enumerate(keys):
+            ax = axes[key]
+            ax.imshow(self.intensity_imgs[idx], cmap=cmap, vmin=vmin, vmax=vmax)
+            ax.set_xticks([])
+            ax.set_yticks([])
+        
         return fig

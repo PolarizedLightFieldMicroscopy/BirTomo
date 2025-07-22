@@ -827,7 +827,8 @@ class VolumeVisualizer:
         #     ax.axis('off')
 
         # Optionally add a colorbar only if the data is not constant
-        if display_colorbar:
+        NO_EXTRA = False
+        if display_colorbar and not NO_EXTRA:
             mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
             mappable.set_array(bir_data)
             cbar = plt.colorbar(mappable, ax=ax, pad=0.07, shrink=0.7, label='Birefringence')
@@ -838,9 +839,10 @@ class VolumeVisualizer:
             if not (vmin < 0 and vmax > 0):
                 ticks = np.linspace(vmin, vmax, 3)
                 cbar.set_ticks(ticks)
-                cbar.set_ticklabels([f'{t:.1f}' for t in ticks]) #3f
+                cbar.set_ticklabels([f'{t:.3f}' for t in ticks])
 
-        ax.set_title("3D Birefringence Distribution")
+        if not NO_EXTRA:
+            ax.set_title("3D Birefringence Distribution")
 
         if created_ax:
             # plt.tight_layout()
@@ -1101,7 +1103,7 @@ class VolumeVisualizer:
             axis_order=axis_order,
             flip_dim=flip_dim,
             ax=ax,
-            voxel_alpha=0.2
+            voxel_alpha=0.2 #0.14
         )
         # 5) Overlay the optic axis lines, single color
         self.display_3d_optic_axis(
@@ -1113,7 +1115,9 @@ class VolumeVisualizer:
             flip_dim=flip_dim
         )
 
-        ax_3d.set_title("3D Volume: Birefringence & Optic Axis")
+        NO_EXTRA = False
+        if not NO_EXTRA:
+            ax_3d.set_title("3D Volume: Birefringence & Optic Axis")
 
         # ax_3d.xaxis.pane.fill = False
         # ax_3d.yaxis.pane.fill = False
@@ -1129,5 +1133,6 @@ class VolumeVisualizer:
         if fig_created:
             plt.tight_layout()
             plt.show()
+            return fig, ax_3d
 
         return ax_3d
