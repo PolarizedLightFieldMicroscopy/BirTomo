@@ -1,8 +1,8 @@
 {
     "general": {
-        "num_iterations": 2,
-        "save_freq": 1,
-        "output_directory_postfix": "Mac_Ss1L2_100RevXRandAllNumIt2",
+        "num_iterations": 100,
+        "save_freq": 25,
+        "output_directory_postfix": "Mac_Ss1L2_100RevXRandIt200",
         "notes": ""
     },
     "learning_rates": {
