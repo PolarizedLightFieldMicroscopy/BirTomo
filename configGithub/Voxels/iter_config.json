@@ -1,13 +1,13 @@
 {
     "general": {
-        "num_iterations": 100,
-        "save_freq": 10,
-        "output_directory_postfix": "VoxRingXZRand2It100Reg50Lr4Mac",
+        "num_iterations": 300,
+        "save_freq": 100,
+        "output_directory_postfix": "VoxelRingXYoAZ_Rand2_BirLrV1e-4_OaLrV1e-2_L2V50_ItV300",
         "notes": ""
     },
     "learning_rates": {
         "birefringence": 1e-4,
-        "optic_axis": 1e-1
+        "optic_axis": 1e-2
     },
     "file_paths": {
         "saved_rays": null

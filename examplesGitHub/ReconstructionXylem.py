@@ -31,14 +31,15 @@ optical_config_file = os.path.join("..", "config", "Xylem", "optical_config.json
 iter_config_file = os.path.join("..", "config", "Xylem", "iter_config.json")
 
 # Path to the directory where the reconstruction will be saved
-recon_output_dir = os.path.join("..", "reconstructionsGitHub", "Xylem")
+recon_output_dir = os.path.join("..", "reconstructions", "Xylem")
 
 # Whether to continue a previous reconstruction or start from a given volume
 continue_recon = True
-recon_init_file_path = os.path.join(r"../dataGitHub/2025_07/XylemA Experim&Simulation/Simulation Data/XylemACrop2Ss1Random.h5")
+# recon_init_file_path = os.path.join(r"../data/2025_07/XylemA Experim&Simulation/Simulation Data/XylemACrop2Ss1Random.h5")
+recon_init_file_path = os.path.join(r"../reconstructions/Xylem/2025-07-11_01-41-13_Mac_L2_100Crop2Ss1RandIt200/volume.h5")
 
 # For loading forward images that were saved in a previous reconstruction folder
-measurement_dir = os.path.join(r"../dataGitHub/2025_07/XylemA Experim&Simulation/Experimental Data")
+measurement_dir = os.path.join(r"../data/2025_07/XylemA Experim&Simulation/Experimental Data")
 # measurement_dir = os.path.join(r"../data/2025_04/SpiculeA Experim&Simulation/Simulation Data/LF Images BirTomo")
 
 BACKEND = BackEnds.PYTORCH
@@ -63,7 +64,7 @@ if simulate:
     ret_image_meas = simulator.ret_img.detach().numpy()
     azim_image_meas = simulator.azim_img.detach().numpy()
 else:
-    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "XylemACrop2Float32bitRetCornLowLow.tif"))
+    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "XylemACrop2Float32bitRet.tif"))
     ret_image_meas = np.array(ret_image_meas_tiff)
     azim_image_meas_tiff = imread(os.path.join(measurement_dir, "XylemACrop2Float32bitAzim.tif"))
     azim_image_meas = np.array(azim_image_meas_tiff)

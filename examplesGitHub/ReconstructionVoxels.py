@@ -35,10 +35,10 @@ recon_output_dir = os.path.join("..", "reconstructions", "Voxels")
 
 # Whether to continue a previous reconstruction or start from a given volume
 continue_recon = True
-recon_init_file_path = os.path.join(r"../data/2025_04/Voxels/Simulation Data/VoxelsInitRandom2.h5")
+recon_init_file_path = os.path.join(r"../data/2025_08/Voxels/Simulation Data/VoxelsInitRandom2.h5")
 
 # For loading forward images that were saved in a previous reconstruction folder
-measurement_dir = os.path.join(r"../data/2025_04/Voxels/Simulation Data/LF Images BirTomo")
+measurement_dir = os.path.join(r"../data/2025_08/Voxels/Simulation Data/LF Images BirTomo")
 
 BACKEND = BackEnds.PYTORCH
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,9 +62,9 @@ if simulate:
     ret_image_meas = simulator.ret_img.detach().numpy()
     azim_image_meas = simulator.azim_img.detach().numpy()
 else:
-    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "VoxelRingXZ-h5_Apr29_60x12_Ret.tif"))
+    ret_image_meas_tiff = imread(os.path.join(measurement_dir, "VoxelRingXYoAZ-h5_Aug2Ret.tif"))
     ret_image_meas = np.array(ret_image_meas_tiff)
-    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "VoxelRingXZ-h5_Apr29_60x12_Azim.tif"))
+    azim_image_meas_tiff = imread(os.path.join(measurement_dir, "VoxelRingXYoAZ-h5_Aug2Azim.tif"))
     azim_image_meas = np.array(azim_image_meas_tiff)
     volume_GT = None
 

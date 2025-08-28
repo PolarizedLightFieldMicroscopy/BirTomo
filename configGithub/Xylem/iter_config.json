@@ -1,8 +1,8 @@
 {
     "general": {
-        "num_iterations": 2,
-        "save_freq": 1,
-        "output_directory_postfix": "Mac_Corn0_L2_100Crop2Ss1RandomIt2",
+        "num_iterations": 100,
+        "save_freq": 50,
+        "output_directory_postfix": "Mac_L2_100Crop2Ss1RandIt300",
         "notes": ""
     },
     "learning_rates": {
