@@ -73,7 +73,11 @@ if DEBUG:
 ######################################################################
 class BirefringentVolume(BirefringentElement):
     """Stores a 3D array of voxels with birefringence properties,
-    either with a numpy or pytorch back-end."""
+    either with a numpy or pytorch back-end.
+
+    Arrays are indexed [axial, y, x]. Axial index 0 is the slice nearest the
+    objective (camera side); light propagates toward decreasing axial index.
+    See docs/Conventions.md."""
 
     def __init__(
         self,
@@ -2251,6 +2255,9 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
             )
 
             start_time_mloop = time.perf_counter()
+            # Segment 0 is the voxel nearest the objective (axial index 0).
+            # Light crosses the segments from last to first, so the product
+            # J_0 @ J_1 @ ... @ J_n is in physical order (docs/Conventions.md).
             material_jones = jones[:, 0]
             for m in range(1, ell_in_voxels.shape[1]):
                 if DEBUG:
@@ -2920,6 +2927,11 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     ):
         """Calculate intensity images using Jones Calculus. The polarizer and
         analyzer are applied to the cummulated Jones matrices."""
+        # The polarizer and analyzer are specified in the right-handed frame
+        # (ray_perp1, ray_perp2), while the material Jones matrices use the
+        # swapped frame (ray_perp2, ray_perp1). Flipping both axes of the
+        # matrix (and the vector below) swaps the basis vectors. Do not remove
+        # these flips on their own; see docs/Conventions.md.
         analyzer = self.optical_info["analyzer"]
         analyzer = np.flip(analyzer, (0, 1)).copy()
         swing = self.optical_info["polarizer_swing"]
@@ -3063,6 +3075,8 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def rayJM_numpy(JMlist):
         """Computes product of Jones matrix sequence
         Equivalent method: np.linalg.multi_dot([JM1, JM2])
+        JMlist[0] is the voxel nearest the objective, so the product is in
+        physical order for light travelling toward the objective.
         """
         product = np.identity(2)
         for JM in JMlist:
@@ -3090,6 +3104,10 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
     def apply_polarizers(self, material_jones):
         """Apply the polarizer and analyzer to a product of Jones matrices representing the
         material. material_jones can be a 2x2 array or probably a list/array of 2x2 array.
+
+        Note: unlike intensity_images, this does not swap the basis of the
+        polarizer and analyzer into the (ray_perp2, ray_perp1) frame of the
+        material matrices (see docs/Conventions.md). Currently unused.
         """
         if self.backend == BackEnds.PYTORCH:
             # Possibly need to attach .to(Delta_n.device)

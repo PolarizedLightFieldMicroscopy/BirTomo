@@ -3,8 +3,9 @@ import numpy as np
 
 
 def vox_ray_ret_azim_numpy(bir, optic_axis, rayDir, ell, wavelength):
-    # Azimuth is the angle of the slow axis of retardance.
-    # TODO: verify the order of these two components
+    # Azimuth is the angle of the slow axis of retardance, measured from
+    # ray_perp2 toward ray_perp1: Jones component 0 is along ray_perp2 and
+    # component 1 along ray_perp1 (docs/Conventions.md).
     azim = np.atan2(np.dot(optic_axis, rayDir[1]), np.dot(optic_axis, rayDir[2]))
     azim = 0 if bir == 0 else (azim + np.pi / 2 if bir < 0 else azim)
     # proj_along_ray = np.dot(optic_axis, rayDir[0])
@@ -48,7 +49,9 @@ def vox_ray_ret_azim_torch(bir, optic_axis, rayDir, ell, wavelength):
     pi_tensor = torch.tensor(np.pi, dtype=bir.dtype, device=bir.device)
     # Dot product of optical axis and 3 ray-direction vectors
     OA_dot_rayDir = (rayDir.unsqueeze(2) @ optic_axis).squeeze(2)
-    # There is the x2 here because it is not in the jones matrix function
+    # There is the x2 here because it is not in the jones matrix function.
+    # Angle measured from ray_perp2 toward ray_perp1: Jones component 0 is
+    # along ray_perp2 and component 1 along ray_perp1 (docs/Conventions.md).
     azim = 2 * torch.atan2(OA_dot_rayDir[1], OA_dot_rayDir[2])
     ret = abs(bir) * (1 - (OA_dot_rayDir[0]) ** 2) * ell * pi_tensor / wavelength
     neg_delta_mask = bir < 0

@@ -401,6 +401,10 @@ class RayTraceLFM(OpticalElement):
             ray (np.array): same as input
             ray_perp1 (np.array): normalized 3D vector
             ray_perp2 (np.array): normalized 3D vector
+        Note: rays point away from the objective (toward increasing axial
+            index), opposite to the light. ray_perp1 x ray_perp2 = -ray, so
+            (ray_perp1, ray_perp2) is right-handed for the light's direction
+            of travel. See docs/Conventions.md.
         """
         theta = np.arccos(np.dot(ray, np.array([1, 0, 0])))
         # Unit vectors that give the laboratory axes, can be changed
@@ -433,6 +437,10 @@ class RayTraceLFM(OpticalElement):
             ray (torch.array): same as input
             ray_perp1 (torch.array): normalized 3D vector
             ray_perp2 (torch.array): normalized 3D vector
+        Note: rays point away from the objective (toward increasing axial
+            index), opposite to the light. ray_perp1 x ray_perp2 = -ray, so
+            (ray_perp1, ray_perp2) is right-handed for the light's direction
+            of travel. See docs/Conventions.md.
         """
         ray = torch.from_numpy(ray_in) if not torch.is_tensor(ray_in) else ray_in
         # Unit vectors that give the laboratory axes, can be changed
@@ -469,7 +477,10 @@ class RayTraceLFM(OpticalElement):
     # Ray-tracing functions
     @staticmethod
     def rays_through_vol(pixels_per_ml, naObj, nMedium, volume_ctr_um, aperture_radius_px):
-        """Identifies the rays that pass through the volume and the central lenslet
+        """Identifies the rays that pass through the volume and the central lenslet.
+        Rays are traced backward from the camera: ray_enter lies on the axial-0
+        plane (objective side) and ray_exit on the far (condenser) side, so the
+        physical light travels from ray_exit to ray_enter. See docs/Conventions.md.
         Args:
             pixels_per_ml (int): number of pixels per microlens in one direction,
                                     preferrable to be odd integer so there is a central
