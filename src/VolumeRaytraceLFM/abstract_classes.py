@@ -782,8 +782,8 @@ class RayTraceLFM(OpticalElement):
         naObj = self.optical_info["na_obj"]
         nMedium = self.optical_info["n_medium"]
         aperture_radius_px = self.optical_info["aperture_radius_px"]
-        valid_vol_shape = (
-            self.optical_info["n_micro_lenses"] * self.optical_info["n_voxels_per_ml"]
+        valid_vol_shape = RayTraceLFM.reference_lenslet_region_width(
+            self.optical_info["n_micro_lenses"], self.optical_info["n_voxels_per_ml"]
         )
         self.vol_shape_restricted = [
             self.optical_info["volume_shape"][0],
@@ -816,6 +816,19 @@ class RayTraceLFM(OpticalElement):
             self.ray_direction = ray_diff
 
         return ray_enter, ray_exit, ray_diff
+
+    @staticmethod
+    def reference_lenslet_region_width(n_micro_lenses, n_voxels_per_ml):
+        """Lateral width, in voxels, of the region in which the rays of the
+        reference lenslet are traced. The rays converge at the center of this
+        region, which must be the center of lenslet n_micro_lenses // 2, so
+        that shifting by _calculate_current_offset places every lenslet over
+        its own block of voxels. For an odd number of lenslets that lenslet
+        is the middle of the array; for an even number the region is one
+        lenslet wider so that it stays centered on the reference lenslet.
+        """
+        n_lenslets_spanned = 2 * (n_micro_lenses // 2) + 1
+        return n_lenslets_spanned * n_voxels_per_ml
 
     @staticmethod
     def compute_lateral_ray_length_and_voxel_span(ray_diff, axial_volume_dim):

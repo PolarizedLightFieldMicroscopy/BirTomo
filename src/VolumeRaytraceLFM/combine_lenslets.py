@@ -159,7 +159,7 @@ def vectorized_offset_calculation(n_micro_lenses, n_voxels_per_ml, vox_ctr_idx):
 
     # Create grid of indices for ml_ii and ml_jj
     ml_half = n_micro_lenses // 2
-    indices = torch.arange(-ml_half, ml_half + 1)  # Create the index range for ml_ii and ml_jj
+    indices = torch.arange(n_micro_lenses) - ml_half  # Create the index range for ml_ii and ml_jj
 
     # Generate the grid of (ml_ii, ml_jj) indices
     ml_ii_grid, ml_jj_grid = torch.meshgrid(indices, indices, indexing="ij")

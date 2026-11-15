@@ -1594,13 +1594,26 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
     def check_if_volume_shape_is_too_small(self):
         """Check if the volume shape is too small for the microlenses to fit."""
+        self._check_shifted_indices_in_volume(self.ray_vol_colli_indices)
+
+    def _check_shifted_indices_in_volume(self, collision_indices):
+        """Raise if the rays of any microlens reach outside the lateral extent
+        of the volume. Out-of-range indices would otherwise be raveled into a
+        neighboring row of the volume."""
         n_micro_lenses = self.optical_info["n_micro_lenses"]
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
-        vox1_min, vox2_min = self._calculate_min_shifted_indices(n_micro_lenses, n_voxels_per_ml, self.ray_vol_colli_indices)
+        vox1_min, vox2_min = self._calculate_min_shifted_indices(n_micro_lenses, n_voxels_per_ml, collision_indices)
         if vox1_min < 0 or vox2_min < 0:
             print("Voxel indices are negative. Try increasing the non-axial volume dimensions.")
             print(f"Vox1 min shifted: {vox1_min}, Vox2 min shifted: {vox2_min}")
             raise ValueError(f"Try increasing the non-axial volume dimensions by {[int(-2 * vox1_min), int(-2 * vox2_min)]}.")
+        vox1_max, vox2_max = self._calculate_max_shifted_indices(n_micro_lenses, n_voxels_per_ml, collision_indices)
+        vol_shape = self.optical_info["volume_shape"]
+        excess = [int(vox1_max - (vol_shape[1] - 1)), int(vox2_max - (vol_shape[2] - 1))]
+        if excess[0] > 0 or excess[1] > 0:
+            print("Voxel indices exceed the volume. Try increasing the non-axial volume dimensions.")
+            print(f"Vox1 max shifted: {vox1_max}, Vox2 max shifted: {vox2_max}, volume shape: {vol_shape}")
+            raise ValueError(f"Try increasing the non-axial volume dimensions by {[2 * max(e, 0) for e in excess]}.")
 
     def store_shifted_vox_indices(self):
         """Store the shifted voxel indices for each microlens in a
@@ -1627,11 +1640,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         n_voxels_per_ml = self.optical_info["n_voxels_per_ml"]
         n_ml_half = floor(n_micro_lenses / 2.0)
         collision_indices = self.ray_vol_colli_indices
-        vox1_min, vox2_min = self._calculate_min_shifted_indices(n_micro_lenses, n_voxels_per_ml, collision_indices)
-        if vox1_min < 0 or vox2_min < 0:
-            print("Voxel indices are negative. Try increasing the non-axial volume dimensions.")
-            print(f"Vox1 min shifted: {vox1_min}, Vox2 min shifted: {vox2_min}")
-            raise ValueError(f"Try increasing the non-axial volume dimensions by {[int(-2 * vox1_min), int(-2 * vox2_min)]}.")
+        self._check_shifted_indices_in_volume(collision_indices)
 
         tensor_method = False
         if tensor_method:
@@ -1705,7 +1714,7 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
 
         # Create grid of indices for ml_ii_idx and ml_jj_idx (for the mla_index mapping)
         ml_half = n_micro_lenses // 2
-        indices = torch.arange(-ml_half, ml_half + 1)
+        indices = torch.arange(n_micro_lenses) - ml_half
         ml_ii_grid, ml_jj_grid = torch.meshgrid(indices, indices, indexing="ij")
 
         # Step 2: Flatten the grids and offsets for batch processing
@@ -1964,6 +1973,14 @@ class BirefringentRaytraceLFM(RayTraceLFM, BirefringentElement):
         vox2_min_shifted = vox2_min + min_offset[1]
 
         return vox1_min_shifted, vox2_min_shifted
+
+    def _calculate_max_shifted_indices(self, num_microlenses, num_voxels_per_ml, collision_indices):
+        last_ml = num_microlenses - 1 - num_microlenses // 2
+        max_offset = self._calculate_current_offset(
+            last_ml, last_ml, num_voxels_per_ml, num_microlenses
+        )
+        flat_np = np.array([coord for ray in collision_indices for coord in ray])
+        return flat_np[:, 1].max() + max_offset[0], flat_np[:, 2].max() + max_offset[1]
 
     def generate_images(self, volume, offset, intensity, mla_index=(0, 0)):
         """Generates images for a single microlens, by passing an offset
