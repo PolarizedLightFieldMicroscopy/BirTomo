@@ -56,6 +56,9 @@ The workflow within that script is the following:
 1. Define a loss function to be minimized.
 1. Perform many iterations of the estimated volume being updated from the gradients of the loss function with respect to the estimated volume.
 
+### Conventions
+Volumes are indexed `[axial, y, x]`, and **axial index 0 is the slice nearest the objective** (camera side): light propagates toward decreasing axial index. Rays are traced backward from the camera, and Jones matrices are multiplied in the matching order. See [docs/Conventions.md](docs/Conventions.md) for the full set of geometric and Jones-calculus conventions, including the frame used for the polarizer and analyzer.
+
 Open the streamlit page locally with
 ```
 streamlit run User_Interface.py
