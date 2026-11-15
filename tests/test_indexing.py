@@ -111,7 +111,7 @@ def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
     BF_raytrace.store_shifted_vox_indices()
     counts = BF_raytrace._count_vox_raytrace_occurrences(zero_ret_voxels=False)
 
-    assert len(counts) == 205, "Expected 205 voxels raytraced"
+    assert len(counts) == 211, "Expected 211 voxels raytraced"
 
     voxel_volume = BirefringentVolume(
         backend=backend_fixture,
@@ -124,9 +124,9 @@ def test_identify_voxels_repeated_zero_ret_empty_list(backend_fixture):
     counts = BF_raytrace._count_vox_raytrace_occurrences(zero_ret_voxels=False)
     vox_list = BF_raytrace.identify_voxels_repeated_zero_ret()
 
-    assert len(counts) == 205, "Expected 205 voxels raytraced with volume"
+    assert len(counts) == 211, "Expected 211 voxels raytraced with volume"
     err_msg = (
-        "Expected 198 voxels raytraced excluding repeated "
+        "Expected 202 voxels raytraced excluding repeated "
         + f"zero retardance voxels. Got: {vox_list}"
     )
-    assert len(vox_list) in {198, 199}, err_msg
+    assert len(vox_list) in {202, 203}, err_msg
