@@ -53,35 +53,40 @@ def siddon_params(start, stop, vox_pitch, vox_count):
         k_min = ceil(pix_numz - (pix_numz * dz - a_max * (z2 - z1) - z1) / dz)
         k_max = floor((z1 + a_min * (z2 - z1)) / dz)
 
-    # next calculate the list of parametric values for each coordinate
+    # next calculate the list of parametric values for each coordinate.
+    # The ray crosses every plane from index *_min to *_max inclusive, so the
+    # ranges must include *_max; otherwise one crossing per axis is dropped and
+    # part of the path is attributed to the neighboring voxel.
     a_x = []
-    if (x2 - x1) > 0:
-        for i in range(i_min, i_max):
+    if (x2 - x1) != 0:
+        for i in range(i_min, i_max + 1):
             a_x.append((i * dx - x1) / (x2 - x1))
-    elif (x2 - x1) < 0:
-        for i in range(i_min, i_max):
-            a_x.insert(0, (i * dx - x1) / (x2 - x1))
 
     a_y = []
-    if (y2 - y1) > 0:
-        for j in range(j_min, j_max):
+    if (y2 - y1) != 0:
+        for j in range(j_min, j_max + 1):
             a_y.append((j * dy - y1) / (y2 - y1))
-    elif (y2 - y1) < 0:
-        for j in range(j_min, j_max):
-            a_y.insert(0, (j * dy - y1) / (y2 - y1))
 
     a_z = []
-    if (z2 - z1) > 0:
-        for k in range(k_min, k_max):
+    if (z2 - z1) != 0:
+        for k in range(k_min, k_max + 1):
             a_z.append((k * dz - z1) / (z2 - z1))
-    elif (z2 - z1) < 0:
-        for k in range(k_min, k_max):
-            a_z.insert(0, (k * dz - z1) / (z2 - z1))
 
-    # finally, form the list of parametric values
-    a_list = [a_min] + a_x + a_y + a_z + [a_max]
-    a_list = list(set(a_list))
-    a_list.sort()
+    # finally, form the sorted list of parametric values within [a_min, a_max],
+    # merging values that coincide up to floating-point error so that no
+    # zero-length segments are created (e.g. a plane that is also the
+    # entry/exit point, or a ray passing exactly through a voxel edge)
+    if a_min >= a_max:
+        # The ray does not pass through the volume
+        return []
+    a_all = sorted(a for a in [a_min] + a_x + a_y + a_z + [a_max] if a_min <= a <= a_max)
+    tol = 1e-12
+    a_list = [a_all[0]]
+    for a in a_all[1:]:
+        if a - a_list[-1] > tol:
+            a_list.append(a)
+    if a_max - a_list[-1] <= tol:
+        a_list[-1] = a_max
     return a_list
 
 
